@@ -61,13 +61,17 @@ impl HSTState {
         }
     }
 
-    fn is_path_closed(&self, path_constraints: &HashSet<AxiomId>, justifications: &[Vec<Axiom>]) -> bool {
+    fn is_path_closed(
+        &self,
+        path_constraints: &HashSet<AxiomId>,
+        justifications: &[Vec<Axiom>],
+    ) -> bool {
         if justifications.is_empty() {
             return false;
         }
-        justifications.iter().all(|j| {
-            j.iter().any(|ax| path_constraints.contains(&ax.axiom_id()))
-        })
+        justifications
+            .iter()
+            .all(|j| j.iter().any(|ax| path_constraints.contains(&ax.axiom_id())))
     }
 
     fn is_path_covered(&self, path_constraints: &HashSet<AxiomId>) -> bool {
@@ -176,8 +180,7 @@ impl HSTExplanationGenerator {
 
             // Check if this justification is already known
             if state.justifications.iter().any(|existing| {
-                existing.len() == j.len()
-                    && existing.iter().all(|ax| j.contains(ax))
+                existing.len() == j.len() && existing.iter().all(|ax| j.contains(ax))
             }) {
                 continue;
             }
@@ -209,7 +212,9 @@ impl HSTExplanationGenerator {
                     justification: None,
                     children: Vec::new(),
                 });
-                state.nodes[node_idx].children.push((ax.axiom_id(), child_idx));
+                state.nodes[node_idx]
+                    .children
+                    .push((ax.axiom_id(), child_idx));
                 state.queue.push_back(child_idx);
             }
 
@@ -273,9 +278,10 @@ impl HSTExplanationGenerator {
             let test_set: Vec<Axiom> = minimal.iter().chain(std::iter::once(ax)).cloned().collect();
             let onto = Self::build_onto(&test_set);
             if let Ok(reasoner) = self.factory.create_reasoner(&onto, &Default::default())
-                && reasoner.is_entailed(entailment).unwrap_or(false) {
-                    minimal.push(ax.clone());
-                }
+                && reasoner.is_entailed(entailment).unwrap_or(false)
+            {
+                minimal.push(ax.clone());
+            }
         }
 
         Ok(minimal)

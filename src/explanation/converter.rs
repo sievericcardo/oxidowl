@@ -16,7 +16,9 @@ impl SatisfiabilityConverter {
         entailment: &Axiom,
     ) -> (OntologyRef, Vec<OntologyChange>) {
         let negated = Self::negate_axiom(entailment);
-        let guard = ontology.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let guard = ontology
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut o = guard.clone();
         let iri = guard
             .get_iri()

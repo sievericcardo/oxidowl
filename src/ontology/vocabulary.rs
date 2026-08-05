@@ -137,11 +137,13 @@ pub mod owl {
     pub const RESTRICTION: &str = "http://www.w3.org/2002/07/owl#Restriction";
     pub const DATA_RANGE: &str = "http://www.w3.org/2002/07/owl#DataRange";
     pub const ANNOTATION: &str = "http://www.w3.org/2002/07/owl#Annotation";
-    pub const NEGATIVE_PROPERTY_ASSERTION: &str = "http://www.w3.org/2002/07/owl#NegativePropertyAssertion";
+    pub const NEGATIVE_PROPERTY_ASSERTION: &str =
+        "http://www.w3.org/2002/07/owl#NegativePropertyAssertion";
 
     // Property Characteristics
     pub const FUNCTIONAL_PROPERTY: &str = "http://www.w3.org/2002/07/owl#FunctionalProperty";
-    pub const INVERSE_FUNCTIONAL_PROPERTY: &str = "http://www.w3.org/2002/07/owl#InverseFunctionalProperty";
+    pub const INVERSE_FUNCTIONAL_PROPERTY: &str =
+        "http://www.w3.org/2002/07/owl#InverseFunctionalProperty";
     pub const SYMMETRIC_PROPERTY: &str = "http://www.w3.org/2002/07/owl#SymmetricProperty";
     pub const ASYMMETRIC_PROPERTY: &str = "http://www.w3.org/2002/07/owl#AsymmetricProperty";
     pub const TRANSITIVE_PROPERTY: &str = "http://www.w3.org/2002/07/owl#TransitiveProperty";
@@ -168,7 +170,8 @@ pub mod owl {
     pub const ALL_DISJOINT_CLASSES: &str = "http://www.w3.org/2002/07/owl#AllDisjointClasses";
     pub const ALL_DISJOINT_PROPERTIES: &str = "http://www.w3.org/2002/07/owl#AllDisjointProperties";
     pub const MEMBERS: &str = "http://www.w3.org/2002/07/owl#members";
-    pub const INVERSE_OBJECT_PROPERTY_EXPRESSION: &str = "http://www.w3.org/2002/07/owl#inverseObjectPropertyExpression";
+    pub const INVERSE_OBJECT_PROPERTY_EXPRESSION: &str =
+        "http://www.w3.org/2002/07/owl#inverseObjectPropertyExpression";
 }
 
 /// RDF/RDFS vocabulary constants.
@@ -373,7 +376,8 @@ pub mod time {
     pub const HAS_DURATION: &str = "http://www.w3.org/2006/time#hasDuration";
     pub const HAS_TEMPORAL_DURATION: &str = "http://www.w3.org/2006/time#hasTemporalDuration";
     pub const HAS_DURATION_DESCRIPTION: &str = "http://www.w3.org/2006/time#hasDurationDescription";
-    pub const HAS_DATE_TIME_DESCRIPTION: &str = "http://www.w3.org/2006/time#hasDateTimeDescription";
+    pub const HAS_DATE_TIME_DESCRIPTION: &str =
+        "http://www.w3.org/2006/time#hasDateTimeDescription";
     pub const UNIT_TYPE: &str = "http://www.w3.org/2006/time#unitType";
     pub const HAS_TRS: &str = "http://www.w3.org/2006/time#hasTRS";
     pub const YEAR: &str = "http://www.w3.org/2006/time#year";
@@ -528,9 +532,10 @@ impl PrefixManager {
         // Try custom prefixes first, then known
         for (prefix, ns) in self.custom.iter().chain(self.known.iter()) {
             if let Some(local) = iri.strip_prefix(ns.as_str())
-                && !local.is_empty() {
-                    return Some(format!("{prefix}:{local}"));
-                }
+                && !local.is_empty()
+            {
+                return Some(format!("{prefix}:{local}"));
+            }
         }
         None
     }
@@ -603,7 +608,9 @@ impl IRI {
     /// Get the fragment portion after # (local name)
     #[must_use]
     pub fn get_fragment(&self) -> Option<&str> {
-        self.as_str().rfind('#').map(|pos| &self.as_str()[pos + 1..])
+        self.as_str()
+            .rfind('#')
+            .map(|pos| &self.as_str()[pos + 1..])
     }
 
     /// Resolve a relative IRI against this base IRI

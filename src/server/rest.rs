@@ -756,7 +756,10 @@ async fn handle_rejection(
     if err.is_not_found() {
         code = warp::http::StatusCode::NOT_FOUND;
         message = "NOT_FOUND";
-    } else if err.find::<warp::filters::body::BodyDeserializeError>().is_some() {
+    } else if err
+        .find::<warp::filters::body::BodyDeserializeError>()
+        .is_some()
+    {
         code = warp::http::StatusCode::BAD_REQUEST;
         message = "BAD_REQUEST";
     } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {

@@ -124,7 +124,7 @@ impl CacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            max_size: 10000,                    // Default maximum size
+            max_size: 10000,              // Default maximum size
             ttl: Duration::from_hours(1), // Default TTL of 1 hour
             features: CacheFeature::Concept
                 | CacheFeature::Subsumption

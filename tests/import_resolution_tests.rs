@@ -1,7 +1,12 @@
-use oxidowl::import::{ImportDeclaration, ImportDependencyGraph, ImportError, ImportManager, ImportManagerConfig, ImportResolutionStrategy};
-use oxidowl::manager::changes::OntologyChange;
-use oxidowl::manager::iri_mapper::{AutoIRIMapper, NonMappingOntologyIRIMapper, OntologyIRIMapper, SimpleIRIMapper};
+use oxidowl::import::{
+    ImportDeclaration, ImportDependencyGraph, ImportError, ImportManager, ImportManagerConfig,
+    ImportResolutionStrategy,
+};
 use oxidowl::manager::ManagerConfig;
+use oxidowl::manager::changes::OntologyChange;
+use oxidowl::manager::iri_mapper::{
+    AutoIRIMapper, NonMappingOntologyIRIMapper, OntologyIRIMapper, SimpleIRIMapper,
+};
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 use oxidowl::*;
@@ -22,16 +27,22 @@ fn test_import_declaration_add_remove() {
     let imported_iri = IRI::new(&format!("{base}B"));
     let mut imported = Ontology::new();
     imported.set_iri(imported_iri.clone());
-    imported.add_axiom(tb.df.declaration_axiom(
-        tb.df.make_entity(format!("{base}ClassB"), EntityType::Class),
-    ));
+    imported.add_axiom(
+        tb.df.declaration_axiom(
+            tb.df
+                .make_entity(format!("{base}ClassB"), EntityType::Class),
+        ),
+    );
 
     let main_iri = IRI::new(&format!("{base}A"));
     let mut main = Ontology::new();
     main.set_iri(main_iri.clone());
-    main.add_axiom(tb.df.declaration_axiom(
-        tb.df.make_entity(format!("{base}ClassA"), EntityType::Class),
-    ));
+    main.add_axiom(
+        tb.df.declaration_axiom(
+            tb.df
+                .make_entity(format!("{base}ClassA"), EntityType::Class),
+        ),
+    );
     main.imports.push(ImportsDeclaration {
         imported_ontology_iri: imported_iri.clone(),
     });
@@ -87,27 +98,36 @@ fn test_import_cycle_detection() {
 
     let mut a = Ontology::new();
     a.set_iri(iri_a.clone());
-    a.add_axiom(tb.df.declaration_axiom(
-        tb.df.make_entity(format!("{base}ClassA"), EntityType::Class),
-    ));
+    a.add_axiom(
+        tb.df.declaration_axiom(
+            tb.df
+                .make_entity(format!("{base}ClassA"), EntityType::Class),
+        ),
+    );
     a.imports.push(ImportsDeclaration {
         imported_ontology_iri: iri_b.clone(),
     });
 
     let mut b = Ontology::new();
     b.set_iri(iri_b.clone());
-    b.add_axiom(tb.df.declaration_axiom(
-        tb.df.make_entity(format!("{base}ClassB"), EntityType::Class),
-    ));
+    b.add_axiom(
+        tb.df.declaration_axiom(
+            tb.df
+                .make_entity(format!("{base}ClassB"), EntityType::Class),
+        ),
+    );
     b.imports.push(ImportsDeclaration {
         imported_ontology_iri: iri_c.clone(),
     });
 
     let mut c = Ontology::new();
     c.set_iri(iri_c.clone());
-    c.add_axiom(tb.df.declaration_axiom(
-        tb.df.make_entity(format!("{base}ClassC"), EntityType::Class),
-    ));
+    c.add_axiom(
+        tb.df.declaration_axiom(
+            tb.df
+                .make_entity(format!("{base}ClassC"), EntityType::Class),
+        ),
+    );
     c.imports.push(ImportsDeclaration {
         imported_ontology_iri: iri_a.clone(),
     });
@@ -151,27 +171,36 @@ fn test_transitive_import_chain() {
 
     let mut a = Ontology::new();
     a.set_iri(iri_a.clone());
-    a.add_axiom(tb.df.declaration_axiom(
-        tb.df.make_entity(format!("{base}ClassA"), EntityType::Class),
-    ));
+    a.add_axiom(
+        tb.df.declaration_axiom(
+            tb.df
+                .make_entity(format!("{base}ClassA"), EntityType::Class),
+        ),
+    );
     a.imports.push(ImportsDeclaration {
         imported_ontology_iri: iri_b.clone(),
     });
 
     let mut b = Ontology::new();
     b.set_iri(iri_b.clone());
-    b.add_axiom(tb.df.declaration_axiom(
-        tb.df.make_entity(format!("{base}ClassB"), EntityType::Class),
-    ));
+    b.add_axiom(
+        tb.df.declaration_axiom(
+            tb.df
+                .make_entity(format!("{base}ClassB"), EntityType::Class),
+        ),
+    );
     b.imports.push(ImportsDeclaration {
         imported_ontology_iri: iri_c.clone(),
     });
 
     let mut c = Ontology::new();
     c.set_iri(iri_c.clone());
-    c.add_axiom(tb.df.declaration_axiom(
-        tb.df.make_entity(format!("{base}ClassC"), EntityType::Class),
-    ));
+    c.add_axiom(
+        tb.df.declaration_axiom(
+            tb.df
+                .make_entity(format!("{base}ClassC"), EntityType::Class),
+        ),
+    );
 
     let a_ref = Arc::new(std::sync::RwLock::new(a));
     let b_ref = Arc::new(std::sync::RwLock::new(b));
@@ -329,10 +358,7 @@ fn test_simple_iri_mapper() {
         manager_resolved.is_some(),
         "Manager should resolve via SimpleIRIMapper"
     );
-    assert_eq!(
-        manager_resolved.unwrap().as_str(),
-        document_iri.as_str()
-    );
+    assert_eq!(manager_resolved.unwrap().as_str(), document_iri.as_str());
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -349,7 +375,10 @@ fn test_non_mapping_iri_mapper() {
     );
 
     let result2 = mapper.get_document_iri(&IRI::new("http://www.w3.org/2002/07/owl#"));
-    assert!(result2.is_none(), "NonMapping mapper should always return None");
+    assert!(
+        result2.is_none(),
+        "NonMapping mapper should always return None"
+    );
 
     assert_eq!(mapper.name(), "NonMappingIRIMapper");
 }
@@ -406,10 +435,9 @@ fn test_import_resolution_strict() {
 
     let tb = TestBase::new();
     let missing_iri = IRI::new("urn:test:definitely_does_not_exist");
-    let mut onto = tb.df.build_ontology_with_iri(
-        "http://test.org/caller",
-        vec![],
-    );
+    let mut onto = tb
+        .df
+        .build_ontology_with_iri("http://test.org/caller", vec![]);
 
     let imports_prop = AnnotationProperty {
         iri: IRI::new("http://www.w3.org/2002/07/owl#imports"),
@@ -426,11 +454,15 @@ fn test_import_resolution_strict() {
         "resolve_imports should complete even when import cannot be resolved"
     );
     let results = results.unwrap();
-    assert!(!results.is_empty(), "Should have at least one resolution result");
+    assert!(
+        !results.is_empty(),
+        "Should have at least one resolution result"
+    );
     let resolution = &results[0];
-    let has_resolution_error = resolution.errors.iter().any(|e| {
-        matches!(e, ImportError::ResolutionFailed { .. })
-    });
+    let has_resolution_error = resolution
+        .errors
+        .iter()
+        .any(|e| matches!(e, ImportError::ResolutionFailed { .. }));
     assert!(
         has_resolution_error,
         "Resolution should fail for nonexistent import"
@@ -449,12 +481,11 @@ fn test_import_declaration_with_annotations() {
     let imported_iri = IRI::new(&format!("{base}Imported"));
     let label_annotation = tb.df.rdfs_label("Imported ontology description");
 
-    let import_decl = ImportDeclaration::new(imported_iri.clone())
-        .with_annotation(label_annotation.clone());
+    let import_decl =
+        ImportDeclaration::new(imported_iri.clone()).with_annotation(label_annotation.clone());
 
     assert_eq!(
-        import_decl.imported_ontology_iri,
-        imported_iri,
+        import_decl.imported_ontology_iri, imported_iri,
         "Import declaration should preserve IRI"
     );
     assert_eq!(
@@ -467,7 +498,8 @@ fn test_import_declaration_with_annotations() {
     let mut main = Ontology::new();
     main.set_iri(main_iri.clone());
 
-    tb.manager.register_ontology(Arc::new(std::sync::RwLock::new(main.clone())));
+    tb.manager
+        .register_ontology(Arc::new(std::sync::RwLock::new(main.clone())));
 
     tb.manager.apply_change(OntologyChange::AddImport {
         ontology_iri: main_iri.clone(),
@@ -486,8 +518,7 @@ fn test_import_declaration_with_annotations() {
             "Main ontology should have one import after AddImport"
         );
         assert_eq!(
-            guard.imports[0].imported_ontology_iri,
-            imported_iri,
+            guard.imports[0].imported_ontology_iri, imported_iri,
             "Import IRI should be correctly stored"
         );
     }
@@ -519,8 +550,7 @@ fn test_import_declaration_version_iri() {
     let ontology_iri = IRI::new("http://example.org/versioned");
     let version_iri = IRI::new("http://example.org/versioned/v1.0");
 
-    let decl = ImportDeclaration::new(ontology_iri.clone())
-        .with_version_iri(version_iri.clone());
+    let decl = ImportDeclaration::new(ontology_iri.clone()).with_version_iri(version_iri.clone());
 
     assert_eq!(decl.imported_ontology_iri, ontology_iri);
     assert_eq!(decl.version_iri, Some(version_iri.clone()));
@@ -583,9 +613,12 @@ fn test_import_resolution_skip_strategy() {
     let tb = TestBase::new();
     let mut onto = tb.df.build_ontology_with_iri(
         "http://test.org/skip",
-        vec![tb.df.declaration_axiom(
-            tb.df.make_entity("http://test.org/skip#C", EntityType::Class),
-        )],
+        vec![
+            tb.df.declaration_axiom(
+                tb.df
+                    .make_entity("http://test.org/skip#C", EntityType::Class),
+            ),
+        ],
     );
     let imports_prop = AnnotationProperty {
         iri: IRI::new("http://www.w3.org/2002/07/owl#imports"),

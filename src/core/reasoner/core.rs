@@ -383,8 +383,7 @@ impl Reasoner {
             let ontology = read_lock(ontology_ref, "core: reading ontology for get_superclasses")?;
             let index = ontology.build_index();
 
-            let mut superclasses: Vec<ClassExpression> =
-                index.direct_superclasses(class).to_vec();
+            let mut superclasses: Vec<ClassExpression> = index.direct_superclasses(class).to_vec();
             for eq in index.equivalent_classes(class) {
                 superclasses.push(eq.clone());
             }
@@ -419,8 +418,7 @@ impl Reasoner {
             let ontology = read_lock(ontology_ref, "core: reading ontology for get_subclasses")?;
             let index = ontology.build_index();
 
-            let mut subclasses: Vec<ClassExpression> =
-                index.direct_subclasses(class).to_vec();
+            let mut subclasses: Vec<ClassExpression> = index.direct_subclasses(class).to_vec();
             for eq in index.equivalent_classes(class) {
                 subclasses.push(eq.clone());
             }
@@ -429,7 +427,10 @@ impl Reasoner {
             let owl_nothing = ClassExpression::Class(crate::ontology::Class::new(
                 crate::ontology::IRI::owl_nothing(),
             ));
-            if !self.classes_equivalent(class, &owl_nothing).unwrap_or(false) {
+            if !self
+                .classes_equivalent(class, &owl_nothing)
+                .unwrap_or(false)
+            {
                 subclasses.push(owl_nothing);
             }
 
@@ -464,13 +465,15 @@ impl Reasoner {
 
             let all_classes = self.get_all_classes_in_ontology_internal()?;
             for other_class in all_classes {
-                if !self.classes_equivalent(&other_class, class).unwrap_or(false)
+                if !self
+                    .classes_equivalent(&other_class, class)
+                    .unwrap_or(false)
                     && !equivalent_classes.contains(&other_class)
                     && self.is_subclass_of(class, &other_class)?
-                        && self.is_subclass_of(&other_class, class)?
-                    {
-                        equivalent_classes.push(other_class);
-                    }
+                    && self.is_subclass_of(&other_class, class)?
+                {
+                    equivalent_classes.push(other_class);
+                }
             }
 
             Ok(equivalent_classes)
@@ -640,8 +643,7 @@ impl Reasoner {
             // Detect the profile with a read-lock and avoid a full tableau run
             // when the ontology is EL-conforming.
             let is_el = {
-                let ont =
-                    read_lock(&ontology, "classify: EL profile detection")?;
+                let ont = read_lock(&ontology, "classify: EL profile detection")?;
                 let validator = crate::profiles::el::ELValidator::new();
                 use crate::profiles::ProfileValidator;
                 validator

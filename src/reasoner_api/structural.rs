@@ -9,12 +9,10 @@ use crate::ontology::axioms::Axiom;
 use crate::ontology::axioms::{
     ClassAssertionAxiom, DataPropertyAssertionAxiom, DataPropertyDomainAxiom,
     DataPropertyRangeAxiom, DifferentIndividualsAxiom, DisjointClassesAxiom,
-    DisjointDataPropertiesAxiom, DisjointObjectPropertiesAxiom,
-    EquivalentClassesAxiom, EquivalentDataPropertiesAxiom,
-    EquivalentObjectPropertiesAxiom, InverseObjectPropertiesAxiom,
-    ObjectPropertyAssertionAxiom, ObjectPropertyDomainAxiom,
-    ObjectPropertyRangeAxiom, SameIndividualAxiom, SubClassOfAxiom,
-    SubDataPropertyOfAxiom, SubObjectPropertyOfAxiom,
+    DisjointDataPropertiesAxiom, DisjointObjectPropertiesAxiom, EquivalentClassesAxiom,
+    EquivalentDataPropertiesAxiom, EquivalentObjectPropertiesAxiom, InverseObjectPropertiesAxiom,
+    ObjectPropertyAssertionAxiom, ObjectPropertyDomainAxiom, ObjectPropertyRangeAxiom,
+    SameIndividualAxiom, SubClassOfAxiom, SubDataPropertyOfAxiom, SubObjectPropertyOfAxiom,
 };
 use crate::ontology::{
     ClassExpression, DataPropertyExpression, DataRange, Individual, NamedIndividual,
@@ -44,32 +42,21 @@ struct AxiomIndex {
         HashMap<NamedIndividual, Vec<ObjectPropertyAssertionAxiom>>,
     data_property_assertions_by_individual:
         HashMap<NamedIndividual, Vec<DataPropertyAssertionAxiom>>,
-    sub_object_property_by_sub:
-        HashMap<ObjectPropertyExpression, Vec<SubObjectPropertyOfAxiom>>,
-    sub_object_property_by_super:
-        HashMap<ObjectPropertyExpression, Vec<SubObjectPropertyOfAxiom>>,
+    sub_object_property_by_sub: HashMap<ObjectPropertyExpression, Vec<SubObjectPropertyOfAxiom>>,
+    sub_object_property_by_super: HashMap<ObjectPropertyExpression, Vec<SubObjectPropertyOfAxiom>>,
     equivalent_object_properties:
         HashMap<ObjectPropertyExpression, Vec<EquivalentObjectPropertiesAxiom>>,
     disjoint_object_properties:
         HashMap<ObjectPropertyExpression, Vec<DisjointObjectPropertiesAxiom>>,
-    inverse_object_properties:
-        HashMap<ObjectPropertyExpression, Vec<InverseObjectPropertiesAxiom>>,
-    object_property_domains:
-        HashMap<ObjectPropertyExpression, Vec<ObjectPropertyDomainAxiom>>,
-    object_property_ranges:
-        HashMap<ObjectPropertyExpression, Vec<ObjectPropertyRangeAxiom>>,
-    sub_data_property_by_sub:
-        HashMap<DataPropertyExpression, Vec<SubDataPropertyOfAxiom>>,
-    sub_data_property_by_super:
-        HashMap<DataPropertyExpression, Vec<SubDataPropertyOfAxiom>>,
-    equivalent_data_properties:
-        HashMap<DataPropertyExpression, Vec<EquivalentDataPropertiesAxiom>>,
-    disjoint_data_properties:
-        HashMap<DataPropertyExpression, Vec<DisjointDataPropertiesAxiom>>,
-    data_property_domains:
-        HashMap<DataPropertyExpression, Vec<DataPropertyDomainAxiom>>,
-    data_property_ranges:
-        HashMap<DataPropertyExpression, Vec<DataPropertyRangeAxiom>>,
+    inverse_object_properties: HashMap<ObjectPropertyExpression, Vec<InverseObjectPropertiesAxiom>>,
+    object_property_domains: HashMap<ObjectPropertyExpression, Vec<ObjectPropertyDomainAxiom>>,
+    object_property_ranges: HashMap<ObjectPropertyExpression, Vec<ObjectPropertyRangeAxiom>>,
+    sub_data_property_by_sub: HashMap<DataPropertyExpression, Vec<SubDataPropertyOfAxiom>>,
+    sub_data_property_by_super: HashMap<DataPropertyExpression, Vec<SubDataPropertyOfAxiom>>,
+    equivalent_data_properties: HashMap<DataPropertyExpression, Vec<EquivalentDataPropertiesAxiom>>,
+    disjoint_data_properties: HashMap<DataPropertyExpression, Vec<DisjointDataPropertiesAxiom>>,
+    data_property_domains: HashMap<DataPropertyExpression, Vec<DataPropertyDomainAxiom>>,
+    data_property_ranges: HashMap<DataPropertyExpression, Vec<DataPropertyRangeAxiom>>,
 }
 
 impl StructuralReasoner {
@@ -812,9 +799,10 @@ impl OWLReasoner for StructuralReasoner {
         {
             for ax in axioms {
                 if &ax.property == property
-                    && let Individual::Named(ni) = &ax.target {
-                        nodes.insert(Node::singleton(ni.clone()));
-                    }
+                    && let Individual::Named(ni) = &ax.target
+                {
+                    nodes.insert(Node::singleton(ni.clone()));
+                }
             }
         }
         Ok(NodeSet::new(nodes))

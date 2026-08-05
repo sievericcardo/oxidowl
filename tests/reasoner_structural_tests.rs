@@ -6,8 +6,8 @@ use helpers::*;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 use oxidowl::{
-    Node, NodeSet, OWLReasoner, OWLReasonerConfiguration, ReasonerFactory,
-    StructuralReasoner, StructuralReasonerFactory,
+    Node, NodeSet, OWLReasoner, OWLReasonerConfiguration, ReasonerFactory, StructuralReasoner,
+    StructuralReasonerFactory,
 };
 use std::sync::Arc;
 
@@ -25,7 +25,10 @@ fn test_structural_reasoner_consistent() {
     let ont_ref = onto_ref(ont);
 
     let reasoner = StructuralReasoner::new(ont_ref);
-    assert!(reasoner.is_consistent().unwrap(), "Ontology should be consistent");
+    assert!(
+        reasoner.is_consistent().unwrap(),
+        "Ontology should be consistent"
+    );
 }
 
 #[test]
@@ -44,7 +47,10 @@ fn test_structural_reasoner_inconsistent() {
     let reasoner = StructuralReasoner::new(ont_ref);
     // Structural reasoner always returns true for consistency — it does not
     // perform logical consistency checking (no tableau).
-    assert!(reasoner.is_consistent().unwrap(), "Structural reasoner always reports consistent");
+    assert!(
+        reasoner.is_consistent().unwrap(),
+        "Structural reasoner always reports consistent"
+    );
 }
 
 #[test]
@@ -89,7 +95,10 @@ fn test_get_sub_classes_all() {
     assert!(!subs_all.is_empty(), "Should have all subclasses");
     let flat = subs_all.get_flattened();
     assert!(flat.contains(&b), "B should be a subclass of A (all)");
-    assert!(flat.contains(&c), "C should be a subclass of A (transitive)");
+    assert!(
+        flat.contains(&c),
+        "C should be a subclass of A (transitive)"
+    );
 }
 
 #[test]
@@ -132,7 +141,10 @@ fn test_get_super_classes_all() {
     assert!(!sups.is_empty(), "Should have all superclasses");
     let flat = sups.get_flattened();
     assert!(flat.contains(&b), "B should be a superclass of A");
-    assert!(flat.contains(&c), "C should be a superclass of A (transitive)");
+    assert!(
+        flat.contains(&c),
+        "C should be a superclass of A (transitive)"
+    );
 }
 
 #[test]
@@ -178,7 +190,10 @@ fn test_get_instances() {
     let reasoner = StructuralReasoner::new(ont_ref);
     let instances = reasoner.get_instances(&a, false).unwrap();
     assert!(!instances.is_empty(), "A should have instances");
-    assert!(instances.contains_entity(&i), "i should be an instance of A");
+    assert!(
+        instances.contains_entity(&i),
+        "i should be an instance of A"
+    );
 }
 
 #[test]
@@ -198,7 +213,10 @@ fn test_get_types() {
     let types = reasoner.get_types(&i, false).unwrap();
     assert!(!types.is_empty(), "i should have types");
     let flat = types.get_flattened();
-    assert!(flat.contains(&a), "i should be of type A (direct assertion)");
+    assert!(
+        flat.contains(&a),
+        "i should be of type A (direct assertion)"
+    );
     // Structural reasoner only returns directly asserted types (no subclass inference)
 }
 
@@ -232,7 +250,10 @@ fn test_is_satisfiable() {
     let ont_ref = onto_ref(ont);
 
     let reasoner = StructuralReasoner::new(ont_ref);
-    assert!(reasoner.is_satisfiable(&a).unwrap(), "A should be satisfiable");
+    assert!(
+        reasoner.is_satisfiable(&a).unwrap(),
+        "A should be satisfiable"
+    );
 }
 
 #[test]
@@ -265,7 +286,10 @@ fn test_reasoner_factory() {
     let reasoner = factory.create_reasoner(&ont_ref, &config).unwrap();
 
     assert_eq!(factory.get_reasoner_name(), "Oxidowl Structural Reasoner");
-    assert!(reasoner.is_consistent().unwrap(), "Factory-created reasoner should be consistent");
+    assert!(
+        reasoner.is_consistent().unwrap(),
+        "Factory-created reasoner should be consistent"
+    );
     let (major, minor, patch) = reasoner.get_reasoner_version();
     assert_eq!(major, 1);
     assert_eq!(minor, 0);

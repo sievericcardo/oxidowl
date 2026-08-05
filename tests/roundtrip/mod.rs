@@ -52,9 +52,7 @@ fn rt_functional_subclass_of_with_intersection() {
     let b = df.class_ce("http://ex.org/B");
     let c = df.class_ce("http://ex.org/C");
     let intersection = df.intersection_of(vec![a.clone(), b.clone()]);
-    functional_roundtrip(vec![
-        df.sub_class_of(intersection, c),
-    ]);
+    functional_roundtrip(vec![df.sub_class_of(intersection, c)]);
 }
 
 // ── EquivalentClasses ───────────────────────────────────────────────────────
@@ -656,7 +654,6 @@ fn rdfxml_roundtrip(axioms: Vec<Axiom>) {
 
 #[test]
 // ── RDF/XML tests marked ignore: parser needs OWL-to-RDF mapping ────────
-
 #[test]
 fn rt_rdfxml_subclass_of() {
     let df = DF::new();
@@ -929,9 +926,9 @@ fn rt_functional_literal_with_escapes() {
 #[test]
 fn rt_functional_escaped_iri() {
     let df = DF::new();
-    let mut o = df.build_ontology(vec![
-        df.declaration_axiom(Entity::Class(IRI::new("http://ex.org/Class%20With%20Spaces"))),
-    ]);
+    let mut o = df.build_ontology(vec![df.declaration_axiom(Entity::Class(IRI::new(
+        "http://ex.org/Class%20With%20Spaces",
+    )))]);
     df.auto_declare(&mut o);
     functional_roundtrip_single(&o);
 }

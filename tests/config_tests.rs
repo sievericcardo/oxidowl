@@ -3,10 +3,10 @@ mod helpers;
 
 use helpers::df::DF;
 use helpers::*;
-use oxidowl::manager::ManagerConfig;
-use oxidowl::ontology::*;
 use oxidowl::OntologyManager;
 use oxidowl::PrefixManager;
+use oxidowl::manager::ManagerConfig;
+use oxidowl::ontology::*;
 
 fn onto_ref(o: Ontology) -> OntologyRef {
     std::sync::Arc::new(std::sync::RwLock::new(o))

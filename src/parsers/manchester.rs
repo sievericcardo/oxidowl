@@ -1,14 +1,13 @@
 use crate::error::OxidowlError;
 use crate::ontology::axioms::{
-    Axiom, ClassAssertionAxiom, DeclarationAxiom, DifferentIndividualsAxiom,
-    DisjointClassesAxiom, DisjointObjectPropertiesAxiom, DisjointUnionAxiom, Entity,
-    EquivalentClassesAxiom, EquivalentObjectPropertiesAxiom, FunctionalObjectPropertyAxiom,
+    AnnotationPropertyDomainAxiom, AnnotationPropertyRangeAxiom, AsymmetricObjectPropertyAxiom,
+    Axiom, ClassAssertionAxiom, DeclarationAxiom, DifferentIndividualsAxiom, DisjointClassesAxiom,
+    DisjointObjectPropertiesAxiom, DisjointUnionAxiom, Entity, EquivalentClassesAxiom,
+    EquivalentObjectPropertiesAxiom, FunctionalObjectPropertyAxiom, HasKeyAxiom,
     InverseFunctionalObjectPropertyAxiom, InverseObjectPropertiesAxiom,
     IrreflexiveObjectPropertyAxiom, ObjectPropertyAssertionAxiom, ObjectPropertyDomainAxiom,
-    ObjectPropertyRangeAxiom, ReflexiveObjectPropertyAxiom, SameIndividualAxiom,
-    SubClassOfAxiom, SubObjectPropertyOfAxiom, SymmetricObjectPropertyAxiom,
-    TransitiveObjectPropertyAxiom, AsymmetricObjectPropertyAxiom, HasKeyAxiom,
-    AnnotationPropertyDomainAxiom, AnnotationPropertyRangeAxiom,
+    ObjectPropertyRangeAxiom, ReflexiveObjectPropertyAxiom, SameIndividualAxiom, SubClassOfAxiom,
+    SubObjectPropertyOfAxiom, SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
 };
 use crate::ontology::{
     Class, ClassExpression, IRI, Individual, ObjectProperty, ObjectPropertyExpression, Ontology,
@@ -112,7 +111,11 @@ impl ManchesterParser {
             let line = lines[i].trim();
 
             // Skip prefix lines (already handled)
-            if line.starts_with("Prefix:") || line.is_empty() || line.starts_with('#') || line.starts_with("//") {
+            if line.starts_with("Prefix:")
+                || line.is_empty()
+                || line.starts_with('#')
+                || line.starts_with("//")
+            {
                 i += 1;
                 continue;
             }
@@ -126,7 +129,8 @@ impl ManchesterParser {
             // Handle Import: header
             if line.starts_with("Import:") {
                 let rest = line.strip_prefix("Import:").unwrap().trim();
-                let iri = self.resolve_iri(rest)
+                let iri = self
+                    .resolve_iri(rest)
                     .map_err(|e| OxidowlError::ParseError(format!("Invalid import IRI: {e}")))?;
                 ontology.imports.push(crate::ontology::ImportsDeclaration {
                     imported_ontology_iri: iri,
@@ -144,43 +148,41 @@ impl ManchesterParser {
             // Frame headers
             if line.starts_with("Class:") {
                 let name = line.strip_prefix("Class:").unwrap().trim();
-                let axioms = self
-                    .parse_class_frame(name, &lines, &mut i, &mut next_axiom_id)?;
+                let axioms = self.parse_class_frame(name, &lines, &mut i, &mut next_axiom_id)?;
                 for axiom in axioms {
                     ontology.add_axiom(axiom);
                 }
             } else if line.starts_with("ObjectProperty:") {
                 let name = line.strip_prefix("ObjectProperty:").unwrap().trim();
-                let axioms = self
-                    .parse_object_property_frame(name, &lines, &mut i, &mut next_axiom_id)?;
+                let axioms =
+                    self.parse_object_property_frame(name, &lines, &mut i, &mut next_axiom_id)?;
                 for axiom in axioms {
                     ontology.add_axiom(axiom);
                 }
             } else if line.starts_with("DataProperty:") {
                 let name = line.strip_prefix("DataProperty:").unwrap().trim();
-                let axioms = self
-                    .parse_data_property_frame(name, &lines, &mut i, &mut next_axiom_id)?;
+                let axioms =
+                    self.parse_data_property_frame(name, &lines, &mut i, &mut next_axiom_id)?;
                 for axiom in axioms {
                     ontology.add_axiom(axiom);
                 }
             } else if line.starts_with("Individual:") {
                 let name = line.strip_prefix("Individual:").unwrap().trim();
-                let axioms = self
-                    .parse_individual_frame(name, &lines, &mut i, &mut next_axiom_id)?;
+                let axioms =
+                    self.parse_individual_frame(name, &lines, &mut i, &mut next_axiom_id)?;
                 for axiom in axioms {
                     ontology.add_axiom(axiom);
                 }
             } else if line.starts_with("Datatype:") {
                 let name = line.strip_prefix("Datatype:").unwrap().trim();
-                let axioms = self
-                    .parse_datatype_frame(name, &lines, &mut i, &mut next_axiom_id)?;
+                let axioms = self.parse_datatype_frame(name, &lines, &mut i, &mut next_axiom_id)?;
                 for axiom in axioms {
                     ontology.add_axiom(axiom);
                 }
             } else if line.starts_with("AnnotationProperty:") {
                 let name = line.strip_prefix("AnnotationProperty:").unwrap().trim();
-                let axioms = self
-                    .parse_annotation_property_frame(name, &lines, &mut i, &mut next_axiom_id)?;
+                let axioms =
+                    self.parse_annotation_property_frame(name, &lines, &mut i, &mut next_axiom_id)?;
                 for axiom in axioms {
                     ontology.add_axiom(axiom);
                 }
@@ -278,8 +280,7 @@ impl ManchesterParser {
                 *next_id += 1;
             } else if line.starts_with("DisjointUnionOf:") {
                 let expr_str = line.strip_prefix("DisjointUnionOf:").unwrap().trim();
-                let disjoint_classes =
-                    self.parse_comma_separated_class_expressions(expr_str)?;
+                let disjoint_classes = self.parse_comma_separated_class_expressions(expr_str)?;
                 axioms.push(Axiom::DisjointUnion(DisjointUnionAxiom {
                     id: *next_id,
                     class: ClassExpression::Class(Class::new(class_iri.clone())),
@@ -416,13 +417,9 @@ impl ManchesterParser {
                 ));
                 *next_id += 1;
             } else if line.starts_with("SubPropertyChain:") {
-                let expr_str = line
-                    .strip_prefix("SubPropertyChain:")
-                    .unwrap()
-                    .trim();
+                let expr_str = line.strip_prefix("SubPropertyChain:").unwrap().trim();
                 let props = self.parse_chain_property_expressions(expr_str)?;
-                let chain =
-                    ObjectPropertyExpression::PropertyChain(props);
+                let chain = ObjectPropertyExpression::PropertyChain(props);
                 axioms.push(Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
                     id: *next_id,
                     sub_property: chain,
@@ -431,10 +428,7 @@ impl ManchesterParser {
                 }));
                 *next_id += 1;
             } else if line.starts_with("Characteristics:") {
-                let char_str = line
-                    .strip_prefix("Characteristics:")
-                    .unwrap()
-                    .trim();
+                let char_str = line.strip_prefix("Characteristics:").unwrap().trim();
                 for chr in char_str.split(',') {
                     let chr = chr.trim();
                     match chr {
@@ -533,11 +527,10 @@ impl ManchesterParser {
         next_id: &mut u64,
     ) -> Result<Vec<Axiom>, OxidowlError> {
         let prop_iri = self.resolve_iri(name)?;
-        let prop = crate::ontology::DataPropertyExpression::DataProperty(
-            crate::ontology::DataProperty {
+        let prop =
+            crate::ontology::DataPropertyExpression::DataProperty(crate::ontology::DataProperty {
                 iri: prop_iri.clone(),
-            },
-        );
+            });
         let mut axioms: Vec<Axiom> = Vec::new();
 
         axioms.push(Axiom::Declaration(DeclarationAxiom {
@@ -730,13 +723,11 @@ impl ManchesterParser {
                 let inds = self.parse_comma_separated_individuals(expr_str)?;
                 let mut all_inds = vec![individual.clone()];
                 all_inds.extend(inds);
-                axioms.push(Axiom::DifferentIndividuals(
-                    DifferentIndividualsAxiom {
-                        id: *next_id,
-                        individuals: all_inds,
-                        annotations: Vec::new(),
-                    },
-                ));
+                axioms.push(Axiom::DifferentIndividuals(DifferentIndividualsAxiom {
+                    id: *next_id,
+                    individuals: all_inds,
+                    annotations: Vec::new(),
+                }));
                 *next_id += 1;
             }
 
@@ -1115,9 +1106,7 @@ impl ManchesterParser {
             .map(|s| {
                 let s = s.trim();
                 let iri = self.resolve_iri(s)?;
-                Ok(Individual::Named(crate::ontology::NamedIndividual {
-                    iri,
-                }))
+                Ok(Individual::Named(crate::ontology::NamedIndividual { iri }))
             })
             .collect()
     }
@@ -1134,28 +1123,28 @@ impl ManchesterParser {
         // Try to split into property and value
         // Format: "prop value" or "not (prop value)"
         if let Some(negated) = input.strip_prefix("not (")
-            && let Some(inner) = negated.strip_suffix(')') {
-                let inner = inner.trim();
-                if let Some(space_pos) = inner.find(' ') {
-                    let prop_str = &inner[..space_pos];
-                    let value_str = inner[space_pos + 1..].trim();
-                    let property = self.parse_property_expression(prop_str)?;
-                    let target_iri = self.resolve_iri(value_str)?;
-                    let target = Individual::Named(crate::ontology::NamedIndividual {
-                        iri: target_iri,
-                    });
-                    axioms.push(Axiom::NegativeObjectPropertyAssertion(
-                        crate::ontology::axioms::NegativeObjectPropertyAssertionAxiom {
-                            id: 0,
-                            source: subject.clone(),
-                            target,
-                            property,
-                            annotations: Vec::new(),
-                        },
-                    ));
-                    return Ok(axioms);
-                }
+            && let Some(inner) = negated.strip_suffix(')')
+        {
+            let inner = inner.trim();
+            if let Some(space_pos) = inner.find(' ') {
+                let prop_str = &inner[..space_pos];
+                let value_str = inner[space_pos + 1..].trim();
+                let property = self.parse_property_expression(prop_str)?;
+                let target_iri = self.resolve_iri(value_str)?;
+                let target =
+                    Individual::Named(crate::ontology::NamedIndividual { iri: target_iri });
+                axioms.push(Axiom::NegativeObjectPropertyAssertion(
+                    crate::ontology::axioms::NegativeObjectPropertyAssertionAxiom {
+                        id: 0,
+                        source: subject.clone(),
+                        target,
+                        property,
+                        annotations: Vec::new(),
+                    },
+                ));
+                return Ok(axioms);
             }
+        }
 
         if let Some(space_pos) = input.find(' ') {
             let prop_str = &input[..space_pos];
@@ -1184,9 +1173,8 @@ impl ManchesterParser {
             } else {
                 // Object property assertion
                 let target_iri = self.resolve_iri(value_trimmed)?;
-                let target = Individual::Named(crate::ontology::NamedIndividual {
-                    iri: target_iri,
-                });
+                let target =
+                    Individual::Named(crate::ontology::NamedIndividual { iri: target_iri });
                 axioms.push(Axiom::ObjectPropertyAssertion(
                     ObjectPropertyAssertionAxiom {
                         id: 0,
@@ -1203,10 +1191,7 @@ impl ManchesterParser {
     }
 
     /// Parse a literal value (quoted string)
-    fn parse_literal(
-        &self,
-        input: &str,
-    ) -> Result<crate::ontology::Literal, OxidowlError> {
+    fn parse_literal(&self, input: &str) -> Result<crate::ontology::Literal, OxidowlError> {
         let input = input.trim();
         // Format: "value" or "value"@lang or "value"^^<datatype>
         if let Some(rest) = input.strip_prefix('"') {
@@ -1233,9 +1218,7 @@ impl ManchesterParser {
                 )))
             }
         } else {
-            Err(OxidowlError::ParseError(format!(
-                "Not a literal: {input}"
-            )))
+            Err(OxidowlError::ParseError(format!("Not a literal: {input}")))
         }
     }
 
@@ -1263,9 +1246,9 @@ impl ManchesterParser {
             // Otherwise default to object property
             let iri = self.resolve_iri(part)?;
             // Default to object property
-            obj_props.push(ObjectPropertyExpression::ObjectProperty(
-                ObjectProperty { iri },
-            ));
+            obj_props.push(ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                iri,
+            }));
         }
 
         Ok((obj_props, data_props))
@@ -1297,10 +1280,7 @@ impl ManchesterParser {
     }
 
     /// Parse a data range (simple datatype IRI)
-    fn parse_data_range(
-        &self,
-        expr: &str,
-    ) -> Result<crate::ontology::DataRange, OxidowlError> {
+    fn parse_data_range(&self, expr: &str) -> Result<crate::ontology::DataRange, OxidowlError> {
         let iri = self.resolve_iri(expr.trim())?;
         Ok(crate::ontology::DataRange::Datatype(iri))
     }
@@ -1408,7 +1388,10 @@ Class: ex:Student
         // Each class frame now produces a Declaration axiom
         assert_eq!(ontology.axioms().len(), 2);
         for axiom in ontology.axioms() {
-            assert!(matches!(axiom, crate::ontology::axioms::Axiom::Declaration(_)));
+            assert!(matches!(
+                axiom,
+                crate::ontology::axioms::Axiom::Declaration(_)
+            ));
         }
     }
 
@@ -1455,14 +1438,21 @@ AnnotationProperty: ex:label
             .expect("Failed to parse Manchester syntax ontology");
 
         let axioms = ontology.axioms();
-        assert!(axioms.len() > 10, "Expected many axioms, got {}", axioms.len());
+        assert!(
+            axioms.len() > 10,
+            "Expected many axioms, got {}",
+            axioms.len()
+        );
 
         // Check for declarations
         let declarations: Vec<_> = axioms
             .iter()
             .filter(|a| matches!(a, crate::ontology::axioms::Axiom::Declaration(_)))
             .collect();
-        assert!(!declarations.is_empty(), "Expected at least one declaration");
+        assert!(
+            !declarations.is_empty(),
+            "Expected at least one declaration"
+        );
 
         // Check for SubClassOf axioms
         let subclassof: Vec<_> = axioms
@@ -1483,41 +1473,79 @@ AnnotationProperty: ex:label
             .iter()
             .filter(|a| matches!(a, crate::ontology::axioms::Axiom::DisjointClasses(_)))
             .collect();
-        assert!(!disjoint.is_empty(), "Expected at least one DisjointClasses");
+        assert!(
+            !disjoint.is_empty(),
+            "Expected at least one DisjointClasses"
+        );
 
         // Check for property characteristic axioms
         let transitive: Vec<_> = axioms
             .iter()
-            .filter(|a| matches!(a, crate::ontology::axioms::Axiom::TransitiveObjectProperty(_)))
+            .filter(|a| {
+                matches!(
+                    a,
+                    crate::ontology::axioms::Axiom::TransitiveObjectProperty(_)
+                )
+            })
             .collect();
-        assert!(!transitive.is_empty(), "Expected at least one TransitiveObjectProperty");
+        assert!(
+            !transitive.is_empty(),
+            "Expected at least one TransitiveObjectProperty"
+        );
 
         let asymmetric: Vec<_> = axioms
             .iter()
-            .filter(|a| matches!(a, crate::ontology::axioms::Axiom::AsymmetricObjectProperty(_)))
+            .filter(|a| {
+                matches!(
+                    a,
+                    crate::ontology::axioms::Axiom::AsymmetricObjectProperty(_)
+                )
+            })
             .collect();
-        assert!(!asymmetric.is_empty(), "Expected at least one AsymmetricObjectProperty");
+        assert!(
+            !asymmetric.is_empty(),
+            "Expected at least one AsymmetricObjectProperty"
+        );
 
         // Check for InverseObjectProperties
         let inverse: Vec<_> = axioms
             .iter()
-            .filter(|a| matches!(a, crate::ontology::axioms::Axiom::InverseObjectProperties(_)))
+            .filter(|a| {
+                matches!(
+                    a,
+                    crate::ontology::axioms::Axiom::InverseObjectProperties(_)
+                )
+            })
             .collect();
-        assert!(!inverse.is_empty(), "Expected at least one InverseObjectProperties");
+        assert!(
+            !inverse.is_empty(),
+            "Expected at least one InverseObjectProperties"
+        );
 
         // Check for ClassAssertion (Types:)
         let class_assert: Vec<_> = axioms
             .iter()
             .filter(|a| matches!(a, crate::ontology::axioms::Axiom::ClassAssertion(_)))
             .collect();
-        assert!(!class_assert.is_empty(), "Expected at least one ClassAssertion");
+        assert!(
+            !class_assert.is_empty(),
+            "Expected at least one ClassAssertion"
+        );
 
         // Check for ObjectPropertyAssertion (Facts:)
         let prop_assert: Vec<_> = axioms
             .iter()
-            .filter(|a| matches!(a, crate::ontology::axioms::Axiom::ObjectPropertyAssertion(_)))
+            .filter(|a| {
+                matches!(
+                    a,
+                    crate::ontology::axioms::Axiom::ObjectPropertyAssertion(_)
+                )
+            })
             .collect();
-        assert!(!prop_assert.is_empty(), "Expected at least one ObjectPropertyAssertion");
+        assert!(
+            !prop_assert.is_empty(),
+            "Expected at least one ObjectPropertyAssertion"
+        );
 
         // Check for SameIndividual
         let same: Vec<_> = axioms
@@ -1529,15 +1557,31 @@ AnnotationProperty: ex:label
         // Check for AnnotationPropertyDomain
         let ap_domain: Vec<_> = axioms
             .iter()
-            .filter(|a| matches!(a, crate::ontology::axioms::Axiom::AnnotationPropertyDomain(_)))
+            .filter(|a| {
+                matches!(
+                    a,
+                    crate::ontology::axioms::Axiom::AnnotationPropertyDomain(_)
+                )
+            })
             .collect();
-        assert!(!ap_domain.is_empty(), "Expected at least one AnnotationPropertyDomain");
+        assert!(
+            !ap_domain.is_empty(),
+            "Expected at least one AnnotationPropertyDomain"
+        );
 
         // Check for AnnotationPropertyRange
         let ap_range: Vec<_> = axioms
             .iter()
-            .filter(|a| matches!(a, crate::ontology::axioms::Axiom::AnnotationPropertyRange(_)))
+            .filter(|a| {
+                matches!(
+                    a,
+                    crate::ontology::axioms::Axiom::AnnotationPropertyRange(_)
+                )
+            })
             .collect();
-        assert!(!ap_range.is_empty(), "Expected at least one AnnotationPropertyRange");
+        assert!(
+            !ap_range.is_empty(),
+            "Expected at least one AnnotationPropertyRange"
+        );
     }
 }

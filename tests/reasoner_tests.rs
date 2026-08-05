@@ -3,14 +3,14 @@ mod helpers;
 
 use helpers::df::DF;
 use helpers::*;
+use oxidowl::StructuralReasoner;
+use oxidowl::StructuralReasonerFactory;
+use oxidowl::TableauReasonerFactory;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 use oxidowl::reasoner_api::{
     Node, NodeSet, OWLReasoner, OWLReasonerConfiguration, ReasonerFactory,
 };
-use oxidowl::StructuralReasoner;
-use oxidowl::StructuralReasonerFactory;
-use oxidowl::TableauReasonerFactory;
 use std::sync::Arc;
 
 // Node/NodeSet tests are separated below; these types come from reasoner_api
@@ -39,8 +39,12 @@ fn structural_reasoner_is_consistent() {
 fn structural_reasoner_sub_classes() {
     let onto = test_ontology_ref();
     let reasoner = StructuralReasoner::new(onto);
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-    let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/B"),
+    });
 
     // A ⊑ B, so B's subclasses should include A
     let subs = reasoner.get_sub_classes(&b, false).unwrap();
@@ -53,8 +57,12 @@ fn structural_reasoner_sub_classes() {
 fn structural_reasoner_super_classes() {
     let onto = test_ontology_ref();
     let reasoner = StructuralReasoner::new(onto);
-    let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
-    let c = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/C") });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/B"),
+    });
+    let c = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/C"),
+    });
 
     // A ⊑ B ⊑ C, so B's superclasses should include C
     let sups = reasoner.get_super_classes(&b, false).unwrap();
@@ -67,8 +75,12 @@ fn structural_reasoner_super_classes() {
 fn structural_reasoner_instances() {
     let onto = test_ontology_ref();
     let reasoner = StructuralReasoner::new(onto);
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-    let ind = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/ind") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
+    let ind = Individual::Named(NamedIndividual {
+        iri: IRI::new("http://ex.org/ind"),
+    });
 
     let instances = reasoner.get_instances(&a, false).unwrap();
     assert!(instances.contains_entity(&ind));
@@ -78,8 +90,12 @@ fn structural_reasoner_instances() {
 fn structural_reasoner_types() {
     let onto = test_ontology_ref();
     let reasoner = StructuralReasoner::new(onto);
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-    let ind = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/ind") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
+    let ind = Individual::Named(NamedIndividual {
+        iri: IRI::new("http://ex.org/ind"),
+    });
 
     let types = reasoner.get_types(&ind, false).unwrap();
     assert!(types.contains_entity(&a));
@@ -89,7 +105,9 @@ fn structural_reasoner_types() {
 fn structural_reasoner_equivalent_classes() {
     let onto = test_ontology_ref();
     let reasoner = StructuralReasoner::new(onto);
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
     let node = reasoner.get_equivalent_classes(&a).unwrap();
     assert!(node.is_singleton());
 }
@@ -98,7 +116,9 @@ fn structural_reasoner_equivalent_classes() {
 fn structural_reasoner_satisfiable() {
     let onto = test_ontology_ref();
     let reasoner = StructuralReasoner::new(onto);
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
     assert!(reasoner.is_satisfiable(&a).unwrap());
 }
 

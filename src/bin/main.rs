@@ -1150,7 +1150,11 @@ fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
         let conclusion_file = &cli.input[0];
 
         // Load conclusion ontology and check entailment
-        println!("Checking entailment of {} against {}...", conclusion_file.display(), premise_file.display());
+        println!(
+            "Checking entailment of {} against {}...",
+            conclusion_file.display(),
+            premise_file.display()
+        );
         let conclusion = match oxidowl::ontology::Ontology::from_file(conclusion_file, None) {
             Ok(o) => o,
             Err(e) => {
@@ -1166,7 +1170,7 @@ fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
         let mut all_entailed = true;
         for axiom in conclusion.axioms() {
             match reasoner.check_entailment(axiom, &onto_ref, &mut stats) {
-                Ok(true) => {},
+                Ok(true) => {}
                 Ok(false) => {
                     println!("  Not entailed: {axiom:?}");
                     all_entailed = false;
@@ -1178,11 +1182,17 @@ fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
             }
         }
         if all_entailed {
-            println!("Entailment holds: all axioms in {} are entailed by {}",
-                conclusion_file.display(), premise_file.display());
+            println!(
+                "Entailment holds: all axioms in {} are entailed by {}",
+                conclusion_file.display(),
+                premise_file.display()
+            );
         } else {
-            println!("Entailment does NOT hold between {} and {}",
-                premise_file.display(), conclusion_file.display());
+            println!(
+                "Entailment does NOT hold between {} and {}",
+                premise_file.display(),
+                conclusion_file.display()
+            );
         }
     }
 

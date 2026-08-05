@@ -96,19 +96,33 @@ fn datatype_validation() {
     assert!(OWL2Datatype::Integer.validate_lexical_form("42").is_ok());
     assert!(OWL2Datatype::Integer.validate_lexical_form("-17").is_ok());
     assert!(OWL2Datatype::Integer.validate_lexical_form("0").is_ok());
-    assert!(OWL2Datatype::Integer.validate_lexical_form("not-a-number").is_err());
+    assert!(
+        OWL2Datatype::Integer
+            .validate_lexical_form("not-a-number")
+            .is_err()
+    );
     assert!(OWL2Datatype::Boolean.validate_lexical_form("true").is_ok());
     assert!(OWL2Datatype::Boolean.validate_lexical_form("false").is_ok());
-    assert!(OWL2Datatype::Boolean.validate_lexical_form("maybe").is_err());
+    assert!(
+        OWL2Datatype::Boolean
+            .validate_lexical_form("maybe")
+            .is_err()
+    );
 }
 
 #[test]
 fn datatype_from_iri() {
     let string_iri = IRI::new("http://www.w3.org/2001/XMLSchema#string");
-    assert_eq!(OWL2Datatype::from_iri(&string_iri), Some(OWL2Datatype::String));
+    assert_eq!(
+        OWL2Datatype::from_iri(&string_iri),
+        Some(OWL2Datatype::String)
+    );
 
     let integer_iri = IRI::new("http://www.w3.org/2001/XMLSchema#integer");
-    assert_eq!(OWL2Datatype::from_iri(&integer_iri), Some(OWL2Datatype::Integer));
+    assert_eq!(
+        OWL2Datatype::from_iri(&integer_iri),
+        Some(OWL2Datatype::Integer)
+    );
 
     let unknown_iri = IRI::new("http://example.org/MyDatatype");
     assert_eq!(OWL2Datatype::from_iri(&unknown_iri), None);
@@ -139,7 +153,10 @@ fn datatype_facets_numeric() {
 fn datatype_parse_literal_integer() {
     let lit = OWL2Datatype::Integer.parse_literal("42");
     assert_eq!(lit.value, "42");
-    assert_eq!(lit.datatype.as_ref().unwrap().as_str(), "http://www.w3.org/2001/XMLSchema#integer");
+    assert_eq!(
+        lit.datatype.as_ref().unwrap().as_str(),
+        "http://www.w3.org/2001/XMLSchema#integer"
+    );
 }
 
 #[test]

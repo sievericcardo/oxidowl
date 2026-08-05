@@ -20,7 +20,10 @@ fn test_special_characters_in_iri() {
     let reparse = parse_functional(&fss).expect("reparse");
 
     let subclasses = reparse.get_axioms_by_type(&AxiomType::SubClassOf);
-    assert!(!subclasses.is_empty(), "Reparsed ontology should have subclass-of axioms");
+    assert!(
+        !subclasses.is_empty(),
+        "Reparsed ontology should have subclass-of axioms"
+    );
 }
 
 #[test]
@@ -62,7 +65,10 @@ fn test_non_ascii_iris() {
     let fss = save_to_string(&o, OntologyFormat::Functional).expect("serialize");
     let reparse = parse_functional(&fss).expect("reparse");
 
-    assert!(reparse.axioms().len() >= 2, "Non-ASCII IRI ontology should survive roundtrip");
+    assert!(
+        reparse.axioms().len() >= 2,
+        "Non-ASCII IRI ontology should survive roundtrip"
+    );
 }
 
 #[test]
@@ -118,20 +124,14 @@ fn test_blank_node_id_scoping() {
     let df1 = DF::new();
     let mut o1 = df1.build_ontology(vec![
         df1.declaration_axiom(Entity::Class(IRI::new("http://ex.org/A"))),
-        df1.class_assertion(
-            df1.class_ce("http://ex.org/A"),
-            df1.anon(),
-        ),
+        df1.class_assertion(df1.class_ce("http://ex.org/A"), df1.anon()),
     ]);
     df1.auto_declare(&mut o1);
 
     let df2 = DF::new();
     let mut o2 = df2.build_ontology(vec![
         df2.declaration_axiom(Entity::Class(IRI::new("http://ex.org/B"))),
-        df2.class_assertion(
-            df2.class_ce("http://ex.org/B"),
-            df2.anon(),
-        ),
+        df2.class_assertion(df2.class_ce("http://ex.org/B"), df2.anon()),
     ]);
     df2.auto_declare(&mut o2);
 
@@ -149,7 +149,10 @@ fn test_blank_node_id_scoping() {
 fn test_ontology_anonymous_iri() {
     let df = DF::new();
     let o = df.new_ontology();
-    assert!(o.get_iri().is_none(), "Anonymous ontology should have no IRI");
+    assert!(
+        o.get_iri().is_none(),
+        "Anonymous ontology should have no IRI"
+    );
 
     let mut o_with = df.new_ontology();
     o_with.add_axiom(df.declaration_axiom(Entity::Class(IRI::new("http://ex.org/A"))));
@@ -180,7 +183,10 @@ fn test_deep_class_expression_nesting() {
         .iter()
         .filter(|ax| matches!(ax, Axiom::SubClassOf(_)))
         .count();
-    assert_eq!(subclass_axs, 1, "Should have exactly one SubClassOf axiom after roundtrip");
+    assert_eq!(
+        subclass_axs, 1,
+        "Should have exactly one SubClassOf axiom after roundtrip"
+    );
 }
 
 #[test]
@@ -201,7 +207,10 @@ fn test_large_cardinality() {
         .iter()
         .filter(|ax| matches!(ax, Axiom::SubClassOf(_)))
         .count();
-    assert_eq!(subclass_axs, 1, "Should have SubClassOf with large cardinality");
+    assert_eq!(
+        subclass_axs, 1,
+        "Should have SubClassOf with large cardinality"
+    );
 }
 
 #[test]
@@ -251,10 +260,17 @@ fn test_empty_ontology_handling() {
     assert!(o.is_empty());
 
     let fss = save_to_string(&o, OntologyFormat::Functional).expect("serialize");
-    assert!(!fss.is_empty(), "Serialized empty ontology should produce output");
+    assert!(
+        !fss.is_empty(),
+        "Serialized empty ontology should produce output"
+    );
 
     let reparse = parse_functional(&fss).expect("reparse");
-    assert_eq!(reparse.axioms().len(), 0, "Reparsed empty ontology should have 0 axioms");
+    assert_eq!(
+        reparse.axioms().len(),
+        0,
+        "Reparsed empty ontology should have 0 axioms"
+    );
 }
 
 #[test]
@@ -275,12 +291,19 @@ fn test_iri_with_fragment() {
     let reparse = parse_functional(&fss).expect("reparse");
 
     let subclasses = reparse.get_axioms_by_type(&AxiomType::SubClassOf);
-    assert!(!subclasses.is_empty(), "IRI with fragment should survive roundtrip");
+    assert!(
+        !subclasses.is_empty(),
+        "IRI with fragment should survive roundtrip"
+    );
 
-    let mentions_a = reparse.axioms().iter().any(|ax| {
-        format!("{:?}", ax).contains("ont#A")
-    });
-    assert!(mentions_a, "Reparsed ontology should mention the fragment IRI");
+    let mentions_a = reparse
+        .axioms()
+        .iter()
+        .any(|ax| format!("{:?}", ax).contains("ont#A"));
+    assert!(
+        mentions_a,
+        "Reparsed ontology should mention the fragment IRI"
+    );
 }
 
 #[test]
@@ -347,6 +370,12 @@ fn test_punning_same_iri_class_and_individual() {
         matches!(ax, Axiom::Declaration(d) if matches!(&d.entity, Entity::NamedIndividual(ni) if ni.as_str() == "http://ex.org/Thing"))
     });
 
-    assert!(has_class_decl, "Punned IRI should appear as class declaration");
-    assert!(has_ind_decl, "Punned IRI should appear as individual declaration");
+    assert!(
+        has_class_decl,
+        "Punned IRI should appear as class declaration"
+    );
+    assert!(
+        has_ind_decl,
+        "Punned IRI should appear as individual declaration"
+    );
 }

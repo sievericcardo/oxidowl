@@ -10,8 +10,8 @@ pub mod entailment;
 pub mod graph_isomorphism;
 pub mod interpretation;
 pub mod iri_validation;
-pub mod owl_rdf_mapping;
 pub mod owl2;
+pub mod owl_rdf_mapping;
 pub mod quoted_triple_optimizer;
 pub mod rdf;
 pub mod rdfs; // Re-enabled after fixing type system issues

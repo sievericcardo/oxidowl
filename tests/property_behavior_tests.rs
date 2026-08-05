@@ -52,7 +52,10 @@ fn test_object_property_subsumption_chain() {
         .iter()
         .filter(|ax| matches!(ax, Axiom::SubObjectPropertyOf(_)))
         .count();
-    assert_eq!(sub_count, 2, "Should have 2 SubObjectPropertyOf axioms in the chain");
+    assert_eq!(
+        sub_count, 2,
+        "Should have 2 SubObjectPropertyOf axioms in the chain"
+    );
 }
 
 /// test_object_property_inverse: InverseObjectProperties(P, Q) — verify structure
@@ -235,15 +238,32 @@ fn test_all_object_property_characteristics() {
     assert_eq!(axioms.len(), 7, "Should have all 7 characteristic axioms");
 
     // Count per type
-    let count_by_type = |variant: fn(&Axiom) -> bool| -> usize {
-        axioms.iter().filter(|ax| variant(ax)).count()
-    };
-    assert_eq!(count_by_type(|ax| matches!(ax, Axiom::FunctionalObjectProperty(_))), 1);
-    assert_eq!(count_by_type(|ax| matches!(ax, Axiom::TransitiveObjectProperty(_))), 1);
-    assert_eq!(count_by_type(|ax| matches!(ax, Axiom::SymmetricObjectProperty(_))), 1);
-    assert_eq!(count_by_type(|ax| matches!(ax, Axiom::AsymmetricObjectProperty(_))), 1);
-    assert_eq!(count_by_type(|ax| matches!(ax, Axiom::ReflexiveObjectProperty(_))), 1);
-    assert_eq!(count_by_type(|ax| matches!(ax, Axiom::IrreflexiveObjectProperty(_))), 1);
+    let count_by_type =
+        |variant: fn(&Axiom) -> bool| -> usize { axioms.iter().filter(|ax| variant(ax)).count() };
+    assert_eq!(
+        count_by_type(|ax| matches!(ax, Axiom::FunctionalObjectProperty(_))),
+        1
+    );
+    assert_eq!(
+        count_by_type(|ax| matches!(ax, Axiom::TransitiveObjectProperty(_))),
+        1
+    );
+    assert_eq!(
+        count_by_type(|ax| matches!(ax, Axiom::SymmetricObjectProperty(_))),
+        1
+    );
+    assert_eq!(
+        count_by_type(|ax| matches!(ax, Axiom::AsymmetricObjectProperty(_))),
+        1
+    );
+    assert_eq!(
+        count_by_type(|ax| matches!(ax, Axiom::ReflexiveObjectProperty(_))),
+        1
+    );
+    assert_eq!(
+        count_by_type(|ax| matches!(ax, Axiom::IrreflexiveObjectProperty(_))),
+        1
+    );
     assert_eq!(
         count_by_type(|ax| matches!(ax, Axiom::InverseFunctionalObjectProperty(_))),
         1
@@ -313,10 +333,7 @@ fn test_inverse_property_expression() {
     match &expr {
         ClassExpression::ObjectSomeValuesFrom { property, .. } => {
             assert!(property.is_inverse());
-            assert_eq!(
-                property.get_named_property().iri.as_str(),
-                &ex("P")
-            );
+            assert_eq!(property.get_named_property().iri.as_str(), &ex("P"));
         }
         _ => panic!("Expected ObjectSomeValuesFrom"),
     }
@@ -590,7 +607,10 @@ fn test_data_property_assertion_values() {
                 None
             }
         });
-        assert!(found.is_some(), "DataPropertyAssertion should be in ontology");
+        assert!(
+            found.is_some(),
+            "DataPropertyAssertion should be in ontology"
+        );
         if let Some(a) = found {
             assert_eq!(a.value.value, "John Doe");
         }

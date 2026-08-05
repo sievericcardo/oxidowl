@@ -98,9 +98,9 @@ impl RLValidator {
         match expr {
             ClassExpression::Class(_) => true,
             // Intersection of super-class expressions (recursive, per RL spec)
-            ClassExpression::ObjectIntersectionOf(classes) => classes
-                .iter()
-                .all(|c| self.is_rl_super_class_expression(c)),
+            ClassExpression::ObjectIntersectionOf(classes) => {
+                classes.iter().all(|c| self.is_rl_super_class_expression(c))
+            }
             ClassExpression::ObjectAllValuesFrom { property, filler } => {
                 self.is_property_expression_allowed(property)
                     && matches!(filler.as_ref(), ClassExpression::Class(_))
@@ -360,14 +360,12 @@ impl ProfileValidator for RLValidator {
                 self.is_rl_sub_class_expression(&subclass_axiom.subclass)
                     && self.is_rl_super_class_expression(&subclass_axiom.superclass)
             }
-            Axiom::EquivalentClasses(equiv_axiom) => equiv_axiom
-                .classes
-                .iter()
-                .all(|c| self.is_rl_sub_class_expression(c) || self.is_rl_super_class_expression(c)),
-            Axiom::DisjointClasses(disjoint_axiom) => disjoint_axiom
-                .classes
-                .iter()
-                .all(|c| self.is_rl_sub_class_expression(c) || self.is_rl_super_class_expression(c)),
+            Axiom::EquivalentClasses(equiv_axiom) => equiv_axiom.classes.iter().all(|c| {
+                self.is_rl_sub_class_expression(c) || self.is_rl_super_class_expression(c)
+            }),
+            Axiom::DisjointClasses(disjoint_axiom) => disjoint_axiom.classes.iter().all(|c| {
+                self.is_rl_sub_class_expression(c) || self.is_rl_super_class_expression(c)
+            }),
             Axiom::DisjointUnion(_) => false, // Disjoint unions not allowed in RL
 
             // Object property axioms - most are allowed

@@ -1,8 +1,9 @@
 #[path = "helpers/mod.rs"]
 mod helpers;
 
-use helpers::*;
 use helpers::df::DF;
+use helpers::*;
+use oxidowl::config::{PerformanceFeature, ReasoningFeature};
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 use oxidowl::{
@@ -13,7 +14,6 @@ use oxidowl::{
     ManagerConfig, NNFConverter, PerformanceConfig, PerformanceProfile, PrefixManager,
     QNameShortFormProvider, ReasonerConfig, ShortFormProvider, SimpleShortFormProvider,
 };
-use oxidowl::config::{ReasoningFeature, PerformanceFeature};
 use std::sync::{Arc, RwLock};
 
 const EX: &str = "http://example.org/";
@@ -45,8 +45,14 @@ fn test_expressivity_al_basic() {
     assert!(!expr.has_complement, "AL should not have complement");
     assert!(!expr.has_union, "AL should not have union");
     assert!(!expr.has_nominals, "AL should not have nominals");
-    assert!(expr.to_name().starts_with("AL"), "Expressivity should start with AL");
-    assert!(!expr.to_name().contains('C'), "AL should not contain complement marker");
+    assert!(
+        expr.to_name().starts_with("AL"),
+        "Expressivity should start with AL"
+    );
+    assert!(
+        !expr.to_name().contains('C'),
+        "AL should not contain complement marker"
+    );
 }
 
 /// Adding complement should produce ALC.
@@ -62,9 +68,15 @@ fn test_expressivity_al_with_complement() {
     let expr = checker.analyze(&ont);
 
     assert!(expr.has_complement, "Should detect complement");
-    assert!(!expr.to_name().contains('C'), "Just complement alone doesn't make ALC (needs existential+universal too)");
+    assert!(
+        !expr.to_name().contains('C'),
+        "Just complement alone doesn't make ALC (needs existential+universal too)"
+    );
     let name = expr.to_name();
-    assert!(name.starts_with("AL"), "Expressivity should start with AL: {name}");
+    assert!(
+        name.starts_with("AL"),
+        "Expressivity should start with AL: {name}"
+    );
 }
 
 /// Adding existential quantifier to ALC keeps it as ALC (ALCE is absorbed).
@@ -81,8 +93,11 @@ fn test_expressivity_alc_with_role() {
     let expr = checker.analyze(&ont);
 
     assert!(expr.has_existential, "Should detect existential quantifier");
-    assert!(expr.to_name().contains("ALC") || expr.to_name().contains("AL"),
-        "Expressivity: {}", expr.to_name());
+    assert!(
+        expr.to_name().contains("ALC") || expr.to_name().contains("AL"),
+        "Expressivity: {}",
+        expr.to_name()
+    );
 }
 
 /// Adding union produces ALCU.
@@ -99,7 +114,10 @@ fn test_expressivity_alc_with_union() {
     let expr = checker.analyze(&ont);
 
     assert!(expr.has_union, "Should detect union");
-    assert!(!expr.has_existential, "Union alone does not create existential quantifier");
+    assert!(
+        !expr.has_existential,
+        "Union alone does not create existential quantifier"
+    );
 }
 
 /// Adding a transitive property should add S.
@@ -118,8 +136,11 @@ fn test_expressivity_with_transitive() {
     let expr = checker.analyze(&ont);
 
     assert!(expr.has_transitivity, "Should detect transitivity (S)");
-    assert!(expr.to_name().contains('S') || !expr.has_complement,
-        "Name should reflect transitivity: {}", expr.to_name());
+    assert!(
+        expr.to_name().contains('S') || !expr.has_complement,
+        "Name should reflect transitivity: {}",
+        expr.to_name()
+    );
 }
 
 /// Adding ObjectOneOf (nominals) should add O.
@@ -135,8 +156,11 @@ fn test_expressivity_with_nominals() {
     let expr = checker.analyze(&ont);
 
     assert!(expr.has_nominals, "Should detect nominals (O)");
-    assert!(expr.to_name().contains('O'),
-        "Name should contain O for nominals: {}", expr.to_name());
+    assert!(
+        expr.to_name().contains('O'),
+        "Name should contain O for nominals: {}",
+        expr.to_name()
+    );
 }
 
 /// Adding inverse property should add I.
@@ -156,8 +180,11 @@ fn test_expressivity_with_inverse() {
     let expr = checker.analyze(&ont);
 
     assert!(expr.has_inverse, "Should detect inverse properties (I)");
-    assert!(expr.to_name().contains('I'),
-        "Name should contain I: {}", expr.to_name());
+    assert!(
+        expr.to_name().contains('I'),
+        "Name should contain I: {}",
+        expr.to_name()
+    );
 }
 
 /// Adding functional property should add F.
@@ -175,9 +202,15 @@ fn test_expressivity_with_functional() {
     let checker = DLExpressivityChecker;
     let expr = checker.analyze(&ont);
 
-    assert!(expr.has_functional, "Should detect functional properties (F)");
-    assert!(expr.to_name().contains('F'),
-        "Name should contain F: {}", expr.to_name());
+    assert!(
+        expr.has_functional,
+        "Should detect functional properties (F)"
+    );
+    assert!(
+        expr.to_name().contains('F'),
+        "Name should contain F: {}",
+        expr.to_name()
+    );
 }
 
 /// Adding qualified cardinality should add Q.
@@ -188,18 +221,21 @@ fn test_expressivity_with_cardinality() {
     let a = df.class_ce(&ex("A"));
     let b = df.class_ce(&ex("B"));
     let min_card = df.min_cardinality(2, r, a.clone());
-    let ont = df.build_ontology(vec![
-        df.sub_class_of(b, min_card),
-    ]);
+    let ont = df.build_ontology(vec![df.sub_class_of(b, min_card)]);
 
     let checker = DLExpressivityChecker;
     let expr = checker.analyze(&ont);
 
     assert!(expr.has_cardinality, "Should detect cardinality");
-    assert!(expr.has_qualified_cardinality,
-        "Should detect qualified cardinality (Q) since filler is not owl:Thing");
-    assert!(expr.to_name().contains('Q'),
-        "Name should contain Q: {}", expr.to_name());
+    assert!(
+        expr.has_qualified_cardinality,
+        "Should detect qualified cardinality (Q) since filler is not owl:Thing"
+    );
+    assert!(
+        expr.to_name().contains('Q'),
+        "Name should contain Q: {}",
+        expr.to_name()
+    );
 }
 
 /// Adding a property chain should add R (role hierarchy/disjointness).
@@ -210,14 +246,15 @@ fn test_expressivity_with_property_chain() {
     let p2 = df.obj_prop(&ex("p2"));
     let chain = ObjectPropertyExpression::PropertyChain(vec![p1, p2]);
     let super_p = df.obj_prop(&ex("super"));
-    let ont = df.build_ontology(vec![
-        df.sub_object_property_of(chain, super_p),
-    ]);
+    let ont = df.build_ontology(vec![df.sub_object_property_of(chain, super_p)]);
 
     let checker = DLExpressivityChecker;
     let expr = checker.analyze(&ont);
 
-    assert!(expr.has_role_hierarchy, "Should detect role hierarchy (R via property chain)");
+    assert!(
+        expr.has_role_hierarchy,
+        "Should detect role hierarchy (R via property chain)"
+    );
 }
 
 /// Full SROIQ ontology exercising S, R, O, I, Q.
@@ -239,7 +276,9 @@ fn test_expressivity_full_sroiq() {
     let some_r_c = df.some_values_from(r.clone(), c.clone());
     let one_of = df.one_of(vec![i, j]);
     let min_card = df.min_cardinality(2, t.clone(), b.clone());
-    let inv_s = ObjectPropertyExpression::InverseObjectProperty(ObjectProperty { iri: IRI::new(&ex("s")) });
+    let inv_s = ObjectPropertyExpression::InverseObjectProperty(ObjectProperty {
+        iri: IRI::new(&ex("s")),
+    });
 
     let ont = df.build_ontology(vec![
         df.sub_class_of(not_a, b.clone()),
@@ -261,8 +300,14 @@ fn test_expressivity_full_sroiq() {
     assert!(expr.has_nominals, "SROIQ should have nominals (O)");
     assert!(expr.has_inverse, "SROIQ should have inverse (I)");
     assert!(expr.has_transitivity, "SROIQ should have transitivity (S)");
-    assert!(expr.has_role_hierarchy, "SROIQ should have role hierarchy (R)");
-    assert!(expr.has_qualified_cardinality, "SROIQ should have qualified cardinality (Q)");
+    assert!(
+        expr.has_role_hierarchy,
+        "SROIQ should have role hierarchy (R)"
+    );
+    assert!(
+        expr.has_qualified_cardinality,
+        "SROIQ should have qualified cardinality (Q)"
+    );
     assert!(expr.has_functional, "SROIQ should have functional (F)");
 
     let name = expr.to_name();
@@ -285,23 +330,46 @@ fn test_reasoner_config_defaults() {
         config.reasoning.tableau_algorithm,
         oxidowl::TableauAlgorithm::Traditional
     );
-    assert!(config.reasoning.timeout.is_some(), "Default should have a timeout");
-    assert!(config.reasoning.max_memory_mb.is_some(), "Default should have a memory limit");
-    assert!(config.reasoning.max_expansion_depth > 0, "Max expansion depth should be positive");
-    assert!(!config.reasoning.dump_clauses, "Clause dumping should be disabled by default");
-    assert!(!config.reasoning.incremental_reasoning, "Incremental reasoning should be off by default");
+    assert!(
+        config.reasoning.timeout.is_some(),
+        "Default should have a timeout"
+    );
+    assert!(
+        config.reasoning.max_memory_mb.is_some(),
+        "Default should have a memory limit"
+    );
+    assert!(
+        config.reasoning.max_expansion_depth > 0,
+        "Max expansion depth should be positive"
+    );
+    assert!(
+        !config.reasoning.dump_clauses,
+        "Clause dumping should be disabled by default"
+    );
+    assert!(
+        !config.reasoning.incremental_reasoning,
+        "Incremental reasoning should be off by default"
+    );
     assert!(
         config.reasoning.is_enabled(ReasoningFeature::Optimizations),
         "Optimizations should be enabled by default"
     );
     assert!(
-        config.reasoning.is_enabled(ReasoningFeature::ClashDetection),
+        config
+            .reasoning
+            .is_enabled(ReasoningFeature::ClashDetection),
         "Clash detection should be enabled by default"
     );
 
-    assert!(config.cache.max_cache_size_mb > 0, "Cache size should be positive");
+    assert!(
+        config.cache.max_cache_size_mb > 0,
+        "Cache size should be positive"
+    );
     assert!(config.server.port > 0, "Server port should be positive");
-    assert!(!config.server.bind_address.is_empty(), "Bind address should not be empty");
+    assert!(
+        !config.server.bind_address.is_empty(),
+        "Bind address should not be empty"
+    );
 }
 
 /// Custom manager config creation.
@@ -455,9 +523,18 @@ fn test_ontology_walker_basic() {
     let visitor = walker.into_visitor();
 
     assert_eq!(visitor.axiom_count, 3, "Should visit all 3 axioms");
-    assert!(visitor.ce_count >= 4, "Should visit at least 4 class expressions (3 axioms + fillers)");
-    assert!(visitor.ope_count >= 1, "Should visit at least 1 object property expression");
-    assert!(visitor.iri_count >= 4, "Should visit at least 4 IRIs (A, B, C, r)");
+    assert!(
+        visitor.ce_count >= 4,
+        "Should visit at least 4 class expressions (3 axioms + fillers)"
+    );
+    assert!(
+        visitor.ope_count >= 1,
+        "Should visit at least 1 object property expression"
+    );
+    assert!(
+        visitor.iri_count >= 4,
+        "Should visit at least 4 IRIs (A, B, C, r)"
+    );
     assert!(visitor.ind_count >= 1, "Should visit at least 1 individual");
 }
 
@@ -467,19 +544,20 @@ fn test_structure_walker_current_axiom() {
     let df = DF::new();
     let a = df.class_ce(&ex("A"));
     let b = df.class_ce(&ex("B"));
-    let ont = df.build_ontology(vec![
-        df.sub_class_of(a.clone(), b.clone()),
-    ]);
+    let ont = df.build_ontology(vec![df.sub_class_of(a.clone(), b.clone())]);
 
     #[derive(Debug, Default)]
-    struct CheckVisitor { last_type: Option<AxiomType> }
+    struct CheckVisitor {
+        last_type: Option<AxiomType>,
+    }
     impl OWLObjectVisitor for CheckVisitor {
         fn visit_axiom(&mut self, axiom: &Axiom) {
             self.last_type = Some(axiom.axiom_type());
         }
     }
 
-    let mut walker: StructureWalker<'_, CheckVisitor> = StructureWalker::new(CheckVisitor::default());
+    let mut walker: StructureWalker<'_, CheckVisitor> =
+        StructureWalker::new(CheckVisitor::default());
     walker.walk_ontology(&ont);
 
     assert!(walker.get_current_axiom().is_some());
@@ -502,12 +580,14 @@ fn test_ontology_merger_basic() {
     let c = df.class_ce(&ex("C"));
     let d = df.class_ce(&ex("D"));
 
-    let ont1 = df.build_ontology_with_iri("http://test.org/onto1", vec![
-        df.sub_class_of(a.clone(), b.clone()),
-    ]);
-    let ont2 = df.build_ontology_with_iri("http://test.org/onto2", vec![
-        df.sub_class_of(c.clone(), d.clone()),
-    ]);
+    let ont1 = df.build_ontology_with_iri(
+        "http://test.org/onto1",
+        vec![df.sub_class_of(a.clone(), b.clone())],
+    );
+    let ont2 = df.build_ontology_with_iri(
+        "http://test.org/onto2",
+        vec![df.sub_class_of(c.clone(), d.clone())],
+    );
 
     let ont1_ref = Arc::new(RwLock::new(ont1));
     let ont2_ref = Arc::new(RwLock::new(ont2));
@@ -519,7 +599,11 @@ fn test_ontology_merger_basic() {
     assert!(result.is_ok(), "Merge should succeed");
     let merged_ref = result.unwrap();
     let guard = merged_ref.read().unwrap();
-    assert_eq!(guard.axioms().len(), 2, "Merged ontology should have 2 axioms");
+    assert_eq!(
+        guard.axioms().len(),
+        2,
+        "Merged ontology should have 2 axioms"
+    );
     assert_eq!(
         guard.get_iri().map(|i| i.as_str().to_string()),
         Some("http://test.org/merged".to_string())
@@ -534,28 +618,38 @@ fn test_ontology_merger_basic() {
 #[test]
 fn test_concise_renderer_basic() {
     let renderer = ConciseObjectRenderer::new();
-    let a = ClassExpression::Class(Class { iri: IRI::new(&ex("A")) });
-    let b = ClassExpression::Class(Class { iri: IRI::new(&ex("B")) });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new(&ex("A")),
+    });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new(&ex("B")),
+    });
     let intersection = ClassExpression::ObjectIntersectionOf(vec![a, b]);
 
     let rendered = renderer.render_class_expression(&intersection);
-    assert!(rendered.contains("and"), "Should contain 'and' for intersection: {rendered}");
+    assert!(
+        rendered.contains("and"),
+        "Should contain 'and' for intersection: {rendered}"
+    );
     assert!(rendered.contains("A"), "Should contain short form for A");
     assert!(rendered.contains("B"), "Should contain short form for B");
 
-    let complement = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::Class(Class { iri: IRI::new(&ex("C")) }),
-    ));
+    let complement = ClassExpression::ObjectComplementOf(Box::new(ClassExpression::Class(Class {
+        iri: IRI::new(&ex("C")),
+    })));
     let comp_rendered = renderer.render_class_expression(&complement);
-    assert!(comp_rendered.contains("not"), "Should contain 'not': {comp_rendered}");
+    assert!(
+        comp_rendered.contains("not"),
+        "Should contain 'not': {comp_rendered}"
+    );
 
     let df = DF::new();
-    let ax = df.sub_class_of(
-        df.class_ce(&ex("D")),
-        df.class_ce(&ex("E")),
-    );
+    let ax = df.sub_class_of(df.class_ce(&ex("D")), df.class_ce(&ex("E")));
     let ax_rendered = renderer.render_axiom(&ax);
-    assert!(ax_rendered.contains("SubClassOf"), "Should contain SubClassOf: {ax_rendered}");
+    assert!(
+        ax_rendered.contains("SubClassOf"),
+        "Should contain SubClassOf: {ax_rendered}"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -567,7 +661,9 @@ fn test_concise_renderer_basic() {
 fn test_nnf_converter_creation() {
     let converter = NNFConverter;
 
-    let a = ClassExpression::Class(Class { iri: IRI::new(&ex("A")) });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new(&ex("A")),
+    });
     let result = converter.to_nnf(&a);
     assert_eq!(result, a, "NNF of a named class should be itself");
 
@@ -576,13 +672,20 @@ fn test_nnf_converter_creation() {
     let result2 = converter.to_nnf(&not_not_a);
     match &result2 {
         ClassExpression::Class(c) => {
-            assert!(c.iri.as_str().contains("A"), "Double negation should unwrap to A");
+            assert!(
+                c.iri.as_str().contains("A"),
+                "Double negation should unwrap to A"
+            );
         }
         other => panic!("Expected class after double-negation removal, got: {other:?}"),
     }
 
-    let a2 = ClassExpression::Class(Class { iri: IRI::new(&ex("A")) });
-    let b = ClassExpression::Class(Class { iri: IRI::new(&ex("B")) });
+    let a2 = ClassExpression::Class(Class {
+        iri: IRI::new(&ex("A")),
+    });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new(&ex("B")),
+    });
     let intersection = ClassExpression::ObjectIntersectionOf(vec![a2, b]);
     let not_intersection = ClassExpression::ObjectComplementOf(Box::new(intersection));
     let result3 = converter.to_nnf(&not_intersection);

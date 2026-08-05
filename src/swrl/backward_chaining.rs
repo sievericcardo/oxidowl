@@ -368,9 +368,10 @@ impl BackwardChainingEngine {
                 argument,
             } => {
                 if let SWRLDArgument::Literal(lit) = argument.clone()
-                    && lit.value.parse::<f64>().is_ok() {
-                        return true;
-                    }
+                    && lit.value.parse::<f64>().is_ok()
+                {
+                    return true;
+                }
                 return false;
             }
         }

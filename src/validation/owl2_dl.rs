@@ -236,7 +236,10 @@ impl std::fmt::Display for ValidationErrorType {
                 write!(f, "Non-simple property in functional property axiom")
             }
             ValidationErrorType::NonSimplePropertyInInverseFunctionalProperty => {
-                write!(f, "Non-simple property in inverse-functional property axiom")
+                write!(
+                    f,
+                    "Non-simple property in inverse-functional property axiom"
+                )
             }
             ValidationErrorType::NonSimplePropertyInIrreflexiveProperty => {
                 write!(f, "Non-simple property in irreflexive property axiom")

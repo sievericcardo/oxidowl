@@ -3,12 +3,12 @@ mod helpers;
 
 use helpers::df::DF;
 use helpers::test_base::TestBase;
+use oxidowl::OntologyChangeListener;
+use oxidowl::OntologyManager;
 use oxidowl::manager::changes::OntologyChange;
 use oxidowl::manager::*;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
-use oxidowl::OntologyChangeListener;
-use oxidowl::OntologyManager;
 use std::sync::{Arc, Mutex};
 
 type AddedVec = Arc<Mutex<Vec<Axiom>>>;
@@ -85,10 +85,9 @@ fn assert_not_contains_axiom(ont: &Ontology, axiom: &Axiom) {
 fn test_change_listener_receives_add_axiom() {
     let mut tb = TestBase::new();
     let added: AddedVec = Arc::new(Mutex::new(vec![]));
-    tb.manager
-        .add_change_listener(Box::new(TrackingListener {
-            added: added.clone(),
-        }));
+    tb.manager.add_change_listener(Box::new(TrackingListener {
+        added: added.clone(),
+    }));
 
     let iri = IRI::new("http://ex.org/ont");
     tb.manager.create_ontology(iri.clone());
@@ -153,24 +152,20 @@ fn test_per_ontology_listener() {
         }),
     );
 
-    let ax_b = tb
-        .df
-        .sub_class_of(
-            tb.df.class_ce("http://ex.org/X"),
-            tb.df.class_ce("http://ex.org/Y"),
-        );
+    let ax_b = tb.df.sub_class_of(
+        tb.df.class_ce("http://ex.org/X"),
+        tb.df.class_ce("http://ex.org/Y"),
+    );
     tb.manager.apply_change(OntologyChange::AddAxiom {
         ontology_iri: iri_b.clone(),
         axiom: ax_b.clone(),
     });
     assert_eq!(added.lock().unwrap().len(), 0);
 
-    let ax_a = tb
-        .df
-        .sub_class_of(
-            tb.df.class_ce("http://ex.org/A"),
-            tb.df.class_ce("http://ex.org/B"),
-        );
+    let ax_a = tb.df.sub_class_of(
+        tb.df.class_ce("http://ex.org/A"),
+        tb.df.class_ce("http://ex.org/B"),
+    );
     tb.manager.apply_change(OntologyChange::AddAxiom {
         ontology_iri: iri_a.clone(),
         axiom: ax_a.clone(),
@@ -182,20 +177,17 @@ fn test_per_ontology_listener() {
 fn test_clear_listeners() {
     let mut tb = TestBase::new();
     let added: AddedVec = Arc::new(Mutex::new(vec![]));
-    tb.manager
-        .add_change_listener(Box::new(TrackingListener {
-            added: added.clone(),
-        }));
+    tb.manager.add_change_listener(Box::new(TrackingListener {
+        added: added.clone(),
+    }));
 
     let iri = IRI::new("http://ex.org/ont");
     tb.manager.create_ontology(iri.clone());
 
-    let ax1 = tb
-        .df
-        .sub_class_of(
-            tb.df.class_ce("http://ex.org/A"),
-            tb.df.class_ce("http://ex.org/B"),
-        );
+    let ax1 = tb.df.sub_class_of(
+        tb.df.class_ce("http://ex.org/A"),
+        tb.df.class_ce("http://ex.org/B"),
+    );
     tb.manager.apply_change(OntologyChange::AddAxiom {
         ontology_iri: iri.clone(),
         axiom: ax1.clone(),
@@ -204,12 +196,10 @@ fn test_clear_listeners() {
 
     tb.manager.clear_listeners();
 
-    let ax2 = tb
-        .df
-        .sub_class_of(
-            tb.df.class_ce("http://ex.org/C"),
-            tb.df.class_ce("http://ex.org/D"),
-        );
+    let ax2 = tb.df.sub_class_of(
+        tb.df.class_ce("http://ex.org/C"),
+        tb.df.class_ce("http://ex.org/D"),
+    );
     tb.manager.apply_change(OntologyChange::AddAxiom {
         ontology_iri: iri.clone(),
         axiom: ax2,
@@ -266,23 +256,19 @@ fn test_try_apply_changes_rollback() {
     let iri = IRI::new("http://ex.org/ont");
     let ont = tb.manager.create_ontology(iri.clone());
 
-    let ax1 = tb
-        .df
-        .sub_class_of(
-            tb.df.class_ce("http://ex.org/A"),
-            tb.df.class_ce("http://ex.org/B"),
-        );
+    let ax1 = tb.df.sub_class_of(
+        tb.df.class_ce("http://ex.org/A"),
+        tb.df.class_ce("http://ex.org/B"),
+    );
     tb.manager.apply_change(OntologyChange::AddAxiom {
         ontology_iri: iri.clone(),
         axiom: ax1.clone(),
     });
 
-    let ax2 = tb
-        .df
-        .sub_class_of(
-            tb.df.class_ce("http://ex.org/C"),
-            tb.df.class_ce("http://ex.org/D"),
-        );
+    let ax2 = tb.df.sub_class_of(
+        tb.df.class_ce("http://ex.org/C"),
+        tb.df.class_ce("http://ex.org/D"),
+    );
 
     let changes = vec![
         OntologyChange::AddAxiom {
@@ -324,10 +310,7 @@ fn test_broadcast_strategy_buffered() {
     let c = tb.df.class_ce("http://ex.org/C");
 
     for class in [a, b, c] {
-        let axiom = tb.df.sub_class_of(
-            class,
-            tb.df.class_ce("http://ex.org/D"),
-        );
+        let axiom = tb.df.sub_class_of(class, tb.df.class_ce("http://ex.org/D"));
         tb.manager.apply_change(OntologyChange::AddAxiom {
             ontology_iri: iri.clone(),
             axiom,
@@ -529,7 +512,9 @@ fn test_save_ontology_to_string_and_reload() {
     let c = tb.df.class_ce("http://ex.org/C");
     let ax1 = tb.df.sub_class_of(a.clone(), b.clone());
     let ax2 = tb.df.sub_class_of(b.clone(), c.clone());
-    let ax3 = tb.df.class_assertion(a.clone(), tb.df.named("http://ex.org/i"));
+    let ax3 = tb
+        .df
+        .class_assertion(a.clone(), tb.df.named("http://ex.org/i"));
 
     {
         let mut guard = ont.write().unwrap();
@@ -580,8 +565,7 @@ fn test_save_ontology_to_file() {
     assert!(file_path.exists());
 
     let mut tb2 = TestBase::new();
-    let content =
-        std::fs::read_to_string(&file_path).expect("Should read saved file");
+    let content = std::fs::read_to_string(&file_path).expect("Should read saved file");
     let reloaded = tb2
         .load_and_get_ontology(&content, OntologyFormat::Functional)
         .expect("Reload should succeed");

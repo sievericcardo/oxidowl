@@ -3,33 +3,42 @@ mod helpers;
 
 use helpers::df::DF;
 use helpers::*;
+use oxidowl::ELValidator;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
-use oxidowl::ELValidator;
+use oxidowl::profiles::ProfileValidator;
 use oxidowl::profiles::ql::QLValidator;
 use oxidowl::profiles::rl::RLValidator;
-use oxidowl::profiles::ProfileValidator;
 
 /// Helper: validate ontology against a specific profile validator.
 fn validate_el(axioms: &[Axiom]) -> bool {
     let df = DF::new();
     let onto = df.build_ontology(axioms.to_vec());
     let validator = ELValidator::new();
-    validator.validate(&onto).map(|r| r.is_valid()).unwrap_or(false)
+    validator
+        .validate(&onto)
+        .map(|r| r.is_valid())
+        .unwrap_or(false)
 }
 
 fn validate_ql(axioms: &[Axiom]) -> bool {
     let df = DF::new();
     let onto = df.build_ontology(axioms.to_vec());
     let validator = QLValidator::new();
-    validator.validate(&onto).map(|r| r.is_valid()).unwrap_or(false)
+    validator
+        .validate(&onto)
+        .map(|r| r.is_valid())
+        .unwrap_or(false)
 }
 
 fn validate_rl(axioms: &[Axiom]) -> bool {
     let df = DF::new();
     let onto = df.build_ontology(axioms.to_vec());
     let validator = RLValidator::new();
-    validator.validate(&onto).map(|r| r.is_valid()).unwrap_or(false)
+    validator
+        .validate(&onto)
+        .map(|r| r.is_valid())
+        .unwrap_or(false)
 }
 
 /// Simple ontology that should pass all profiles.
@@ -65,7 +74,10 @@ fn complement_ontology() -> Vec<Axiom> {
 
 #[test]
 fn profile_el_valid() {
-    assert!(validate_el(&el_valid_ontology()), "EL-valid ontology should pass");
+    assert!(
+        validate_el(&el_valid_ontology()),
+        "EL-valid ontology should pass"
+    );
 }
 
 #[test]
@@ -75,7 +87,10 @@ fn profile_el_union_violation() {
 
 #[test]
 fn profile_el_complement_violation() {
-    assert!(!validate_el(&complement_ontology()), "Complement should not pass EL");
+    assert!(
+        !validate_el(&complement_ontology()),
+        "Complement should not pass EL"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -87,39 +102,50 @@ fn profile_ql_simple_subclass_valid() {
     let df = DF::new();
     let a = df.class_ce("http://ex.org/A");
     let b = df.class_ce("http://ex.org/B");
-    assert!(validate_ql(&[df.sub_class_of(a, b)]), "Simple SubClassOf should pass QL");
+    assert!(
+        validate_ql(&[df.sub_class_of(a, b)]),
+        "Simple SubClassOf should pass QL"
+    );
 }
 
 #[test]
 fn profile_ql_transitive_property_violation() {
     let df = DF::new();
     let p = df.obj_prop("http://ex.org/P");
-    assert!(!validate_ql(&[df.transitive_object_property(p)]),
-        "TransitiveObjectProperty should NOT pass QL");
+    assert!(
+        !validate_ql(&[df.transitive_object_property(p)]),
+        "TransitiveObjectProperty should NOT pass QL"
+    );
 }
 
 #[test]
 fn profile_ql_symmetric_property_violation() {
     let df = DF::new();
     let p = df.obj_prop("http://ex.org/P");
-    assert!(!validate_ql(&[df.symmetric_object_property(p)]),
-        "SymmetricObjectProperty should NOT pass QL");
+    assert!(
+        !validate_ql(&[df.symmetric_object_property(p)]),
+        "SymmetricObjectProperty should NOT pass QL"
+    );
 }
 
 #[test]
 fn profile_ql_functional_property_violation() {
     let df = DF::new();
     let p = df.obj_prop("http://ex.org/P");
-    assert!(!validate_ql(&[df.functional_object_property(p)]),
-        "FunctionalObjectProperty should NOT pass QL");
+    assert!(
+        !validate_ql(&[df.functional_object_property(p)]),
+        "FunctionalObjectProperty should NOT pass QL"
+    );
 }
 
 #[test]
 fn profile_ql_irreflexive_property_violation() {
     let df = DF::new();
     let p = df.obj_prop("http://ex.org/P");
-    assert!(!validate_ql(&[df.irreflexive_object_property(p)]),
-        "IrreflexiveObjectProperty should NOT pass QL");
+    assert!(
+        !validate_ql(&[df.irreflexive_object_property(p)]),
+        "IrreflexiveObjectProperty should NOT pass QL"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -131,12 +157,18 @@ fn profile_rl_class_assertion_valid() {
     let df = DF::new();
     let a = df.class_ce("http://ex.org/A");
     let i = df.named("http://ex.org/i");
-    assert!(validate_rl(&[df.class_assertion(a, i)]), "Simple class assertion should pass RL");
+    assert!(
+        validate_rl(&[df.class_assertion(a, i)]),
+        "Simple class assertion should pass RL"
+    );
 }
 
 #[test]
 fn profile_rl_complement_violation() {
-    assert!(!validate_rl(&complement_ontology()), "Complement should NOT pass RL");
+    assert!(
+        !validate_rl(&complement_ontology()),
+        "Complement should NOT pass RL"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

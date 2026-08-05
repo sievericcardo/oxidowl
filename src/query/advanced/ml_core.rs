@@ -16,7 +16,7 @@ use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration};
+use std::time::Duration;
 
 #[cfg(feature = "ml")]
 use candle_core::{Device, Tensor};
@@ -1350,9 +1350,12 @@ impl CostPredictionModel {
                         let lr_update = (grad * learning_rate).map_err(|e| Error::Internal {
                             message: format!("Learning rate multiply failed: {}", e),
                         })?;
-                        let updated = var.as_tensor().sub(&lr_update).map_err(|e| Error::Internal {
-                            message: format!("Parameter update failed: {}", e),
-                        })?;
+                        let updated =
+                            var.as_tensor()
+                                .sub(&lr_update)
+                                .map_err(|e| Error::Internal {
+                                    message: format!("Parameter update failed: {}", e),
+                                })?;
                         var.set(&updated).map_err(|e| Error::Internal {
                             message: format!("Failed to update variable: {}", e),
                         })?;

@@ -106,18 +106,19 @@ impl HDTParser {
                     parts[0].parse::<usize>(),
                     parts[1].parse::<usize>(),
                     parts[2].parse::<usize>(),
-                ) {
-                    let subject = if s_idx < dict.subjects.len() {
-                        dict.subjects[s_idx].clone()
-                    } else {
-                        format!("urn:hdt:subject:{s_idx}")
-                    };
-                    let iri = IRI::new(&subject);
-                    o.add_axiom(Axiom::Declaration(DeclarationAxiom {
-                        id: 0,
-                        entity: Entity::Class(iri),
-                    }));
-                }
+                )
+            {
+                let subject = if s_idx < dict.subjects.len() {
+                    dict.subjects[s_idx].clone()
+                } else {
+                    format!("urn:hdt:subject:{s_idx}")
+                };
+                let iri = IRI::new(&subject);
+                o.add_axiom(Axiom::Declaration(DeclarationAxiom {
+                    id: 0,
+                    entity: Entity::Class(iri),
+                }));
+            }
         }
 
         Ok(o)

@@ -19,14 +19,12 @@ use crate::ontology::{
 use std::fmt::Write;
 
 /// KRSS variant selector.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum KRSSVariant {
     #[default]
     KRSS,
     KRSS2,
 }
-
 
 // ── KRSS Parser ──────────────────────────────────────────────────────────────
 
@@ -778,13 +776,17 @@ impl KRSSRenderer {
 
     fn name(&self, iri: &str) -> String {
         if let Some(fragment) = iri.rsplit('#').next()
-            && !fragment.is_empty() && fragment.len() < iri.len() {
-                return fragment.to_string();
-            }
+            && !fragment.is_empty()
+            && fragment.len() < iri.len()
+        {
+            return fragment.to_string();
+        }
         if let Some(last) = iri.rsplit('/').next()
-            && !last.is_empty() && last.len() < iri.len() {
-                return last.to_string();
-            }
+            && !last.is_empty()
+            && last.len() < iri.len()
+        {
+            return last.to_string();
+        }
         iri.to_string()
     }
 }

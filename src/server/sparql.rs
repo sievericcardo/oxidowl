@@ -227,11 +227,9 @@ impl SparqlServer {
         let classification = self.reasoning_service.classify().await?;
         let store = &*self.store;
 
-        let rdfs_subclass =
-            NamedNode::new("http://www.w3.org/2000/01/rdf-schema#subClassOf").map_err(|e| {
-                Error::Sparql {
-                    message: e.to_string(),
-                }
+        let rdfs_subclass = NamedNode::new("http://www.w3.org/2000/01/rdf-schema#subClassOf")
+            .map_err(|e| Error::Sparql {
+                message: e.to_string(),
             })?;
 
         for (subclass, superclasses) in &classification.hierarchy {
@@ -280,17 +278,17 @@ impl SparqlServer {
                 if let Some(class_iri) = self.class_expr_to_iri(&axiom.class)
                     && let crate::ontology::Individual::Named(named) = &axiom.individual
                 {
-                        let individual_iri =
-                            NamedNode::new(named.iri.as_str()).map_err(|e| Error::Sparql {
-                                message: e.to_string(),
-                            })?;
-                        let rdf_type = NamedNode::new(
-                            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
-                        )
-                        .map_err(|e| Error::Sparql {
+                    let individual_iri =
+                        NamedNode::new(named.iri.as_str()).map_err(|e| Error::Sparql {
                             message: e.to_string(),
                         })?;
-                        triples.push(Triple::new(individual_iri, rdf_type, class_iri));
+                    let rdf_type = NamedNode::new(
+                        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                    )
+                    .map_err(|e| Error::Sparql {
+                        message: e.to_string(),
+                    })?;
+                    triples.push(Triple::new(individual_iri, rdf_type, class_iri));
                 }
             }
             Axiom::ObjectPropertyAssertion(axiom) => {
@@ -853,7 +851,9 @@ mod tests {
             predicate: RdfTerm::Iri(url::Url::parse("http://example.org/value").unwrap()),
             object: RdfTerm::Literal {
                 value: "42".to_string(),
-                datatype: Some(url::Url::parse("http://www.w3.org/2001/XMLSchema#integer").unwrap()),
+                datatype: Some(
+                    url::Url::parse("http://www.w3.org/2001/XMLSchema#integer").unwrap(),
+                ),
                 language: None,
                 direction: None,
             },
@@ -979,7 +979,9 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .unwrap();
             assert_eq!(bindings.len(), 1);
 
             let certainty = bindings[0].get("certainty").unwrap();
@@ -1028,7 +1030,9 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .unwrap();
             assert_eq!(bindings.len(), 2);
 
             // Check both results are present
@@ -1083,7 +1087,9 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .unwrap();
             assert_eq!(bindings.len(), 1);
 
             let source = bindings[0].get("source").unwrap();
@@ -1129,7 +1135,9 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .unwrap();
             assert_eq!(bindings.len(), 1);
 
             let report = bindings[0].get("report").unwrap();
@@ -1223,7 +1231,9 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .unwrap();
             assert_eq!(bindings.len(), 2); // pizza and pasta, not salad
 
             let foods: Vec<String> = bindings
@@ -1349,7 +1359,9 @@ mod tests {
             .execute()
             .unwrap()
         {
-            let bindings: Vec<_> = solutions.collect::<std::result::Result<Vec<_>, _>>().unwrap();
+            let bindings: Vec<_> = solutions
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .unwrap();
             assert_eq!(bindings.len(), 1);
 
             // Get the statement binding (should be a quoted triple)
@@ -1434,10 +1446,8 @@ mod tests {
             .expect("Failed to build tokio runtime");
         let ontology = Ontology::new();
         let reasoning_service = Arc::new(
-            rt.block_on(async {
-                ReasoningService::new(ontology, ReasonerConfig::default())
-            })
-            .expect("Failed to create reasoning service"),
+            rt.block_on(async { ReasoningService::new(ontology, ReasonerConfig::default()) })
+                .expect("Failed to create reasoning service"),
         );
         let server = SparqlServer::new(8082, "127.0.0.1".to_string(), reasoning_service);
         (server, rt)

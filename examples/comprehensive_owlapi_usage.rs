@@ -10,105 +10,230 @@
 #![allow(unused_imports, unused_variables, dead_code)]
 
 use oxidowl::{
-    Annotation, AnnotationProperty, AnnotationValue, Class, ClassExpression, DataFactory,
-    DataProperty, DataPropertyExpression, EntityType, IRI, ImportsDeclaration, Individual,
-    Literal, NamedIndividual, ObjectProperty, ObjectPropertyExpression, Ontology,
-    OntologyFormat, OntologyID, OntologyRef, Signature,
-    // Manager
-    ChangeApplied, ChangeBroadcastStrategy, ManagerConfig, OntologyChange,
-    OntologyManager, OntologyManagerRef, Snapshot,
-    OntologyLoader, LoaderConfig, MissingImportStrategy,
-    // IRI Mappers
-    AutoIRIMapper, CompositeIRIMapper, NonMappingOntologyIRIMapper,
-    OntologyIRIMapper, SimpleIRIMapper,
-    // Listeners
-    LoggingChangeListener, NoOpChangeListener, OntologyChangeListener,
-    // Reasoner
-    Reasoner, ReasonerConfig, ReasoningTask,
-    // Reasoner API
-    Node, NodeSet, OWLReasoner, OWLReasonerConfiguration, StructuralReasoner,
-    // Parsers
-    FunctionalParser, OwlXmlSerializer, RdfXmlSerializer, TurtleSerializer,
-    ParserFactory, save_file, save_file_gzip, save_to_string,
-    // RIO
-    NQuadsRenderer, N3Renderer, TriGRenderer, TriXRenderer,
-    JsonLdRenderer, RdfJsonRenderer,
-    // OBO
-    OBOOutputConfig, OBOWriter,
-    // Queries
-    DLQueryEngine, DLQueryParser, QueryResult, QueryService, QueryType,
-    // SWRL
-    SWRLAtom, SWRLIArgument, SWRLRule, SWRLRuleEngine, SWRLVariable,
-    // Profiles
-    ProfileDetectionResult, ProfileValidationReport, ProfileViolation,
-    ProfileViolationType, ProfileValidator, OWL2ProfileValidator,
-    OWL2Profile as Profile,
-    // SHACL
-    ShaclConfig, ShaclSeverity, ShaclValidationReport, ShaclValidator,
-    // Explanation
-    BlackBoxConfig, BlackBoxExplanation, ExplanationGenerator,
-    HSTConfig, HSTExplanationGenerator, BlackBoxOWLDebugger,
-    DebuggerConfig, OWLDebugger,
-    // Inference
-    InferredClassAssertionAxiomGenerator, InferredDisjointClassesAxiomGenerator,
-    InferredEquivalentClassAxiomGenerator, InferredSubClassOfAxiomGenerator,
-    InferredSubDataPropertyAxiomGenerator, InferredSubObjectPropertyAxiomGenerator,
-    InferredAxiomGenerator, OntologyMetrics,
-    // Modularity
-    AtomicDecomposer, AtomicDecomposition, DecomposerConfig,
-    ModuleExtractor, ModuleExtractorConfig, ModuleType, LocalityClass,
-    SyntacticLocalityEvaluator,
-    // Transforms
-    DLExpressivity, DLExpressivityChecker, NNFConverter,
-    OWLEntityRemover, OWLEntityRenamer, OWLObjectTransformer,
-    // Walkers
-    OntologyWalker, StructureWalker, OWLOntologyMerger,
-    // DL Clauses
-    DLClause, DLClauseGenerator, DLClauseSet,
-    // RDF-Star
-    HornedOwlAdapter, RdfStarCapable,
-    // Distributed
-    DistributedConfig, NodeConfig, NodeCapabilities, NodeSettings,
-    ClusterConfig,
-    // Entity Search
-    EntityIndex, EntitySearcher,
-    // Vocabularies
-    Namespaces, PrefixManager,
-    // Datatypes
-    ConstrainingFacet, DatatypeCategory, OWL2Datatype, OWLFacet,
+    Annotation,
+    AnnotationProperty,
+    AnnotationValue,
     // ShortForm
-    AnnotationValueShortFormProvider, OntologyIRIShortFormProvider,
-    QNameShortFormProvider, ShortFormProvider, SimpleShortFormProvider,
+    AnnotationValueShortFormProvider,
+    // Modularity
+    AtomicDecomposer,
+    AtomicDecomposition,
+    // IRI Mappers
+    AutoIRIMapper,
+    // Explanation
+    BlackBoxConfig,
+    BlackBoxExplanation,
+    BlackBoxOWLDebugger,
+    // Manager
+    ChangeApplied,
+    ChangeBroadcastStrategy,
+    Class,
+    ClassExpression,
+    ClusterConfig,
+    CompositeIRIMapper,
+    // Datatypes
+    ConstrainingFacet,
+    // DL Clauses
+    DLClause,
+    DLClauseGenerator,
+    DLClauseSet,
+    // Transforms
+    DLExpressivity,
+    DLExpressivityChecker,
+    // Queries
+    DLQueryEngine,
+    DLQueryParser,
+    DataFactory,
+    DataProperty,
+    DataPropertyExpression,
+    DatatypeCategory,
+    DebuggerConfig,
+    DecomposerConfig,
+    // Distributed
+    DistributedConfig,
+    // Entity Search
+    EntityIndex,
+    EntitySearcher,
+    EntityType,
+    // Error
+    Error,
+    ExplanationGenerator,
+    // Parsers
+    FunctionalParser,
+    HSTConfig,
+    HSTExplanationGenerator,
+    // RDF-Star
+    HornedOwlAdapter,
+    IRI,
     // Import
-    ImportDeclaration, ImportManager,
+    ImportDeclaration,
+    ImportManager,
+    ImportsDeclaration,
+    Individual,
+    InferredAxiomGenerator,
+    // Inference
+    InferredClassAssertionAxiomGenerator,
+    InferredDisjointClassesAxiomGenerator,
+    InferredEquivalentClassAxiomGenerator,
+    InferredSubClassOfAxiomGenerator,
+    InferredSubDataPropertyAxiomGenerator,
+    InferredSubObjectPropertyAxiomGenerator,
+    JsonLdRenderer,
+    Literal,
+    LoaderConfig,
+    LocalityClass,
+    // Listeners
+    LoggingChangeListener,
+    ManagerConfig,
+    MissingImportStrategy,
+    ModuleExtractor,
+    ModuleExtractorConfig,
+    ModuleType,
+    N3Renderer,
+    NNFConverter,
+    // RIO
+    NQuadsRenderer,
+    NamedIndividual,
+    // Vocabularies
+    Namespaces,
+    NoOpChangeListener,
+    // Reasoner API
+    Node,
+    NodeCapabilities,
+    NodeConfig,
+    NodeSet,
+    NodeSettings,
+    NonMappingOntologyIRIMapper,
+    // OBO
+    OBOOutputConfig,
+    OBOWriter,
+    OWL2Datatype,
+    OWL2Profile as Profile,
+    OWL2ProfileValidator,
+    OWLDebugger,
+    OWLEntityRemover,
+    OWLEntityRenamer,
+    OWLFacet,
+    OWLObjectTransformer,
+    OWLOntologyMerger,
+    OWLReasoner,
+    OWLReasonerConfiguration,
+    ObjectProperty,
+    ObjectPropertyExpression,
+    Ontology,
+    OntologyChange,
+    OntologyChangeListener,
+    OntologyFormat,
+    OntologyID,
+    OntologyIRIMapper,
+    OntologyIRIShortFormProvider,
+    OntologyLoader,
+    OntologyManager,
+    OntologyManagerRef,
+    OntologyMetrics,
+    OntologyRef,
+    // Walkers
+    OntologyWalker,
+    OwlXmlSerializer,
+    ParserFactory,
+    PrefixManager,
+    // Profiles
+    ProfileDetectionResult,
+    ProfileValidationReport,
+    ProfileValidator,
+    ProfileViolation,
+    ProfileViolationType,
+    QNameShortFormProvider,
+    QueryResult,
+    QueryService,
+    QueryType,
+    RdfJsonRenderer,
+    RdfStarCapable,
+    RdfXmlSerializer,
+    // Reasoner
+    Reasoner,
+    ReasonerConfig,
     // Reasoning Service
     ReasoningService,
+    ReasoningTask,
+    Result,
+    // SWRL
+    SWRLAtom,
+    SWRLIArgument,
+    SWRLRule,
+    SWRLRuleEngine,
+    SWRLVariable,
+    // SHACL
+    ShaclConfig,
+    ShaclSeverity,
+    ShaclValidationReport,
+    ShaclValidator,
+    ShortFormProvider,
+    Signature,
+    SimpleIRIMapper,
+    SimpleShortFormProvider,
+    Snapshot,
+    StructuralReasoner,
+    StructureWalker,
+    SyntacticLocalityEvaluator,
+    TriGRenderer,
+    TriXRenderer,
+    TurtleSerializer,
     // Axioms
     ontology::axioms::{
-        Axiom, DeclarationAxiom, Entity, SubClassOfAxiom, DisjointClassesAxiom,
-        ClassAssertionAxiom, ObjectPropertyAssertionAxiom, DataPropertyAssertionAxiom,
+        Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom, DeclarationAxiom,
+        DisjointClassesAxiom, Entity, ObjectPropertyAssertionAxiom, SubClassOfAxiom,
     },
     // Parsers trait
     parsers::OntologySerializer,
-    // Error
-    Error, Result,
+    save_file,
+    save_file_gzip,
+    save_to_string,
 };
 
 use std::sync::{Arc, RwLock};
 
 const NS: &str = "http://example.org/demo#";
 
-fn ce(iri: &str) -> ClassExpression { ClassExpression::Class(Class{iri:IRI::new(iri)}) }
-fn ind(iri: &str) -> Individual { Individual::Named(NamedIndividual{iri:IRI::new(iri)}) }
-fn ope(iri: &str) -> ObjectPropertyExpression { ObjectPropertyExpression::ObjectProperty(ObjectProperty{iri:IRI::new(iri)}) }
+fn ce(iri: &str) -> ClassExpression {
+    ClassExpression::Class(Class { iri: IRI::new(iri) })
+}
+fn ind(iri: &str) -> Individual {
+    Individual::Named(NamedIndividual { iri: IRI::new(iri) })
+}
+fn ope(iri: &str) -> ObjectPropertyExpression {
+    ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: IRI::new(iri) })
+}
 
 fn demo_ontology() -> Ontology {
     let mut o = Ontology::new();
-    o.add_axiom(Axiom::Declaration(DeclarationAxiom{id:1,entity:Entity::Class(IRI::new(&format!("{NS}Person")))}));
-    o.add_axiom(Axiom::Declaration(DeclarationAxiom{id:2,entity:Entity::Class(IRI::new(&format!("{NS}Employee")))}));
-    o.add_axiom(Axiom::SubClassOf(SubClassOfAxiom{id:10,subclass:ce(&format!("{NS}Employee")),superclass:ce(&format!("{NS}Person")),annotations:vec![]}));
-    o.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom{id:30,individual:ind(&format!("{NS}alice")),class:ce(&format!("{NS}Person")),annotations:vec![]}));
-    o.annotations.push(Annotation{property:AnnotationProperty{iri:IRI::new("http://purl.org/dc/elements/1.1/title")},value:AnnotationValue::Literal(Literal::new("Demo".into())),annotations:vec![]});
+    o.add_axiom(Axiom::Declaration(DeclarationAxiom {
+        id: 1,
+        entity: Entity::Class(IRI::new(&format!("{NS}Person"))),
+    }));
+    o.add_axiom(Axiom::Declaration(DeclarationAxiom {
+        id: 2,
+        entity: Entity::Class(IRI::new(&format!("{NS}Employee"))),
+    }));
+    o.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
+        id: 10,
+        subclass: ce(&format!("{NS}Employee")),
+        superclass: ce(&format!("{NS}Person")),
+        annotations: vec![],
+    }));
+    o.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
+        id: 30,
+        individual: ind(&format!("{NS}alice")),
+        class: ce(&format!("{NS}Person")),
+        annotations: vec![],
+    }));
+    o.annotations.push(Annotation {
+        property: AnnotationProperty {
+            iri: IRI::new("http://purl.org/dc/elements/1.1/title"),
+        },
+        value: AnnotationValue::Literal(Literal::new("Demo".into())),
+        annotations: vec![],
+    });
     o
 }
 
@@ -156,12 +281,25 @@ fn demo_data_factory() -> Result<()> {
     let c1 = df.get_class(&IRI::new(&format!("{NS}Person")));
     let c2 = df.get_class(&IRI::new(&format!("{NS}Person")));
     println!("   Class interning: {}", c1 == c2);
-    println!("   ObjectProperty: {}", df.get_object_property(&IRI::new("http://ex.org#p")).iri);
-    println!("   Datatype: {}", df.get_owl_datatype(&IRI::new(oxidowl::ontology::vocabulary::xsd::INTEGER)).iri);
-    println!("   AnonymousIndividual: {}", df.get_anonymous_individual().id);
-    println!("   Literals: int={}, bool={}, dt={}",
-        df.get_integer_literal(42), df.get_boolean_literal(true),
-        df.get_date_time_literal("2025-01-15T10:30:00"));
+    println!(
+        "   ObjectProperty: {}",
+        df.get_object_property(&IRI::new("http://ex.org#p")).iri
+    );
+    println!(
+        "   Datatype: {}",
+        df.get_owl_datatype(&IRI::new(oxidowl::ontology::vocabulary::xsd::INTEGER))
+            .iri
+    );
+    println!(
+        "   AnonymousIndividual: {}",
+        df.get_anonymous_individual().id
+    );
+    println!(
+        "   Literals: int={}, bool={}, dt={}",
+        df.get_integer_literal(42),
+        df.get_boolean_literal(true),
+        df.get_date_time_literal("2025-01-15T10:30:00")
+    );
     Ok(())
 }
 
@@ -172,8 +310,16 @@ fn demo_ontology_manager() -> Result<()> {
     let mut mgr = OntologyManager::new();
     let iri = IRI::new("http://ex.org/demo");
     let ont_ref = mgr.create_ontology(iri.clone());
-    { let mut o = ont_ref.write().unwrap(); *o = demo_ontology(); o.set_iri(iri.clone()); }
-    println!("   contains={}, count={}", mgr.contains_ontology(&iri), mgr.ontology_count());
+    {
+        let mut o = ont_ref.write().unwrap();
+        *o = demo_ontology();
+        o.set_iri(iri.clone());
+    }
+    println!(
+        "   contains={}, count={}",
+        mgr.contains_ontology(&iri),
+        mgr.ontology_count()
+    );
     Ok(())
 }
 
@@ -182,9 +328,18 @@ fn demo_ontology_manager() -> Result<()> {
 fn demo_parsers() -> Result<()> {
     println!("\n── 3. Parsers ──");
     let ont = demo_ontology();
-    println!("   OwlXml: {} chars", OwlXmlSerializer::new().serialize(&ont)?.len());
-    println!("   RdfXml: {} chars", RdfXmlSerializer::new().serialize(&ont)?.len());
-    println!("   Turtle: {} chars", TurtleSerializer::new().serialize(&ont)?.len());
+    println!(
+        "   OwlXml: {} chars",
+        OwlXmlSerializer::new().serialize(&ont)?.len()
+    );
+    println!(
+        "   RdfXml: {} chars",
+        RdfXmlSerializer::new().serialize(&ont)?.len()
+    );
+    println!(
+        "   Turtle: {} chars",
+        TurtleSerializer::new().serialize(&ont)?.len()
+    );
     let s = save_to_string(&ont, OntologyFormat::Functional)?;
     let parsed = FunctionalParser::new().parse_string(&s)?;
     println!("   Functional roundtrip: {} axioms", parsed.axioms().len());
@@ -204,10 +359,16 @@ async fn demo_reasoner() -> Result<()> {
     let h = r.classify()?;
     println!("   Classified: {} classes", h.hierarchy.len());
     let person = ce(&format!("{NS}Person"));
-    println!("   Person satisfiable: {}", r.is_class_satisfiable(&person)?);
+    println!(
+        "   Person satisfiable: {}",
+        r.is_class_satisfiable(&person)?
+    );
     let sr = StructuralReasoner::new(Arc::new(RwLock::new(ont)));
     let subs = sr.get_sub_classes(&person, false)?;
-    println!("   StructuralReasoner sub-classes: {}", subs.get_nodes().len());
+    println!(
+        "   StructuralReasoner sub-classes: {}",
+        subs.get_nodes().len()
+    );
     Ok(())
 }
 
@@ -218,8 +379,18 @@ fn demo_entity_searcher() -> Result<()> {
     let ont = demo_ontology();
     let idx = EntityIndex::from_ontology(&ont);
     let searcher = EntitySearcher::new(&ont, &idx);
-    println!("   SubClass axioms: {}", searcher.get_sub_class_axioms_for_lhs(&ce(&format!("{NS}Person"))).len());
-    println!("   EquivalentClass: {}", searcher.get_equivalent_classes_axioms(&ce(&format!("{NS}Person"))).len());
+    println!(
+        "   SubClass axioms: {}",
+        searcher
+            .get_sub_class_axioms_for_lhs(&ce(&format!("{NS}Person")))
+            .len()
+    );
+    println!(
+        "   EquivalentClass: {}",
+        searcher
+            .get_equivalent_classes_axioms(&ce(&format!("{NS}Person")))
+            .len()
+    );
     Ok(())
 }
 
@@ -228,7 +399,10 @@ fn demo_entity_searcher() -> Result<()> {
 async fn demo_query_system() -> Result<()> {
     println!("\n── 6. Query System ──");
     let ont = demo_ontology();
-    let svc = Arc::new(ReasoningService::new(ont.clone(), ReasonerConfig::default())?);
+    let svc = Arc::new(ReasoningService::new(
+        ont.clone(),
+        ReasonerConfig::default(),
+    )?);
     let engine = DLQueryEngine::new_with_namespace(svc.clone(), NS.into());
     let result = engine.execute_query("subclasses: Person").await?;
     println!("   DLQuery 'subclasses: Person': {:?}", result);
@@ -257,8 +431,14 @@ fn demo_profiles() -> Result<()> {
 fn demo_swrl() -> Result<()> {
     println!("\n── 8. SWRL ──");
     let rule = SWRLRule::new(
-        vec![SWRLAtom::ClassAtom{predicate:ce(&format!("{NS}Person")),argument:SWRLIArgument::Variable(SWRLVariable{iri:IRI::new("urn:swrl#x")})}],
-        vec![]);
+        vec![SWRLAtom::ClassAtom {
+            predicate: ce(&format!("{NS}Person")),
+            argument: SWRLIArgument::Variable(SWRLVariable {
+                iri: IRI::new("urn:swrl#x"),
+            }),
+        }],
+        vec![],
+    );
     println!("   Rule: {} head atoms", rule.head.len());
     let _engine = SWRLRuleEngine::new(oxidowl::swrl::SWRLConfig::default());
     println!("   SWRLRuleEngine: created");
@@ -270,7 +450,10 @@ fn demo_swrl() -> Result<()> {
 fn demo_shacl() -> Result<()> {
     println!("\n── 9. SHACL ──");
     let _v = ShaclValidator::with_config("", "", ShaclConfig::default())?;
-    println!("   ShaclSeverity::Violation: {:?}", ShaclSeverity::Violation);
+    println!(
+        "   ShaclSeverity::Violation: {:?}",
+        ShaclSeverity::Violation
+    );
     println!("   ShaclSeverity::Warning: {:?}", ShaclSeverity::Warning);
     Ok(())
 }
@@ -279,9 +462,15 @@ fn demo_shacl() -> Result<()> {
 
 fn demo_explanation() -> Result<()> {
     println!("\n── 10. Explanation ──");
-    let bb = BlackBoxExplanation::new(Arc::new(oxidowl::reasoner_api::TableauReasonerFactory), BlackBoxConfig::default());
+    let bb = BlackBoxExplanation::new(
+        Arc::new(oxidowl::reasoner_api::TableauReasonerFactory),
+        BlackBoxConfig::default(),
+    );
     println!("   BlackBoxExplanation: created");
-    let _hst = HSTExplanationGenerator::new(Arc::new(oxidowl::reasoner_api::TableauReasonerFactory), HSTConfig::default());
+    let _hst = HSTExplanationGenerator::new(
+        Arc::new(oxidowl::reasoner_api::TableauReasonerFactory),
+        HSTConfig::default(),
+    );
     println!("   HSTExplanationGenerator: created");
     let ont_ref = Arc::new(RwLock::new(demo_ontology()));
     let _dbg = BlackBoxOWLDebugger::new(
@@ -314,7 +503,10 @@ fn demo_modularity() -> Result<()> {
     let ont = demo_ontology();
     let _eval = SyntacticLocalityEvaluator::new(LocalityClass::Star);
     println!("   SyntacticLocalityEvaluator: created");
-    let cfg = ModuleExtractorConfig{module_type:ModuleType::Star,..Default::default()};
+    let cfg = ModuleExtractorConfig {
+        module_type: ModuleType::Star,
+        ..Default::default()
+    };
     let _ext = ModuleExtractor::new_syntactic(LocalityClass::Star, cfg);
     println!("   ModuleExtractor (Star): created");
     let deco = AtomicDecomposer::new(DecomposerConfig::default());
@@ -330,9 +522,15 @@ fn demo_transforms() -> Result<()> {
     let ont = demo_ontology();
     let ont_ref = Arc::new(RwLock::new(ont.clone()));
     let renamer = OWLEntityRenamer::new();
-    println!("   OWLEntityRenamer: {} changes", renamer.rename_ontology(&ont_ref)?.len());
+    println!(
+        "   OWLEntityRenamer: {} changes",
+        renamer.rename_ontology(&ont_ref)?.len()
+    );
     let remover = OWLEntityRemover::new();
-    println!("   OWLEntityRemover: {} changes", remover.remove_entities(&ont_ref)?.len());
+    println!(
+        "   OWLEntityRemover: {} changes",
+        remover.remove_entities(&ont_ref)?.len()
+    );
     let _t = OWLObjectTransformer::new_ce(|ce| Some(ce.clone()));
     println!("   OWLObjectTransformer: created");
     let nnf = NNFConverter;
@@ -386,7 +584,12 @@ fn demo_dl_clauses() -> Result<()> {
 
 fn demo_change_system() -> Result<()> {
     println!("\n── 17. Change System ──");
-    let mut mgr = OntologyManager::new_with_config(ManagerConfig{enable_change_history:true,max_history_size:100,silent_missing_imports:true,max_import_depth:20});
+    let mut mgr = OntologyManager::new_with_config(ManagerConfig {
+        enable_change_history: true,
+        max_history_size: 100,
+        silent_missing_imports: true,
+        max_import_depth: 20,
+    });
     let iri = IRI::new("http://ex.org/changes");
     let ont_ref = mgr.create_ontology(iri.clone());
     mgr.add_change_listener(Box::new(LoggingChangeListener::new(log::Level::Info)));
@@ -394,7 +597,10 @@ fn demo_change_system() -> Result<()> {
     mgr.set_broadcast_strategy(ChangeBroadcastStrategy::Immediate);
     println!("   Broadcast strategy: Immediate");
     let snap = mgr.snapshot_ontology(&iri);
-    println!("   Snapshot: {} axioms", snap.map(|s|s.axioms.len()).unwrap_or(0));
+    println!(
+        "   Snapshot: {} axioms",
+        snap.map(|s| s.axioms.len()).unwrap_or(0)
+    );
     Ok(())
 }
 
@@ -402,8 +608,11 @@ fn demo_change_system() -> Result<()> {
 
 fn demo_iri_mappers() -> Result<()> {
     println!("\n── 18. IRI Mappers ──");
-    let sm = SimpleIRIMapper::new(IRI::new("http://ex.org/o"),IRI::new("file:///o.owl"));
-    println!("   SimpleIRIMapper: {:?}", sm.get_document_iri(&IRI::new("http://ex.org/o")));
+    let sm = SimpleIRIMapper::new(IRI::new("http://ex.org/o"), IRI::new("file:///o.owl"));
+    println!(
+        "   SimpleIRIMapper: {:?}",
+        sm.get_document_iri(&IRI::new("http://ex.org/o"))
+    );
     let _cm = CompositeIRIMapper::new(vec![Box::new(sm)]);
     println!("   CompositeIRIMapper: created");
     Ok(())
@@ -443,11 +652,23 @@ fn demo_datatypes() -> Result<()> {
     println!("\n── 22. Datatypes ──");
     println!("   OWL2Datatype::Integer: {:?}", OWL2Datatype::Integer);
     println!("   OWL2Datatype::String: {:?}", OWL2Datatype::String);
-    println!("   DatatypeCategory::String: {:?}", DatatypeCategory::String);
-    println!("   DatatypeCategory::Numeric: {:?}", DatatypeCategory::Numeric);
+    println!(
+        "   DatatypeCategory::String: {:?}",
+        DatatypeCategory::String
+    );
+    println!(
+        "   DatatypeCategory::Numeric: {:?}",
+        DatatypeCategory::Numeric
+    );
     println!("   OWLFacet::XsdLength: {:?}", OWLFacet::XsdLength);
-    println!("   OWLFacet::XsdMinInclusive: {:?}", OWLFacet::XsdMinInclusive);
-    println!("   ConstrainingFacet::MinInclusive: {:?}", ConstrainingFacet::MinInclusive);
+    println!(
+        "   OWLFacet::XsdMinInclusive: {:?}",
+        OWLFacet::XsdMinInclusive
+    );
+    println!(
+        "   ConstrainingFacet::MinInclusive: {:?}",
+        ConstrainingFacet::MinInclusive
+    );
     Ok(())
 }
 
@@ -455,13 +676,23 @@ fn demo_datatypes() -> Result<()> {
 
 fn demo_distributed() -> Result<()> {
     println!("\n── 23. Distributed ──");
-    let n = NodeConfig{
-        node_id:uuid::Uuid::new_v4(),
-        address:"127.0.0.1:9090".parse().unwrap(),
-        capabilities:NodeCapabilities{cpu_cores:8,memory_mb:16384,storage_gb:100,network_bandwidth_mbps:1000,reasoning_features:vec!["tableau".into()]},
-        settings:NodeSettings::default()};
+    let n = NodeConfig {
+        node_id: uuid::Uuid::new_v4(),
+        address: "127.0.0.1:9090".parse().unwrap(),
+        capabilities: NodeCapabilities {
+            cpu_cores: 8,
+            memory_mb: 16384,
+            storage_gb: 100,
+            network_bandwidth_mbps: 1000,
+            reasoning_features: vec!["tableau".into()],
+        },
+        settings: NodeSettings::default(),
+    };
     println!("   NodeConfig: id={} addr={}", n.node_id, n.address);
     let dist = DistributedConfig::default();
-    println!("   DistributedConfig: cluster_name={}", dist.cluster_config.cluster_name);
+    println!(
+        "   DistributedConfig: cluster_name={}",
+        dist.cluster_config.cluster_name
+    );
     Ok(())
 }

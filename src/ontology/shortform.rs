@@ -200,7 +200,9 @@ mod tests {
     fn test_annotation_value_label() {
         use crate::ontology::Ontology;
         use crate::ontology::axioms::{AnnotationAssertionAxiom, Axiom};
-        use crate::ontology::{AnnotationProperty, AnnotationSubject, AnnotationValue as AnnValue, Literal};
+        use crate::ontology::{
+            AnnotationProperty, AnnotationSubject, AnnotationValue as AnnValue, Literal,
+        };
 
         let mut ont = Ontology::new();
         let ann = AnnotationAssertionAxiom {

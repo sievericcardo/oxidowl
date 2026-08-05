@@ -56,7 +56,10 @@ fn module_extraction_star_non_empty() {
     let mut sig = HashSet::new();
     sig.insert(IRI::new("http://ex.org/A"));
     let module = extractor.extract_module(&onto, &sig);
-    assert!(!module.axioms().is_empty(), "Star module should not be empty");
+    assert!(
+        !module.axioms().is_empty(),
+        "Star module should not be empty"
+    );
 }
 
 #[test]
@@ -71,7 +74,10 @@ fn module_extraction_lower_bound() {
     let mut sig = HashSet::new();
     sig.insert(IRI::new("http://ex.org/A"));
     let module = extractor.extract_module(&onto, &sig);
-    assert!(!module.axioms().is_empty(), "Lower bound module should not be empty");
+    assert!(
+        !module.axioms().is_empty(),
+        "Lower bound module should not be empty"
+    );
 }
 
 #[test]
@@ -86,7 +92,10 @@ fn module_extraction_upper_bound() {
     let mut sig = HashSet::new();
     sig.insert(IRI::new("http://ex.org/A"));
     let module = extractor.extract_module(&onto, &sig);
-    assert!(!module.axioms().is_empty(), "Upper bound module should not be empty");
+    assert!(
+        !module.axioms().is_empty(),
+        "Upper bound module should not be empty"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

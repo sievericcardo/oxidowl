@@ -3,10 +3,10 @@ mod helpers;
 
 use helpers::df::DF;
 use helpers::*;
+use oxidowl::inference::metrics::OntologyMetrics;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 use oxidowl::searcher::{EntityIndex, EntitySearcher};
-use oxidowl::inference::metrics::OntologyMetrics;
 
 /// Build a test ontology: A ⊑ B, B ⊑ C, ClassAssertion(A, i), P(i, j)
 fn test_ontology() -> Ontology {
@@ -34,7 +34,9 @@ fn searcher_sub_class_axioms_for_lhs() {
     let o = test_ontology();
     let index = EntityIndex::from_ontology(&o);
     let searcher = EntitySearcher::new(&o, &index);
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
     let axioms = searcher.get_sub_class_axioms_for_lhs(&a);
     assert!(!axioms.is_empty());
 }
@@ -46,7 +48,9 @@ fn searcher_sub_class_axioms_for_rhs() {
     let o = test_ontology();
     let index = EntityIndex::from_ontology(&o);
     let searcher = EntitySearcher::new(&o, &index);
-    let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/B"),
+    });
     let axioms = searcher.get_sub_class_axioms_for_rhs(&b);
     assert!(!axioms.is_empty());
 }
@@ -58,7 +62,9 @@ fn searcher_class_assertion_axioms() {
     let o = test_ontology();
     let index = EntityIndex::from_ontology(&o);
     let searcher = EntitySearcher::new(&o, &index);
-    let i = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/i") });
+    let i = Individual::Named(NamedIndividual {
+        iri: IRI::new("http://ex.org/i"),
+    });
     let axioms = searcher.get_class_assertion_axioms(&i);
     assert!(!axioms.is_empty());
 }
@@ -70,7 +76,9 @@ fn searcher_object_property_assertion_axioms() {
     let o = test_ontology();
     let index = EntityIndex::from_ontology(&o);
     let searcher = EntitySearcher::new(&o, &index);
-    let i = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/i") });
+    let i = Individual::Named(NamedIndividual {
+        iri: IRI::new("http://ex.org/i"),
+    });
     let axioms = searcher.get_object_property_assertion_axioms(&i);
     assert!(!axioms.is_empty());
 }
@@ -82,7 +90,9 @@ fn searcher_equivalent_classes_empty_for_basic_onto() {
     let o = test_ontology();
     let index = EntityIndex::from_ontology(&o);
     let searcher = EntitySearcher::new(&o, &index);
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
     let axioms = searcher.get_equivalent_classes_axioms(&a);
     // No EquivalentClasses in a subclass-only ontology
     assert!(axioms.is_empty());
@@ -95,7 +105,9 @@ fn searcher_disjoint_classes_empty_for_basic_onto() {
     let o = test_ontology();
     let index = EntityIndex::from_ontology(&o);
     let searcher = EntitySearcher::new(&o, &index);
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
     let axioms = searcher.get_disjoint_classes_axioms(&a);
     assert!(axioms.is_empty());
 }
@@ -150,7 +162,10 @@ fn searcher_declaration_axioms_by_obj_prop_type() {
     let index = EntityIndex::from_ontology(&o);
     let searcher = EntitySearcher::new(&o, &index);
     let axioms = searcher.get_declaration_axioms_by_type(&EntityType::ObjectProperty);
-    assert!(axioms.len() >= 1, "Expected at least 1 object property declaration");
+    assert!(
+        axioms.len() >= 1,
+        "Expected at least 1 object property declaration"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -175,7 +190,11 @@ fn ontology_metrics_counts() {
 fn entity_collector_classes() {
     let o = test_ontology();
     let classes = o.get_classes_in_signature();
-    assert!(classes.len() >= 3, "Expected at least 3 classes, got {}", classes.len());
+    assert!(
+        classes.len() >= 3,
+        "Expected at least 3 classes, got {}",
+        classes.len()
+    );
 }
 
 #[test]

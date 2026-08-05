@@ -232,16 +232,17 @@ impl ProfileValidator for GenericValidator {
                 let mut dl_validator =
                     crate::validation::owl2_dl::OWL2DLValidator::new(ontology.clone());
                 if let Ok(dl_report) = dl_validator.validate()
-                    && !dl_report.is_valid {
-                        for error in &dl_report.errors {
-                            report.add_violation(crate::profiles::ProfileViolation::new(
-                                crate::profiles::ProfileViolationType::DisallowedAxiom(
-                                    error.error_type.to_string(),
-                                ),
-                                error.message.clone(),
-                            ));
-                        }
+                    && !dl_report.is_valid
+                {
+                    for error in &dl_report.errors {
+                        report.add_violation(crate::profiles::ProfileViolation::new(
+                            crate::profiles::ProfileViolationType::DisallowedAxiom(
+                                error.error_type.to_string(),
+                            ),
+                            error.message.clone(),
+                        ));
                     }
+                }
             }
             OWL2Profile::Full => {
                 // OWL 2 Full allows everything

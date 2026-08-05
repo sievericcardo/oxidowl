@@ -3,11 +3,11 @@
 
 use crate::Result;
 use crate::ontology::axioms::*;
-use crate::ontology::{IRI, Literal, NamedIndividual, Ontology};
 use crate::ontology::{
     Class, DataProperty, DataPropertyExpression, Individual, ObjectProperty,
     ObjectPropertyExpression,
 };
+use crate::ontology::{IRI, Literal, NamedIndividual, Ontology};
 
 fn axiom_id() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -38,9 +38,7 @@ fn parse_quoted_literal(token: &str) -> (String, Option<String>, Option<url::Url
     if let Some(caret_pos) = trimmed.rfind("^^") {
         let value_part = &trimmed[..caret_pos].trim();
         let dt_part = &trimmed[caret_pos + 2..].trim();
-        let value = value_part
-            .trim_matches('"')
-            .to_string();
+        let value = value_part.trim_matches('"').to_string();
         let dt_str = if dt_part.starts_with('<') && dt_part.ends_with('>') {
             dt_part[1..dt_part.len() - 1].to_string()
         } else {
@@ -51,14 +49,10 @@ fn parse_quoted_literal(token: &str) -> (String, Option<String>, Option<url::Url
     } else if let Some(at_pos) = trimmed.rfind('@') {
         let value_part = &trimmed[..at_pos].trim();
         let lang_part = &trimmed[at_pos + 1..].trim();
-        let value = value_part
-            .trim_matches('"')
-            .to_string();
+        let value = value_part.trim_matches('"').to_string();
         (value, Some(lang_part.to_string()), None)
     } else {
-        let value = trimmed
-            .trim_matches('"')
-            .to_string();
+        let value = trimmed.trim_matches('"').to_string();
         (value, None, None)
     }
 }
@@ -242,13 +236,15 @@ impl NQuadsParser {
                     iri: IRI::new(&object),
                 });
                 let prop = ObjectProperty::new(IRI::new(&predicate))?;
-                o.add_axiom(Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom {
-                    id: axiom_id(),
-                    source: individual,
-                    target,
-                    property: ObjectPropertyExpression::ObjectProperty(prop),
-                    annotations: vec![],
-                }));
+                o.add_axiom(Axiom::ObjectPropertyAssertion(
+                    ObjectPropertyAssertionAxiom {
+                        id: axiom_id(),
+                        source: individual,
+                        target,
+                        property: ObjectPropertyExpression::ObjectProperty(prop),
+                        annotations: vec![],
+                    },
+                ));
             }
         }
 
@@ -289,21 +285,14 @@ impl NQuadsRenderer {
                     if let crate::ontology::ClassExpression::Class(class) = &a.class
                         && let Some(iri) = a.individual.iri()
                     {
-                        buf.push_str(&format!(
-                            "<{iri}> <{RDF_TYPE}> <{}> .\n",
-                            class.iri
-                        ));
+                        buf.push_str(&format!("<{iri}> <{RDF_TYPE}> <{}> .\n", class.iri));
                     }
                 }
                 Axiom::ObjectPropertyAssertion(a) => {
                     if let ObjectPropertyExpression::ObjectProperty(prop) = &a.property
-                        && let (Some(source), Some(target)) =
-                            (a.source.iri(), a.target.iri())
+                        && let (Some(source), Some(target)) = (a.source.iri(), a.target.iri())
                     {
-                        buf.push_str(&format!(
-                            "<{source}> <{}> <{target}> .\n",
-                            prop.iri
-                        ));
+                        buf.push_str(&format!("<{source}> <{}> <{target}> .\n", prop.iri));
                     }
                 }
                 Axiom::DataPropertyAssertion(a) => {
@@ -322,10 +311,7 @@ impl NQuadsRenderer {
                                 prop.iri
                             ));
                         } else {
-                            buf.push_str(&format!(
-                                "<{iri}> <{}> \"{escaped}\" .\n",
-                                prop.iri
-                            ));
+                            buf.push_str(&format!("<{iri}> <{}> \"{escaped}\" .\n", prop.iri));
                         }
                     }
                 }

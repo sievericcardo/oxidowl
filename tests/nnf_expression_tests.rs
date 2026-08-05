@@ -28,9 +28,10 @@ fn test_nnf_object_complement_of_intersection() {
     let b = ClassExpression::class(IRI::new(&ex("B")));
 
     // ¬(A ⊓ B)
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectIntersectionOf(vec![a, b]),
-    ));
+    let original =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectIntersectionOf(vec![
+            a, b,
+        ])));
 
     let result = conv.to_nnf(&original);
 
@@ -47,7 +48,10 @@ fn test_nnf_object_complement_of_intersection() {
                 "Second operand should be a complement"
             );
         }
-        other => panic!("Expected ObjectUnionOf, got {:?}", std::mem::discriminant(other)),
+        other => panic!(
+            "Expected ObjectUnionOf, got {:?}",
+            std::mem::discriminant(other)
+        ),
     }
 }
 
@@ -59,20 +63,26 @@ fn test_nnf_object_complement_of_union() {
     let b = ClassExpression::class(IRI::new(&ex("B")));
 
     // ¬(A ⊔ B)
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectUnionOf(vec![a, b]),
-    ));
+    let original =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectUnionOf(vec![a, b])));
 
     let result = conv.to_nnf(&original);
 
     // Should result in intersection form (¬A ⊓ ¬B)
     match &result {
         ClassExpression::ObjectIntersectionOf(ops) => {
-            assert_eq!(ops.len(), 2, "Intersection should contain exactly 2 operands");
+            assert_eq!(
+                ops.len(),
+                2,
+                "Intersection should contain exactly 2 operands"
+            );
             assert!(matches!(&ops[0], ClassExpression::ObjectComplementOf(_)));
             assert!(matches!(&ops[1], ClassExpression::ObjectComplementOf(_)));
         }
-        other => panic!("Expected ObjectIntersectionOf, got {:?}", std::mem::discriminant(other)),
+        other => panic!(
+            "Expected ObjectIntersectionOf, got {:?}",
+            std::mem::discriminant(other)
+        ),
     }
 }
 
@@ -101,12 +111,11 @@ fn test_nnf_complement_of_some_values_from() {
     let b = ClassExpression::class(IRI::new(&ex("B")));
 
     // ¬(∃P.B)
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectSomeValuesFrom {
+    let original =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectSomeValuesFrom {
             property: p,
             filler: Box::new(b),
-        },
-    ));
+        }));
 
     let result = conv.to_nnf(&original);
     assert!(
@@ -125,12 +134,11 @@ fn test_nnf_complement_of_all_values_from() {
     let b = ClassExpression::class(IRI::new(&ex("B")));
 
     // ¬(∀P.B)
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectAllValuesFrom {
+    let original =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectAllValuesFrom {
             property: p,
             filler: Box::new(b),
-        },
-    ));
+        }));
 
     let result = conv.to_nnf(&original);
     assert!(
@@ -150,13 +158,12 @@ fn test_nnf_complement_of_min_cardinality() {
     let n: u32 = 3;
 
     // ¬(≥3 P.B)
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectMinCardinality {
+    let original =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectMinCardinality {
             property: p,
             cardinality: n,
             filler: Box::new(b),
-        },
-    ));
+        }));
 
     let result = conv.to_nnf(&original);
 
@@ -168,18 +175,20 @@ fn test_nnf_complement_of_min_cardinality() {
             ..
         } => {
             assert_eq!(
-                *cardinality, n - 1,
+                *cardinality,
+                n - 1,
                 "Cardinality should be decremented: {} - 1 = {}",
-                n, n - 1
+                n,
+                n - 1
             );
             // The filler should still be B (not negated — NNF pushes negation
             // over the cardinality, not into the filler in this form)
-            assert!(!matches!(
-                **filler,
-                ClassExpression::ObjectComplementOf(_)
-            ));
+            assert!(!matches!(**filler, ClassExpression::ObjectComplementOf(_)));
         }
-        other => panic!("Expected ObjectMaxCardinality, got {:?}", std::mem::discriminant(other)),
+        other => panic!(
+            "Expected ObjectMaxCardinality, got {:?}",
+            std::mem::discriminant(other)
+        ),
     }
 }
 
@@ -234,11 +243,9 @@ fn test_nnf_object_has_self() {
     });
 
     // ¬(∃P.Self)
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectHasSelf {
-            property: p.clone(),
-        },
-    ));
+    let original = ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectHasSelf {
+        property: p.clone(),
+    }));
 
     let result = conv.to_nnf(&original);
 
@@ -501,9 +508,7 @@ fn test_has_key_axiom_construction() {
     // Verify ontology contains the HasKey axiom
     let o = df.build_ontology(vec![ax]);
     let axioms: Vec<_> = o.axioms().to_vec();
-    let has_haskey = axioms
-        .iter()
-        .any(|ax| matches!(ax, Axiom::HasKey(_)));
+    let has_haskey = axioms.iter().any(|ax| matches!(ax, Axiom::HasKey(_)));
     assert!(has_haskey, "Ontology should contain the HasKey axiom");
 }
 
@@ -541,7 +546,10 @@ fn test_datatype_definition_construction() {
     let has_dt_def = axioms
         .iter()
         .any(|ax| matches!(ax, Axiom::DatatypeDefinition(_)));
-    assert!(has_dt_def, "Ontology should contain the DatatypeDefinition axiom");
+    assert!(
+        has_dt_def,
+        "Ontology should contain the DatatypeDefinition axiom"
+    );
 }
 
 /// test_dl_expressivity_checker: Verify all 14 DL expressivity flags work
@@ -706,10 +714,7 @@ fn test_owl_entity_renamer_basic() {
     }
 
     // At minimum, changes are generated
-    assert!(
-        changes.len() >= 2,
-        "Should have at least remove+add pair"
-    );
+    assert!(changes.len() >= 2, "Should have at least remove+add pair");
 }
 
 /// test_owl_entity_remover_basic: Remove an entity from ontology, verify related axioms removed
@@ -754,7 +759,10 @@ fn test_owl_entity_remover_basic() {
     // All changes should be RemoveAxiom
     for change in &changes {
         assert!(
-            matches!(change, oxidowl::manager::changes::OntologyChange::RemoveAxiom { .. }),
+            matches!(
+                change,
+                oxidowl::manager::changes::OntologyChange::RemoveAxiom { .. }
+            ),
             "All changes should be RemoveAxiom"
         );
     }

@@ -19,23 +19,37 @@ fn rt_and_compare(ont: &Ontology, fmt: OntologyFormat) {
 /// compare the two reloaded ontologies axiom-structurally.
 fn cross_compare(ont: &Ontology, f1: OntologyFormat, f2: OntologyFormat) {
     let mut tb = TestBase::new();
-    let o1 = tb.round_trip(ont, f1).unwrap_or_else(|e| panic!("Roundtrip {f1:?} failed: {e}"));
-    let o2 = tb.round_trip(ont, f2).unwrap_or_else(|e| panic!("Roundtrip {f2:?} failed: {e}"));
+    let o1 = tb
+        .round_trip(ont, f1)
+        .unwrap_or_else(|e| panic!("Roundtrip {f1:?} failed: {e}"));
+    let o2 = tb
+        .round_trip(ont, f2)
+        .unwrap_or_else(|e| panic!("Roundtrip {f2:?} failed: {e}"));
     assertions::assert_ontologies_axiom_equal(&o1, &o2);
 }
 
 /// Roundtrip and verify at least one axiom of the expected type is present.
 fn rt_loose(ont: &Ontology, fmt: OntologyFormat, expected_type: AxiomType) {
     let mut tb = TestBase::new();
-    let reloaded = tb.round_trip(ont, fmt).unwrap_or_else(|e| panic!("Roundtrip {fmt:?} failed: {e}"));
-    let found = reloaded.axioms().iter().any(|ax| ax.axiom_type() == expected_type);
-    assert!(found, "Expected {expected_type:?} axiom not found after {fmt:?} roundtrip");
+    let reloaded = tb
+        .round_trip(ont, fmt)
+        .unwrap_or_else(|e| panic!("Roundtrip {fmt:?} failed: {e}"));
+    let found = reloaded
+        .axioms()
+        .iter()
+        .any(|ax| ax.axiom_type() == expected_type);
+    assert!(
+        found,
+        "Expected {expected_type:?} axiom not found after {fmt:?} roundtrip"
+    );
 }
 
 /// Roundtrip and verify at least one of the listed axiom types is present.
 fn rt_loose_types(ont: &Ontology, fmt: OntologyFormat, types: &[AxiomType]) {
     let mut tb = TestBase::new();
-    let reloaded = tb.round_trip(ont, fmt).unwrap_or_else(|e| panic!("Roundtrip {fmt:?} failed: {e}"));
+    let reloaded = tb
+        .round_trip(ont, fmt)
+        .unwrap_or_else(|e| panic!("Roundtrip {fmt:?} failed: {e}"));
     for t in types {
         if reloaded.axioms().iter().any(|ax| ax.axiom_type() == *t) {
             return;
@@ -47,9 +61,14 @@ fn rt_loose_types(ont: &Ontology, fmt: OntologyFormat, types: &[AxiomType]) {
 /// Roundtrip and verify the reloaded ontology has at least `min_count` axioms.
 fn rt_min_count(ont: &Ontology, fmt: OntologyFormat, min_count: usize) {
     let mut tb = TestBase::new();
-    let reloaded = tb.round_trip(ont, fmt).unwrap_or_else(|e| panic!("Roundtrip {fmt:?} failed: {e}"));
+    let reloaded = tb
+        .round_trip(ont, fmt)
+        .unwrap_or_else(|e| panic!("Roundtrip {fmt:?} failed: {e}"));
     let count = reloaded.axioms().len();
-    assert!(count >= min_count, "Expected >= {min_count} axioms after {fmt:?} roundtrip, got {count}");
+    assert!(
+        count >= min_count,
+        "Expected >= {min_count} axioms after {fmt:?} roundtrip, got {count}"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -164,9 +183,7 @@ fn test_anonymous_in_class_assertion_roundtrip() {
     let a = df.class_ce("http://ex.org/A");
     let anon = df.anon();
 
-    let mut ont = df.build_ontology(vec![
-        df.class_assertion(a.clone(), anon.clone()),
-    ]);
+    let mut ont = df.build_ontology(vec![df.class_assertion(a.clone(), anon.clone())]);
     df.auto_declare(&mut ont);
 
     rt_and_compare(&ont, OntologyFormat::Functional);
@@ -180,7 +197,10 @@ fn test_anonymous_in_class_assertion_roundtrip() {
             false
         }
     });
-    assert!(has_anon, "Anonymous individual lost in Functional roundtrip");
+    assert!(
+        has_anon,
+        "Anonymous individual lost in Functional roundtrip"
+    );
 }
 
 #[test]
@@ -190,9 +210,11 @@ fn test_anonymous_in_object_property_roundtrip() {
     let anon = df.anon();
     let j = df.named("http://ex.org/j");
 
-    let mut ont = df.build_ontology(vec![
-        df.object_property_assertion(p.clone(), anon.clone(), j.clone()),
-    ]);
+    let mut ont = df.build_ontology(vec![df.object_property_assertion(
+        p.clone(),
+        anon.clone(),
+        j.clone(),
+    )]);
     df.auto_declare(&mut ont);
 
     rt_and_compare(&ont, OntologyFormat::Functional);
@@ -207,7 +229,10 @@ fn test_anonymous_in_object_property_roundtrip() {
             false
         }
     });
-    assert!(has_anon, "Anonymous individual lost in Functional roundtrip");
+    assert!(
+        has_anon,
+        "Anonymous individual lost in Functional roundtrip"
+    );
 }
 
 #[test]
@@ -241,7 +266,11 @@ fn test_anonymous_chained_in_annotations() {
     ]);
     df.auto_declare(&mut ont);
 
-    rt_loose(&ont, OntologyFormat::Functional, AxiomType::AnnotationAssertion);
+    rt_loose(
+        &ont,
+        OntologyFormat::Functional,
+        AxiomType::AnnotationAssertion,
+    );
 }
 
 #[test]
@@ -259,34 +288,54 @@ fn test_blank_node_ids_in_turtle_roundtrip() {
     ]);
     df.auto_declare(&mut ont);
 
-    let anon_start = ont.axioms().iter().filter(|ax| {
-        if let Axiom::ClassAssertion(ca_ax) = ax {
-            matches!(ca_ax.individual, Individual::Anonymous(_))
-        } else {
-            false
-        }
-    }).count();
-    assert_eq!(anon_start, 3, "Should start with 3 anonymous class assertions");
+    let anon_start = ont
+        .axioms()
+        .iter()
+        .filter(|ax| {
+            if let Axiom::ClassAssertion(ca_ax) = ax {
+                matches!(ca_ax.individual, Individual::Anonymous(_))
+            } else {
+                false
+            }
+        })
+        .count();
+    assert_eq!(
+        anon_start, 3,
+        "Should start with 3 anonymous class assertions"
+    );
 
     let tb = TestBase::new();
     let turtle = tb.save_to_string(&ont, OntologyFormat::Turtle).unwrap();
-    assert!(!turtle.is_empty(), "Turtle serialization should produce output");
+    assert!(
+        !turtle.is_empty(),
+        "Turtle serialization should produce output"
+    );
 
     let reloaded = tb
         .load_and_get_ontology(&turtle, OntologyFormat::Turtle)
         .unwrap();
-    assert!(!reloaded.axioms().is_empty(), "Reloaded Turtle ontology should have content");
+    assert!(
+        !reloaded.axioms().is_empty(),
+        "Reloaded Turtle ontology should have content"
+    );
 
-    let anon_count = reloaded.axioms().iter().filter(|ax| {
-        if let Axiom::ClassAssertion(ca_ax) = ax {
-            matches!(ca_ax.individual, Individual::Anonymous(_))
-        } else {
-            false
-        }
-    }).count();
+    let anon_count = reloaded
+        .axioms()
+        .iter()
+        .filter(|ax| {
+            if let Axiom::ClassAssertion(ca_ax) = ax {
+                matches!(ca_ax.individual, Individual::Anonymous(_))
+            } else {
+                false
+            }
+        })
+        .count();
 
     let total_ax = reloaded.axioms().len();
-    assert!(total_ax >= 1, "Reloaded Turtle ontology should contain axioms; anonymous count: {anon_count}");
+    assert!(
+        total_ax >= 1,
+        "Reloaded Turtle ontology should contain axioms; anonymous count: {anon_count}"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -365,7 +414,10 @@ fn test_swrl_rule_atom_types_roundtrip() {
         vec![head_atom.clone()],
         vec![body_class, body_prop, body_data],
     );
-    assert!(rule.is_safe(), "SWRL rule with all head vars in body is correctly safe");
+    assert!(
+        rule.is_safe(),
+        "SWRL rule with all head vars in body is correctly safe"
+    );
     let rule_ax = SWRLRuleAxiom::new(df.next_id(), rule);
 
     let mut ont = df.build_ontology(vec![
@@ -377,12 +429,19 @@ fn test_swrl_rule_atom_types_roundtrip() {
     ]);
     df.auto_declare(&mut ont);
 
-    let rule_count = ont.axioms().iter().filter(|ax| matches!(ax, Axiom::Rule(_))).count();
+    let rule_count = ont
+        .axioms()
+        .iter()
+        .filter(|ax| matches!(ax, Axiom::Rule(_)))
+        .count();
     assert_eq!(rule_count, 1, "Ontology should contain exactly 1 SWRL rule");
 
     let tb = TestBase::new();
     let serialized = tb.save_to_string(&ont, OntologyFormat::Functional).unwrap();
-    assert!(!serialized.is_empty(), "Functional serialization of SWRL ontology succeeds");
+    assert!(
+        !serialized.is_empty(),
+        "Functional serialization of SWRL ontology succeeds"
+    );
 }
 
 #[test]
@@ -443,11 +502,20 @@ fn test_datatype_definition_roundtrip() {
     ]);
     df.auto_declare(&mut ont);
 
-    let dt_count = ont.axioms().iter().filter(|ax| matches!(ax, Axiom::DatatypeDefinition(_))).count();
-    assert!(dt_count >= 1, "Ontology should contain DatatypeDefinition axiom");
+    let dt_count = ont
+        .axioms()
+        .iter()
+        .filter(|ax| matches!(ax, Axiom::DatatypeDefinition(_)))
+        .count();
+    assert!(
+        dt_count >= 1,
+        "Ontology should contain DatatypeDefinition axiom"
+    );
 
     assert!(
-        ont.axioms().iter().any(|ax| matches!(ax, Axiom::DatatypeDefinition(_))),
+        ont.axioms()
+            .iter()
+            .any(|ax| matches!(ax, Axiom::DatatypeDefinition(_))),
         "DatatypeDefinition axiom must be present in constructed ontology"
     );
 }
@@ -493,16 +561,20 @@ fn test_all_property_characteristics_roundtrip() {
         OntologyFormat::Turtle,
         OntologyFormat::OwlXml,
     ] {
-        rt_loose_types(&ont, *fmt, &[
-            AxiomType::FunctionalObjectProperty,
-            AxiomType::TransitiveObjectProperty,
-            AxiomType::SymmetricObjectProperty,
-            AxiomType::AsymmetricObjectProperty,
-            AxiomType::ReflexiveObjectProperty,
-            AxiomType::IrreflexiveObjectProperty,
-            AxiomType::InverseFunctionalObjectProperty,
-            AxiomType::FunctionalDataProperty,
-        ]);
+        rt_loose_types(
+            &ont,
+            *fmt,
+            &[
+                AxiomType::FunctionalObjectProperty,
+                AxiomType::TransitiveObjectProperty,
+                AxiomType::SymmetricObjectProperty,
+                AxiomType::AsymmetricObjectProperty,
+                AxiomType::ReflexiveObjectProperty,
+                AxiomType::IrreflexiveObjectProperty,
+                AxiomType::InverseFunctionalObjectProperty,
+                AxiomType::FunctionalDataProperty,
+            ],
+        );
     }
 }
 
@@ -515,9 +587,7 @@ fn test_ontology_annotations_roundtrip() {
     let ont_ann = df.rdfs_comment("Ontology-level comment");
     let ont_label = df.rdfs_label("Test Ontology");
 
-    let mut ont = df.build_ontology(vec![
-        df.sub_class_of(a.clone(), b.clone()),
-    ]);
+    let mut ont = df.build_ontology(vec![df.sub_class_of(a.clone(), b.clone())]);
     df.auto_declare(&mut ont);
     ont.set_iri(IRI::new("http://ex.org/myOnt"));
     ont.annotations = vec![ont_ann, ont_label];

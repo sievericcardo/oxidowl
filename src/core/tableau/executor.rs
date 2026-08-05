@@ -118,9 +118,11 @@ impl TableauExecutor {
             }
 
             // Get next rule application
-            let rule_app = Arc::make_mut(&mut tableau.pending_queue).pop_front().ok_or_else(|| {
-                Error::internal("Tableau executor: pending queue empty despite non-empty check")
-            })?;
+            let rule_app = Arc::make_mut(&mut tableau.pending_queue)
+                .pop_front()
+                .ok_or_else(|| {
+                    Error::internal("Tableau executor: pending queue empty despite non-empty check")
+                })?;
 
             // Apply the rule
             Self::apply_rule(tableau, rule_app)?;
@@ -147,16 +149,14 @@ impl TableauExecutor {
 
                     // Apply the alternative choice
                     if let super::Choice::Disjunction { concepts, .. } = &backtrack_point.choice
-                        && let Some(label) = concepts.first() {
-                            tableau.add_concept_to_node(
-                                backtrack_point.node_id,
-                                label.clone(),
-                            )?;
-                            debug!(
-                                "Backtracked: applying alternative concept at node {}",
-                                backtrack_point.node_id
-                            );
-                        }
+                        && let Some(label) = concepts.first()
+                    {
+                        tableau.add_concept_to_node(backtrack_point.node_id, label.clone())?;
+                        debug!(
+                            "Backtracked: applying alternative concept at node {}",
+                            backtrack_point.node_id
+                        );
+                    }
 
                     // Clear clashes and dirty tracking since we rewound state
                     tableau.clash_detector = crate::core::tableau::ClashDetector::new();
@@ -283,7 +283,11 @@ impl TableauExecutor {
             .parse()
             .map_err(|_| Error::reasoning(format!("Invalid node ID: {}", rule_app.node)))?;
 
-        if let RuleContext::Concept { concept, dependencies } = &rule_app.context {
+        if let RuleContext::Concept {
+            concept,
+            dependencies,
+        } = &rule_app.context
+        {
             match concept {
                 ClassExpression::ObjectUnionOf(disjuncts) => {
                     if disjuncts.is_empty() {
@@ -897,9 +901,10 @@ impl TableauExecutor {
 
         // Forward edges: node_id --role--> target
         if let Some(node) = tableau.nodes.get(node_id)
-            && let Some(forward) = node.role_successors.get(role_name.as_str()) {
-                successors.extend(forward.iter().copied());
-            }
+            && let Some(forward) = node.role_successors.get(role_name.as_str())
+        {
+            successors.extend(forward.iter().copied());
+        }
 
         // Inverse edges: check all nodes for edges going TO node_id
         let inv_role_name = format!("inv({role_name})");
@@ -907,14 +912,16 @@ impl TableauExecutor {
             if edge.to == node_id {
                 let edge_role = edge.role.to_string();
                 if (edge_role == role_name || edge_role == inv_role_name)
-                    && !successors.contains(&edge.from) {
-                        successors.push(edge.from);
-                    }
+                    && !successors.contains(&edge.from)
+                {
+                    successors.push(edge.from);
+                }
                 if let super::node::RoleLabel::Inverse(name) = &edge.role
                     && name == &role_name
-                        && !successors.contains(&edge.from) {
-                            successors.push(edge.from);
-                        }
+                    && !successors.contains(&edge.from)
+                {
+                    successors.push(edge.from);
+                }
             }
         }
 
@@ -934,9 +941,7 @@ impl TableauExecutor {
                     if let ClassExpression::Class(target_class) = concept {
                         match c {
                             ConceptLabel::Atomic(name) => name == target_class.iri.as_str(),
-                            ConceptLabel::NegatedAtomic(name) => {
-                                name == target_class.iri.as_str()
-                            }
+                            ConceptLabel::NegatedAtomic(name) => name == target_class.iri.as_str(),
                             _ => false,
                         }
                     } else {

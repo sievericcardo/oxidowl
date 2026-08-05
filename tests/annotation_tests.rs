@@ -23,14 +23,20 @@ fn annotation_property_creation() {
 fn annotation_rdfs_label() {
     let df = DF::new();
     let ann = df.rdfs_label("My Class");
-    assert_eq!(ann.property.iri.as_str(), "http://www.w3.org/2000/01/rdf-schema#label");
+    assert_eq!(
+        ann.property.iri.as_str(),
+        "http://www.w3.org/2000/01/rdf-schema#label"
+    );
 }
 
 #[test]
 fn annotation_rdfs_comment() {
     let df = DF::new();
     let ann = df.rdfs_comment("Description");
-    assert_eq!(ann.property.iri.as_str(), "http://www.w3.org/2000/01/rdf-schema#comment");
+    assert_eq!(
+        ann.property.iri.as_str(),
+        "http://www.w3.org/2000/01/rdf-schema#comment"
+    );
 }
 
 #[test]
@@ -77,12 +83,10 @@ fn annotation_assertion_iri_value() {
     let value = IRI::new("http://ex.org/B");
     let ax = df.annotation_assertion_iri(ap, subject, value);
     match &ax {
-        Axiom::AnnotationAssertion(a) => {
-            match &a.value {
-                AnnotationValue::IRI(iri) => assert_eq!(iri.as_str(), "http://ex.org/B"),
-                _ => panic!("Expected IRI value"),
-            }
-        }
+        Axiom::AnnotationAssertion(a) => match &a.value {
+            AnnotationValue::IRI(iri) => assert_eq!(iri.as_str(), "http://ex.org/B"),
+            _ => panic!("Expected IRI value"),
+        },
         _ => panic!("Expected AnnotationAssertion"),
     }
 }
@@ -113,8 +117,10 @@ fn annotation_with_nested_annotations() {
         vec![outer_label.clone()],
     );
     assert_eq!(annotation.annotations.len(), 1);
-    assert_eq!(annotation.annotations[0].property.iri.as_str(),
-        "http://www.w3.org/2000/01/rdf-schema#label");
+    assert_eq!(
+        annotation.annotations[0].property.iri.as_str(),
+        "http://www.w3.org/2000/01/rdf-schema#label"
+    );
 }
 
 #[test]
@@ -122,12 +128,8 @@ fn annotation_property_domain() {
     let df = DF::new();
     let prop = df.annotation_property("http://ex.org/ap");
     let domain = IRI::new("http://ex.org/A");
-    let ax = AxiomCreationProvider::make_annotation_property_domain_axiom(
-        &df.df,
-        prop,
-        domain,
-        vec![],
-    );
+    let ax =
+        AxiomCreationProvider::make_annotation_property_domain_axiom(&df.df, prop, domain, vec![]);
     match &Axiom::AnnotationPropertyDomain(ax) {
         Axiom::AnnotationPropertyDomain(a) => {
             assert_eq!(a.property.iri.as_str(), "http://ex.org/ap");
@@ -141,12 +143,8 @@ fn annotation_property_range() {
     let df = DF::new();
     let prop = df.annotation_property("http://ex.org/ap");
     let range = IRI::new("http://ex.org/A");
-    let ax = AxiomCreationProvider::make_annotation_property_range_axiom(
-        &df.df,
-        prop,
-        range,
-        vec![],
-    );
+    let ax =
+        AxiomCreationProvider::make_annotation_property_range_axiom(&df.df, prop, range, vec![]);
     match &Axiom::AnnotationPropertyRange(ax) {
         Axiom::AnnotationPropertyRange(a) => {
             assert_eq!(a.property.iri.as_str(), "http://ex.org/ap");
@@ -196,7 +194,10 @@ fn punning_class_and_object_property() {
 fn annotation_value_short_form() {
     let df = DF::new();
     let ap = df.annotation_property("http://www.w3.org/2000/01/rdf-schema#label");
-    assert_eq!(ap.iri.as_str(), "http://www.w3.org/2000/01/rdf-schema#label");
+    assert_eq!(
+        ap.iri.as_str(),
+        "http://www.w3.org/2000/01/rdf-schema#label"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -207,9 +208,11 @@ fn annotation_value_short_form() {
 fn auto_declare_annotation_property() {
     let df = DF::new();
     let ap = df.annotation_property("http://ex.org/label");
-    let mut onto = df.build_ontology(vec![
-        df.annotation_assertion(ap, IRI::new("http://ex.org/A"), "Class A"),
-    ]);
+    let mut onto = df.build_ontology(vec![df.annotation_assertion(
+        ap,
+        IRI::new("http://ex.org/A"),
+        "Class A",
+    )]);
     df.auto_declare(&mut onto);
     assert!(onto.axioms().len() >= 2);
 }

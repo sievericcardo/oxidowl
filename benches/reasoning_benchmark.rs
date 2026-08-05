@@ -15,7 +15,9 @@ use std::sync::Arc;
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn make_class(name: &str) -> ClassExpression {
-    ClassExpression::Class(Class::new(IRI::new(&format!("http://bench.example.org/{name}"))))
+    ClassExpression::Class(Class::new(IRI::new(&format!(
+        "http://bench.example.org/{name}"
+    ))))
 }
 
 /// Build an ontology with a linear chain: C0 ⊑ C1 ⊑ … ⊑ C(n-1)
@@ -58,16 +60,12 @@ fn bench_axiom_index_lookup(c: &mut Criterion) {
             },
         );
 
-        group.bench_with_input(
-            BenchmarkId::new("build_index", size),
-            &size,
-            |b, _| {
-                b.iter(|| {
-                    let idx = AxiomIndex::build(black_box(ont.axioms()));
-                    black_box(idx);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("build_index", size), &size, |b, _| {
+            b.iter(|| {
+                let idx = AxiomIndex::build(black_box(ont.axioms()));
+                black_box(idx);
+            });
+        });
     }
 
     group.finish();
@@ -84,7 +82,9 @@ fn bench_subsumption(c: &mut Criterion) {
     for size in [10usize, 50, 200] {
         let ont = build_linear_chain(size);
         let config = ReasonerConfig::default();
-        let service = rt.block_on(async { ReasoningService::new(ont, config) }).unwrap();
+        let service = rt
+            .block_on(async { ReasoningService::new(ont, config) })
+            .unwrap();
 
         let sub = make_class("C0");
         let sup = make_class(&format!("C{}", size - 1));
@@ -96,7 +96,9 @@ fn bench_subsumption(c: &mut Criterion) {
             |b, _| {
                 b.iter(|| {
                     rt.block_on(async {
-                        let r = service.is_subsumed_by(black_box(&sub), black_box(&sup)).await;
+                        let r = service
+                            .is_subsumed_by(black_box(&sub), black_box(&sup))
+                            .await;
                         black_box(r)
                     })
                 });
@@ -119,7 +121,9 @@ fn bench_classification(c: &mut Criterion) {
     for size in [10usize, 100] {
         let ont = build_linear_chain(size);
         let config = ReasonerConfig::default();
-        let service = rt.block_on(async { ReasoningService::new(ont, config) }).unwrap();
+        let service = rt
+            .block_on(async { ReasoningService::new(ont, config) })
+            .unwrap();
 
         group.throughput(Throughput::Elements(size as u64));
         group.bench_with_input(
@@ -151,7 +155,9 @@ fn bench_regression_guards(c: &mut Criterion) {
     group.throughput(Throughput::Elements(1));
     group.bench_function("single_query_latency", |b| {
         let config = ReasonerConfig::default();
-        let service = rt.block_on(async { ReasoningService::new(Ontology::new(), config) }).unwrap();
+        let service = rt
+            .block_on(async { ReasoningService::new(Ontology::new(), config) })
+            .unwrap();
         b.iter(|| {
             rt.block_on(async {
                 let r = service.is_consistent().await;
@@ -165,7 +171,9 @@ fn bench_regression_guards(c: &mut Criterion) {
     group.bench_function("medium_ontology_consistency", |b| {
         let ont = build_linear_chain(100);
         let config = ReasonerConfig::default();
-        let service = rt.block_on(async { ReasoningService::new(ont, config) }).unwrap();
+        let service = rt
+            .block_on(async { ReasoningService::new(ont, config) })
+            .unwrap();
         b.iter(|| {
             rt.block_on(async {
                 let r = service.is_consistent().await;
@@ -187,7 +195,10 @@ fn bench_batch_subsumption(c: &mut Criterion) {
 
     let ont = build_linear_chain(200);
     let config = ReasonerConfig::default();
-    let service = Arc::new(rt.block_on(async { ReasoningService::new(ont, config) }).unwrap());
+    let service = Arc::new(
+        rt.block_on(async { ReasoningService::new(ont, config) })
+            .unwrap(),
+    );
 
     let sub = make_class("C0");
     let sup = make_class("C100");

@@ -784,10 +784,11 @@ impl Tableau {
         }
 
         if let Some(node) = self.nodes.get_mut(node_id)
-            && node.concepts.insert(concept) {
-                // Only mark dirty if the concept was actually new
-                self.dirty_nodes.push(node_id);
-            }
+            && node.concepts.insert(concept)
+        {
+            // Only mark dirty if the concept was actually new
+            self.dirty_nodes.push(node_id);
+        }
 
         Ok(())
     }

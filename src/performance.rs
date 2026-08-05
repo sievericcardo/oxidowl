@@ -621,8 +621,10 @@ pub struct WarmContext {
     /// Forward: class → direct/indirect superclasses
     classification: std::sync::Arc<crate::reasoning::ClassificationResult>,
     /// Reverse: class → all subclasses (built from the forward index)
-    subclass_index:
-        std::collections::HashMap<crate::ontology::ClassExpression, std::collections::HashSet<crate::ontology::ClassExpression>>,
+    subclass_index: std::collections::HashMap<
+        crate::ontology::ClassExpression,
+        std::collections::HashSet<crate::ontology::ClassExpression>,
+    >,
     /// When this context was warmed
     warmed_at: Instant,
 }
@@ -674,10 +676,7 @@ impl WarmContext {
         static EMPTY: std::sync::LazyLock<
             std::collections::HashSet<crate::ontology::ClassExpression>,
         > = std::sync::LazyLock::new(std::collections::HashSet::new);
-        self.classification
-            .hierarchy
-            .get(class)
-            .unwrap_or(&*EMPTY)
+        self.classification.hierarchy.get(class).unwrap_or(&*EMPTY)
     }
 
     /// Get all subclasses of a class (O(1) lookup via reverse index).

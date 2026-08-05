@@ -250,10 +250,18 @@ impl ImportResolver {
             ImportType::Remote => {
                 #[cfg(feature = "http-imports")]
                 {
-                    let response = reqwest::get(&resolved.location).await
-                        .map_err(|e| Error::import_error(format!("HTTP request failed for {}: {}", resolved.location, e)))?;
-                    response.text().await
-                        .map_err(|e| Error::import_error(format!("Failed to read HTTP response body {}: {}", resolved.location, e)))
+                    let response = reqwest::get(&resolved.location).await.map_err(|e| {
+                        Error::import_error(format!(
+                            "HTTP request failed for {}: {}",
+                            resolved.location, e
+                        ))
+                    })?;
+                    response.text().await.map_err(|e| {
+                        Error::import_error(format!(
+                            "Failed to read HTTP response body {}: {}",
+                            resolved.location, e
+                        ))
+                    })
                 }
                 #[cfg(not(feature = "http-imports"))]
                 {

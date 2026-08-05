@@ -1,9 +1,9 @@
 //! TriX Parser and Renderer — XML-based RDF with named graphs.
 
 use crate::Result;
+use crate::ontology::Individual;
 use crate::ontology::axioms::*;
 use crate::ontology::{IRI, NamedIndividual, Ontology};
-use crate::ontology::Individual;
 use std::fmt::Write;
 
 const RDF_TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
@@ -164,8 +164,7 @@ impl TriXRenderer {
                     }
                 }
                 Axiom::DataPropertyAssertion(a) => {
-                    if let crate::ontology::DataPropertyExpression::DataProperty(prop) =
-                        &a.property
+                    if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &a.property
                         && let Some(source_iri) = a.individual.iri()
                     {
                         let _ = write!(

@@ -196,7 +196,8 @@ impl NTriplesParser {
                                 );
                                 ontology.add_axiom(axiom);
                             }
-                        } else if obj_iri.as_str() == "http://www.w3.org/2002/07/owl#ObjectProperty" {
+                        } else if obj_iri.as_str() == "http://www.w3.org/2002/07/owl#ObjectProperty"
+                        {
                             if let Some(subj_iri) = subject.as_iri() {
                                 let axiom = crate::ontology::Axiom::Declaration(
                                     crate::ontology::DeclarationAxiom {
@@ -281,13 +282,19 @@ impl NTriplesParser {
                             crate::ontology::ObjectPropertyAssertionAxiom {
                                 id: ontology.next_axiom_id(),
                                 property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                                    crate::ontology::ObjectProperty { iri: crate::ontology::IRI::new(pred_iri.as_str()) },
+                                    crate::ontology::ObjectProperty {
+                                        iri: crate::ontology::IRI::new(pred_iri.as_str()),
+                                    },
                                 ),
                                 source: crate::ontology::Individual::Named(
-                                    crate::ontology::NamedIndividual { iri: crate::ontology::IRI::new(subj_iri.as_str()) },
+                                    crate::ontology::NamedIndividual {
+                                        iri: crate::ontology::IRI::new(subj_iri.as_str()),
+                                    },
                                 ),
                                 target: crate::ontology::Individual::Named(
-                                    crate::ontology::NamedIndividual { iri: crate::ontology::IRI::new(obj_iri.as_str()) },
+                                    crate::ontology::NamedIndividual {
+                                        iri: crate::ontology::IRI::new(obj_iri.as_str()),
+                                    },
                                 ),
                                 annotations: vec![],
                             },
@@ -566,7 +573,11 @@ impl NTriplesSerializer {
         Self
     }
 
-    pub fn serialize_with_config(&self, ontology: &Ontology, _config: &SerializerConfig) -> std::result::Result<String, Error> {
+    pub fn serialize_with_config(
+        &self,
+        ontology: &Ontology,
+        _config: &SerializerConfig,
+    ) -> std::result::Result<String, Error> {
         let mut content = String::new();
         for axiom in ontology.axioms() {
             match axiom {

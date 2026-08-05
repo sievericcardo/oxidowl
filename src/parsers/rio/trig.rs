@@ -71,11 +71,12 @@ impl TriGParser {
 
         let trimmed = rest.trim_start();
         if trimmed.starts_with('{')
-            && let Some(end_pos) = Self::find_matching_brace(trimmed.as_bytes(), 0) {
-                let block = &trimmed[1..end_pos];
-                let _onto = turtle::parse(block)?;
-                return Ok(&trimmed[end_pos + 1..]);
-            }
+            && let Some(end_pos) = Self::find_matching_brace(trimmed.as_bytes(), 0)
+        {
+            let block = &trimmed[1..end_pos];
+            let _onto = turtle::parse(block)?;
+            return Ok(&trimmed[end_pos + 1..]);
+        }
         Ok(rest)
     }
 

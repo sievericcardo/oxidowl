@@ -54,14 +54,8 @@ pub fn assert_ontologies_axiom_equal(ont1: &Ontology, ont2: &Ontology) {
     let axioms1: Vec<_> = ont1.axioms().iter().map(strip_axiom_id).collect();
     let axioms2: Vec<_> = ont2.axioms().iter().map(strip_axiom_id).collect();
 
-    let only_in_1: Vec<_> = axioms1
-        .iter()
-        .filter(|a| !axioms2.contains(a))
-        .collect();
-    let only_in_2: Vec<_> = axioms2
-        .iter()
-        .filter(|a| !axioms1.contains(a))
-        .collect();
+    let only_in_1: Vec<_> = axioms1.iter().filter(|a| !axioms2.contains(a)).collect();
+    let only_in_2: Vec<_> = axioms2.iter().filter(|a| !axioms1.contains(a)).collect();
 
     assert!(
         only_in_1.is_empty() && only_in_2.is_empty(),
@@ -77,10 +71,7 @@ pub fn assert_ontologies_axiom_equal(ont1: &Ontology, ont2: &Ontology) {
 pub fn assert_axiom_count_equal(ont1: &Ontology, ont2: &Ontology) {
     let c1 = ont1.axioms().len();
     let c2 = ont2.axioms().len();
-    assert_eq!(
-        c1, c2,
-        "Axiom count mismatch: {c1} != {c2}"
-    );
+    assert_eq!(c1, c2, "Axiom count mismatch: {c1} != {c2}");
 }
 
 /// Assert that ontology `inner` is a subset of ontology `outer`.
@@ -141,9 +132,10 @@ pub fn assert_signature_equal(ont1: &Ontology, ont2: &Ontology) {
 /// (checking through the axiom list for any axiom referencing the IRI).
 pub fn assert_ontology_mentions_iri(ontology: &Ontology, iri: &IRI) {
     let iri_str = iri.as_str();
-    let found = ontology.axioms().iter().any(|ax| {
-        format!("{ax:?}").contains(iri_str)
-    });
+    let found = ontology
+        .axioms()
+        .iter()
+        .any(|ax| format!("{ax:?}").contains(iri_str));
     assert!(found, "Ontology does not mention IRI {iri}");
 }
 

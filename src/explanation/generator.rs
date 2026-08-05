@@ -44,11 +44,18 @@ impl SingleExplanationGenerator {
 
     /// Get the explanation, computing only once (lazy).
     pub fn get_explanation(&self) -> Result<Explanation> {
-        if let Some(ref cached) = *self.cached.read().unwrap_or_else(std::sync::PoisonError::into_inner) {
+        if let Some(ref cached) = *self
+            .cached
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
             return Ok(cached.clone());
         }
         let explanation = self.inner.get_explanation(&self.entailment)?;
-        let mut guard = self.cached.write().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut guard = self
+            .cached
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         *guard = Some(explanation.clone());
         Ok(explanation)
     }

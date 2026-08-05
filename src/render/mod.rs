@@ -86,11 +86,17 @@ impl OWLObjectRenderer for ConciseObjectRenderer {
                 self.short_form.get_short_form(&entity)
             }
             ClassExpression::ObjectIntersectionOf(ops) => {
-                let parts: Vec<_> = ops.iter().map(|c| self.render_class_expression(c)).collect();
+                let parts: Vec<_> = ops
+                    .iter()
+                    .map(|c| self.render_class_expression(c))
+                    .collect();
                 format!("({})", parts.join(" and "))
             }
             ClassExpression::ObjectUnionOf(ops) => {
-                let parts: Vec<_> = ops.iter().map(|c| self.render_class_expression(c)).collect();
+                let parts: Vec<_> = ops
+                    .iter()
+                    .map(|c| self.render_class_expression(c))
+                    .collect();
                 format!("({})", parts.join(" or "))
             }
             ClassExpression::ObjectComplementOf(op) => {

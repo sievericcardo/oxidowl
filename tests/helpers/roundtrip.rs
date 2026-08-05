@@ -43,8 +43,8 @@ impl RoundtripHarness {
         let orig = self.parse(content, format)?;
         let orig_count = orig.axioms().len();
 
-        let serialized = save_to_string(&orig, format)
-            .map_err(|e| format!("Serialize error: {e}"))?;
+        let serialized =
+            save_to_string(&orig, format).map_err(|e| format!("Serialize error: {e}"))?;
 
         let reparsed = self.parse(&serialized, format)?;
         let reparsed_count = reparsed.axioms().len();
@@ -75,11 +75,7 @@ impl RoundtripHarness {
     }
 
     /// Roundtrip through the given format and assert equality.
-    pub fn roundtrip_assert(
-        &self,
-        content: &str,
-        format: OntologyFormat,
-    ) {
+    pub fn roundtrip_assert(&self, content: &str, format: OntologyFormat) {
         let report = self.test_roundtrip(content, format).unwrap();
         assert!(
             report.passed,
@@ -103,8 +99,8 @@ impl RoundtripHarness {
         let orig = self.parse(content, from)?;
         let orig_count = orig.axioms().len();
 
-        let serialized = save_to_string(&orig, to)
-            .map_err(|e| format!("Serialize to {:?} error: {e}", to))?;
+        let serialized =
+            save_to_string(&orig, to).map_err(|e| format!("Serialize to {:?} error: {e}", to))?;
 
         let reparsed = self.parse(&serialized, to)?;
         let reparsed_count = reparsed.axioms().len();
@@ -128,11 +124,7 @@ impl RoundtripHarness {
             OntologyFormat::RdfXml => parse_rdf_xml(content)?,
             OntologyFormat::Turtle => parse_turtle(content)?,
             OntologyFormat::NTriples => parse_ntriples(content)?,
-            _ => {
-                return Err(
-                    format!("Parsing for {:?} not implemented in harness", format).into(),
-                )
-            }
+            _ => return Err(format!("Parsing for {:?} not implemented in harness", format).into()),
         };
         Ok(ont)
     }

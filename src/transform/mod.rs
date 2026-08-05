@@ -646,22 +646,18 @@ impl OWLEntityRenamer {
                     ce.clone()
                 }
             }
-            ClassExpression::ObjectIntersectionOf(ops) => {
-                ClassExpression::ObjectIntersectionOf(
-                    ops.iter()
-                        .map(|op| self.rename_in_class_expression(op))
-                        .collect(),
-                )
-            }
+            ClassExpression::ObjectIntersectionOf(ops) => ClassExpression::ObjectIntersectionOf(
+                ops.iter()
+                    .map(|op| self.rename_in_class_expression(op))
+                    .collect(),
+            ),
             ClassExpression::ObjectUnionOf(ops) => ClassExpression::ObjectUnionOf(
                 ops.iter()
                     .map(|op| self.rename_in_class_expression(op))
                     .collect(),
             ),
             ClassExpression::ObjectComplementOf(op) => {
-                ClassExpression::ObjectComplementOf(Box::new(
-                    self.rename_in_class_expression(op),
-                ))
+                ClassExpression::ObjectComplementOf(Box::new(self.rename_in_class_expression(op)))
             }
             ClassExpression::ObjectSomeValuesFrom { property, filler } => {
                 ClassExpression::ObjectSomeValuesFrom {
@@ -712,9 +708,7 @@ impl OWLEntityRenamer {
                 filler: Box::new(self.rename_in_class_expression(filler)),
             },
             ClassExpression::ObjectOneOf(inds) => ClassExpression::ObjectOneOf(
-                inds.iter()
-                    .map(|i| self.rename_in_individual(i))
-                    .collect(),
+                inds.iter().map(|i| self.rename_in_individual(i)).collect(),
             ),
             ClassExpression::DataSomeValuesFrom { property, filler } => {
                 ClassExpression::DataSomeValuesFrom {
@@ -728,12 +722,10 @@ impl OWLEntityRenamer {
                     filler: filler.clone(),
                 }
             }
-            ClassExpression::DataHasValue { property, value } => {
-                ClassExpression::DataHasValue {
-                    property: self.rename_in_dpe(property),
-                    value: value.clone(),
-                }
-            }
+            ClassExpression::DataHasValue { property, value } => ClassExpression::DataHasValue {
+                property: self.rename_in_dpe(property),
+                value: value.clone(),
+            },
             ClassExpression::DataMinCardinality {
                 cardinality,
                 property,
@@ -764,10 +756,7 @@ impl OWLEntityRenamer {
         }
     }
 
-    fn rename_in_ope(
-        &self,
-        ope: &ObjectPropertyExpression,
-    ) -> ObjectPropertyExpression {
+    fn rename_in_ope(&self, ope: &ObjectPropertyExpression) -> ObjectPropertyExpression {
         match ope {
             ObjectPropertyExpression::ObjectProperty(p) => {
                 if let Some(new_iri) = self.lookup(&p.iri, EntityType::ObjectProperty) {
@@ -797,10 +786,7 @@ impl OWLEntityRenamer {
         }
     }
 
-    fn rename_in_dpe(
-        &self,
-        dpe: &DataPropertyExpression,
-    ) -> DataPropertyExpression {
+    fn rename_in_dpe(&self, dpe: &DataPropertyExpression) -> DataPropertyExpression {
         match dpe {
             DataPropertyExpression::DataProperty(p) => {
                 if let Some(new_iri) = self.lookup(&p.iri, EntityType::DataProperty) {
@@ -915,33 +901,23 @@ impl OWLEntityRenamer {
                     .collect(),
                 annotations: a.annotations.clone(),
             }),
-            Axiom::SubObjectPropertyOf(a) => {
-                Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
-                    id: a.id,
-                    sub_property: self.rename_in_ope(&a.sub_property),
-                    super_property: self.rename_in_ope(&a.super_property),
-                    annotations: a.annotations.clone(),
-                })
-            }
+            Axiom::SubObjectPropertyOf(a) => Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
+                id: a.id,
+                sub_property: self.rename_in_ope(&a.sub_property),
+                super_property: self.rename_in_ope(&a.super_property),
+                annotations: a.annotations.clone(),
+            }),
             Axiom::EquivalentObjectProperties(a) => {
                 Axiom::EquivalentObjectProperties(EquivalentObjectPropertiesAxiom {
                     id: a.id,
-                    properties: a
-                        .properties
-                        .iter()
-                        .map(|p| self.rename_in_ope(p))
-                        .collect(),
+                    properties: a.properties.iter().map(|p| self.rename_in_ope(p)).collect(),
                     annotations: a.annotations.clone(),
                 })
             }
             Axiom::DisjointObjectProperties(a) => {
                 Axiom::DisjointObjectProperties(DisjointObjectPropertiesAxiom {
                     id: a.id,
-                    properties: a
-                        .properties
-                        .iter()
-                        .map(|p| self.rename_in_ope(p))
-                        .collect(),
+                    properties: a.properties.iter().map(|p| self.rename_in_ope(p)).collect(),
                     annotations: a.annotations.clone(),
                 })
             }
@@ -961,14 +937,12 @@ impl OWLEntityRenamer {
                     annotations: a.annotations.clone(),
                 })
             }
-            Axiom::ObjectPropertyRange(a) => {
-                Axiom::ObjectPropertyRange(ObjectPropertyRangeAxiom {
-                    id: a.id,
-                    property: self.rename_in_ope(&a.property),
-                    range: self.rename_in_class_expression(&a.range),
-                    annotations: a.annotations.clone(),
-                })
-            }
+            Axiom::ObjectPropertyRange(a) => Axiom::ObjectPropertyRange(ObjectPropertyRangeAxiom {
+                id: a.id,
+                property: self.rename_in_ope(&a.property),
+                range: self.rename_in_class_expression(&a.range),
+                annotations: a.annotations.clone(),
+            }),
             Axiom::FunctionalObjectProperty(a) => {
                 Axiom::FunctionalObjectProperty(FunctionalObjectPropertyAxiom {
                     id: a.id,
@@ -1027,33 +1001,23 @@ impl OWLEntityRenamer {
             Axiom::EquivalentDataProperties(a) => {
                 Axiom::EquivalentDataProperties(EquivalentDataPropertiesAxiom {
                     id: a.id,
-                    properties: a
-                        .properties
-                        .iter()
-                        .map(|p| self.rename_in_dpe(p))
-                        .collect(),
+                    properties: a.properties.iter().map(|p| self.rename_in_dpe(p)).collect(),
                     annotations: a.annotations.clone(),
                 })
             }
             Axiom::DisjointDataProperties(a) => {
                 Axiom::DisjointDataProperties(DisjointDataPropertiesAxiom {
                     id: a.id,
-                    properties: a
-                        .properties
-                        .iter()
-                        .map(|p| self.rename_in_dpe(p))
-                        .collect(),
+                    properties: a.properties.iter().map(|p| self.rename_in_dpe(p)).collect(),
                     annotations: a.annotations.clone(),
                 })
             }
-            Axiom::DataPropertyDomain(a) => {
-                Axiom::DataPropertyDomain(DataPropertyDomainAxiom {
-                    id: a.id,
-                    property: self.rename_in_dpe(&a.property),
-                    domain: self.rename_in_class_expression(&a.domain),
-                    annotations: a.annotations.clone(),
-                })
-            }
+            Axiom::DataPropertyDomain(a) => Axiom::DataPropertyDomain(DataPropertyDomainAxiom {
+                id: a.id,
+                property: self.rename_in_dpe(&a.property),
+                domain: self.rename_in_class_expression(&a.domain),
+                annotations: a.annotations.clone(),
+            }),
             Axiom::DataPropertyRange(a) => Axiom::DataPropertyRange(DataPropertyRangeAxiom {
                 id: a.id,
                 property: self.rename_in_dpe(&a.property),
@@ -1247,7 +1211,9 @@ impl OWLEntityRenamer {
         match ce {
             ClassExpression::Class(c) => {
                 if c.iri == *from {
-                    Some(ClassExpression::Class(crate::ontology::Class { iri: to.clone() }))
+                    Some(ClassExpression::Class(crate::ontology::Class {
+                        iri: to.clone(),
+                    }))
                 } else {
                     None
                 }
@@ -1290,10 +1256,8 @@ impl OWLEntityRenamer {
                     None
                 }
             }
-            ClassExpression::ObjectComplementOf(b) => {
-                Self::rename_ce(b, from, to)
-                    .map(|n| ClassExpression::ObjectComplementOf(Box::new(n)))
-            }
+            ClassExpression::ObjectComplementOf(b) => Self::rename_ce(b, from, to)
+                .map(|n| ClassExpression::ObjectComplementOf(Box::new(n))),
             ClassExpression::ObjectOneOf(v) => {
                 let mut changed = false;
                 let r: Vec<_> = v
@@ -1349,10 +1313,8 @@ impl OWLEntityRenamer {
                     None
                 }
             }
-            ClassExpression::ObjectHasSelf { property } => {
-                Self::rename_ope(property, from, to)
-                    .map(|p| ClassExpression::ObjectHasSelf { property: p })
-            }
+            ClassExpression::ObjectHasSelf { property } => Self::rename_ope(property, from, to)
+                .map(|p| ClassExpression::ObjectHasSelf { property: p }),
             ClassExpression::ObjectMinCardinality {
                 cardinality,
                 property,
@@ -1429,11 +1391,10 @@ impl OWLEntityRenamer {
                 }
             }
             ClassExpression::DataHasValue { property, value } => {
-                Self::rename_dpe(property, from, to)
-                    .map(|p| ClassExpression::DataHasValue {
-                        property: p,
-                        value: value.clone(),
-                    })
+                Self::rename_dpe(property, from, to).map(|p| ClassExpression::DataHasValue {
+                    property: p,
+                    value: value.clone(),
+                })
             }
             ClassExpression::DataMinCardinality {
                 cardinality,
@@ -1498,9 +1459,7 @@ impl OWLEntityRenamer {
             ObjectPropertyExpression::ObjectProperty(p) => {
                 if p.iri == *from {
                     Some(ObjectPropertyExpression::ObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: to.clone(),
-                        },
+                        crate::ontology::ObjectProperty { iri: to.clone() },
                     ))
                 } else {
                     None
@@ -1509,9 +1468,7 @@ impl OWLEntityRenamer {
             ObjectPropertyExpression::InverseObjectProperty(p) => {
                 if p.iri == *from {
                     Some(ObjectPropertyExpression::InverseObjectProperty(
-                        crate::ontology::ObjectProperty {
-                            iri: to.clone(),
-                        },
+                        crate::ontology::ObjectProperty { iri: to.clone() },
                     ))
                 } else {
                     None
@@ -1548,9 +1505,7 @@ impl OWLEntityRenamer {
             DataPropertyExpression::DataProperty(p) => {
                 if p.iri == *from {
                     Some(DataPropertyExpression::DataProperty(
-                        crate::ontology::DataProperty {
-                            iri: to.clone(),
-                        },
+                        crate::ontology::DataProperty { iri: to.clone() },
                     ))
                 } else {
                     None
@@ -1635,8 +1590,7 @@ impl OWLEntityRenamer {
                 }
             }
             DataRange::DataComplementOf(b) => {
-                Self::rename_dr(b, from, to)
-                    .map(|n| DataRange::DataComplementOf(Box::new(n)))
+                Self::rename_dr(b, from, to).map(|n| DataRange::DataComplementOf(Box::new(n)))
             }
             DataRange::DataOneOf(_) => None,
         }
@@ -1648,9 +1602,7 @@ impl OWLEntityRenamer {
         to: &IRI,
     ) -> Option<AnnotationValue> {
         match val {
-            AnnotationValue::IRI(iri) if iri == from => {
-                Some(AnnotationValue::IRI(to.clone()))
-            }
+            AnnotationValue::IRI(iri) if iri == from => Some(AnnotationValue::IRI(to.clone())),
             _ => None,
         }
     }
@@ -1661,9 +1613,7 @@ impl OWLEntityRenamer {
         to: &IRI,
     ) -> Option<AnnotationSubject> {
         match subj {
-            AnnotationSubject::IRI(iri) if iri == from => {
-                Some(AnnotationSubject::IRI(to.clone()))
-            }
+            AnnotationSubject::IRI(iri) if iri == from => Some(AnnotationSubject::IRI(to.clone())),
             _ => None,
         }
     }
@@ -1674,9 +1624,7 @@ impl OWLEntityRenamer {
         to: &IRI,
     ) -> Option<AnnotationProperty> {
         if ap.iri == *from {
-            Some(crate::ontology::AnnotationProperty {
-                iri: to.clone(),
-            })
+            Some(crate::ontology::AnnotationProperty { iri: to.clone() })
         } else {
             None
         }
@@ -1812,11 +1760,7 @@ impl OWLEntityRenamer {
                 }
             })
             .collect();
-        if changed {
-            Some(r)
-        } else {
-            None
-        }
+        if changed { Some(r) } else { None }
     }
 
     fn rename_swrl_iarg(
@@ -1826,8 +1770,9 @@ impl OWLEntityRenamer {
     ) -> Option<crate::ontology::axioms::SWRLIArgument> {
         use crate::ontology::axioms::SWRLIArgument;
         match arg {
-            SWRLIArgument::Individual(ind) => Self::rename_individual(ind, from, to)
-                .map(SWRLIArgument::Individual),
+            SWRLIArgument::Individual(ind) => {
+                Self::rename_individual(ind, from, to).map(SWRLIArgument::Individual)
+            }
             SWRLIArgument::Variable(_) => None,
         }
     }
@@ -1837,7 +1782,9 @@ impl OWLEntityRenamer {
             Axiom::Declaration(d) => {
                 let entity = match &d.entity {
                     Entity::Class(iri) if iri == from => Entity::Class(to.clone()),
-                    Entity::ObjectProperty(iri) if iri == from => Entity::ObjectProperty(to.clone()),
+                    Entity::ObjectProperty(iri) if iri == from => {
+                        Entity::ObjectProperty(to.clone())
+                    }
                     Entity::DataProperty(iri) if iri == from => Entity::DataProperty(to.clone()),
                     Entity::AnnotationProperty(iri) if iri == from => {
                         Entity::AnnotationProperty(to.clone())
@@ -1848,10 +1795,7 @@ impl OWLEntityRenamer {
                     Entity::Datatype(iri) if iri == from => Entity::Datatype(to.clone()),
                     _ => return None,
                 };
-                Some(Axiom::Declaration(DeclarationAxiom {
-                    id: d.id,
-                    entity,
-                }))
+                Some(Axiom::Declaration(DeclarationAxiom { id: d.id, entity }))
             }
             Axiom::SubClassOf(a) => {
                 let s = Self::rename_ce(&a.subclass, from, to);
@@ -2074,26 +2018,21 @@ impl OWLEntityRenamer {
                     })
                 })
             }
-            Axiom::InverseFunctionalObjectProperty(a) => {
-                Self::rename_ope(&a.property, from, to).map(|p| {
-                    Axiom::InverseFunctionalObjectProperty(
-                        InverseFunctionalObjectPropertyAxiom {
-                            id: a.id,
-                            property: p,
-                            annotations: a.annotations.clone(),
-                        },
-                    )
-                })
-            }
-            Axiom::ReflexiveObjectProperty(a) => {
-                Self::rename_ope(&a.property, from, to).map(|p| {
-                    Axiom::ReflexiveObjectProperty(ReflexiveObjectPropertyAxiom {
+            Axiom::InverseFunctionalObjectProperty(a) => Self::rename_ope(&a.property, from, to)
+                .map(|p| {
+                    Axiom::InverseFunctionalObjectProperty(InverseFunctionalObjectPropertyAxiom {
                         id: a.id,
                         property: p,
                         annotations: a.annotations.clone(),
                     })
+                }),
+            Axiom::ReflexiveObjectProperty(a) => Self::rename_ope(&a.property, from, to).map(|p| {
+                Axiom::ReflexiveObjectProperty(ReflexiveObjectPropertyAxiom {
+                    id: a.id,
+                    property: p,
+                    annotations: a.annotations.clone(),
                 })
-            }
+            }),
             Axiom::IrreflexiveObjectProperty(a) => {
                 Self::rename_ope(&a.property, from, to).map(|p| {
                     Axiom::IrreflexiveObjectProperty(IrreflexiveObjectPropertyAxiom {
@@ -2103,15 +2042,13 @@ impl OWLEntityRenamer {
                     })
                 })
             }
-            Axiom::SymmetricObjectProperty(a) => {
-                Self::rename_ope(&a.property, from, to).map(|p| {
-                    Axiom::SymmetricObjectProperty(SymmetricObjectPropertyAxiom {
-                        id: a.id,
-                        property: p,
-                        annotations: a.annotations.clone(),
-                    })
+            Axiom::SymmetricObjectProperty(a) => Self::rename_ope(&a.property, from, to).map(|p| {
+                Axiom::SymmetricObjectProperty(SymmetricObjectPropertyAxiom {
+                    id: a.id,
+                    property: p,
+                    annotations: a.annotations.clone(),
                 })
-            }
+            }),
             Axiom::AsymmetricObjectProperty(a) => {
                 Self::rename_ope(&a.property, from, to).map(|p| {
                     Axiom::AsymmetricObjectProperty(AsymmetricObjectPropertyAxiom {
@@ -2185,13 +2122,11 @@ impl OWLEntityRenamer {
                     })
                     .collect();
                 if changed {
-                    Some(Axiom::DisjointDataProperties(
-                        DisjointDataPropertiesAxiom {
-                            id: a.id,
-                            properties: props,
-                            annotations: a.annotations.clone(),
-                        },
-                    ))
+                    Some(Axiom::DisjointDataProperties(DisjointDataPropertiesAxiom {
+                        id: a.id,
+                        properties: props,
+                        annotations: a.annotations.clone(),
+                    }))
                 } else {
                     None
                 }
@@ -2224,15 +2159,13 @@ impl OWLEntityRenamer {
                     None
                 }
             }
-            Axiom::FunctionalDataProperty(a) => {
-                Self::rename_dpe(&a.property, from, to).map(|p| {
-                    Axiom::FunctionalDataProperty(FunctionalDataPropertyAxiom {
-                        id: a.id,
-                        property: p,
-                        annotations: a.annotations.clone(),
-                    })
+            Axiom::FunctionalDataProperty(a) => Self::rename_dpe(&a.property, from, to).map(|p| {
+                Axiom::FunctionalDataProperty(FunctionalDataPropertyAxiom {
+                    id: a.id,
+                    property: p,
+                    annotations: a.annotations.clone(),
                 })
-            }
+            }),
             Axiom::ObjectPropertyAssertion(a) => {
                 let p = Self::rename_ope(&a.property, from, to);
                 let s = Self::rename_individual(&a.source, from, to);
@@ -2452,9 +2385,7 @@ impl OWLEntityRenamer {
                     None
                 }
             }
-            Axiom::DatatypeDefinition(_a) => {
-                None
-            }
+            Axiom::DatatypeDefinition(_a) => None,
             Axiom::Rule(a) => {
                 let head = Self::rename_swrl_atoms(&a.rule.head, from, to);
                 let body = Self::rename_swrl_atoms(&a.rule.body, from, to);

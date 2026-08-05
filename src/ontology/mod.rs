@@ -12,9 +12,8 @@ use url::Url;
 ///
 /// Guarded by the `cache` feature because it depends on `dashmap`.
 #[cfg(feature = "cache")]
-static IRI_INTERN_POOL: std::sync::OnceLock<
-    dashmap::DashMap<Box<str>, std::sync::Weak<str>>,
-> = std::sync::OnceLock::new();
+static IRI_INTERN_POOL: std::sync::OnceLock<dashmap::DashMap<Box<str>, std::sync::Weak<str>>> =
+    std::sync::OnceLock::new();
 
 #[cfg(feature = "cache")]
 fn get_intern_pool() -> &'static dashmap::DashMap<Box<str>, std::sync::Weak<str>> {
@@ -32,9 +31,10 @@ pub fn intern_iri(s: &str) -> std::sync::Arc<str> {
     let pool = get_intern_pool();
     // Fast path: check if already interned and still alive.
     if let Some(weak) = pool.get(s)
-        && let Some(strong) = weak.upgrade() {
-            return strong;
-        }
+        && let Some(strong) = weak.upgrade()
+    {
+        return strong;
+    }
     // Slow path: create new interned value and store the weak reference.
     let arc: std::sync::Arc<str> = std::sync::Arc::from(s);
     let weak = std::sync::Arc::downgrade(&arc);
@@ -712,9 +712,9 @@ impl Ontology {
     /// Check if an entity has a declaration axiom in this ontology
     #[must_use]
     pub fn is_declared(&self, entity: &axioms::Entity) -> bool {
-        self.axioms.iter().any(|a| {
-            matches!(a, axioms::Axiom::Declaration(d) if &d.entity == entity)
-        })
+        self.axioms
+            .iter()
+            .any(|a| matches!(a, axioms::Axiom::Declaration(d) if &d.entity == entity))
     }
 
     /// Get all axioms of a specific type
@@ -817,9 +817,10 @@ impl Ontology {
         let mut classes = Vec::new();
         for a in &self.axioms {
             if let axioms::Axiom::Declaration(d) = a
-                && let axioms::Entity::Class(iri) = &d.entity {
-                    classes.push(concepts::Class { iri: iri.clone() });
-                }
+                && let axioms::Entity::Class(iri) = &d.entity
+            {
+                classes.push(concepts::Class { iri: iri.clone() });
+            }
         }
         classes
     }
@@ -833,9 +834,10 @@ impl Ontology {
         let mut props = Vec::new();
         for a in &self.axioms {
             if let axioms::Axiom::Declaration(d) = a
-                && let axioms::Entity::ObjectProperty(iri) = &d.entity {
-                    props.push(ObjectProperty { iri: iri.clone() });
-                }
+                && let axioms::Entity::ObjectProperty(iri) = &d.entity
+            {
+                props.push(ObjectProperty { iri: iri.clone() });
+            }
         }
         // OWL API v5 always includes owl:topObjectProperty when there are object properties
         if !props.is_empty() {
@@ -853,9 +855,10 @@ impl Ontology {
         let mut props = Vec::new();
         for a in &self.axioms {
             if let axioms::Axiom::Declaration(d) = a
-                && let axioms::Entity::DataProperty(iri) = &d.entity {
-                    props.push(DataProperty { iri: iri.clone() });
-                }
+                && let axioms::Entity::DataProperty(iri) = &d.entity
+            {
+                props.push(DataProperty { iri: iri.clone() });
+            }
         }
 
         // OWL API v5 includes owl:topDataProperty in the signature whenever it is
@@ -886,9 +889,10 @@ impl Ontology {
         let mut inds = Vec::new();
         for a in &self.axioms {
             if let axioms::Axiom::Declaration(d) = a
-                && let axioms::Entity::NamedIndividual(iri) = &d.entity {
-                    inds.push(individuals::NamedIndividual { iri: iri.clone() });
-                }
+                && let axioms::Entity::NamedIndividual(iri) = &d.entity
+            {
+                inds.push(individuals::NamedIndividual { iri: iri.clone() });
+            }
         }
         inds
     }
@@ -905,9 +909,10 @@ impl Ontology {
         // Step 1: collect explicitly declared datatypes
         for a in &self.axioms {
             if let axioms::Axiom::Declaration(d) = a
-                && let axioms::Entity::Datatype(iri) = &d.entity {
-                    dts.push(Datatype { iri: iri.clone() });
-                }
+                && let axioms::Entity::Datatype(iri) = &d.entity
+            {
+                dts.push(Datatype { iri: iri.clone() });
+            }
         }
 
         // Known OWL 2 / XSD built-in datatypes that should appear in the signature
@@ -979,19 +984,17 @@ impl Ontology {
                 // explicitly-typed literal's datatype in the ontology signature.
                 // Also include built-in datatype IRIs used as IRI-valued annotations
                 // (e.g. dcam:rangeIncludes xsd:date).
-                axioms::Axiom::AnnotationAssertion(ax) => {
-                    match &ax.value {
-                        AnnotationValue::Literal(lit) => {
-                            if let Some(url) = &lit.datatype {
-                                used.insert(url.to_string());
-                            }
+                axioms::Axiom::AnnotationAssertion(ax) => match &ax.value {
+                    AnnotationValue::Literal(lit) => {
+                        if let Some(url) = &lit.datatype {
+                            used.insert(url.to_string());
                         }
-                        AnnotationValue::IRI(iri) => {
-                            used.insert(iri.as_str().to_owned());
-                        }
-                        AnnotationValue::AnonymousIndividual(_) => {}
                     }
-                }
+                    AnnotationValue::IRI(iri) => {
+                        used.insert(iri.as_str().to_owned());
+                    }
+                    AnnotationValue::AnonymousIndividual(_) => {}
+                },
                 _ => {}
             }
         }
@@ -1019,9 +1022,10 @@ impl Ontology {
         let mut props = Vec::new();
         for a in &self.axioms {
             if let axioms::Axiom::Declaration(d) = a
-                && let axioms::Entity::AnnotationProperty(iri) = &d.entity {
-                    props.push(AnnotationProperty { iri: iri.clone() });
-                }
+                && let axioms::Entity::AnnotationProperty(iri) = &d.entity
+            {
+                props.push(AnnotationProperty { iri: iri.clone() });
+            }
         }
 
         // Built-in annotation properties that should appear in the signature when used

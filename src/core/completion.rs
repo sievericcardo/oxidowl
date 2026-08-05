@@ -9,8 +9,7 @@ use crate::{
     core::dependency::DependencySet,
     ontology::{
         ClassExpression, DataProperty, DataPropertyExpression, DataRange, FacetRestriction, IRI,
-        Individual, Literal, ObjectPropertyExpression, Role,
-        datatypes::OWL2Datatype,
+        Individual, Literal, ObjectPropertyExpression, Role, datatypes::OWL2Datatype,
     },
 };
 use regex::Regex;
@@ -870,16 +869,16 @@ impl CompletionRuleSet {
                     ));
                     result.datatype_constraints.push((
                         constraint_id,
-                        DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#nonNegativeInteger")),
+                        DataRange::Datatype(IRI::new(
+                            "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+                        )),
                         Arc::clone(dependencies),
                     ));
                     result.cardinality_constraints.push((
                         individual,
-                        ObjectPropertyExpression::ObjectProperty(
-                            crate::ontology::ObjectProperty {
-                                iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
-                            },
-                        ),
+                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                            iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                        }),
                         *cardinality,
                         ClassExpression::Class(crate::ontology::Class::new(IRI::new(
                             "http://www.w3.org/2002/07/owl#Thing",
@@ -903,16 +902,16 @@ impl CompletionRuleSet {
                     ));
                     result.datatype_constraints.push((
                         constraint_id,
-                        DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#nonNegativeInteger")),
+                        DataRange::Datatype(IRI::new(
+                            "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+                        )),
                         Arc::clone(dependencies),
                     ));
                     result.cardinality_constraints.push((
                         individual,
-                        ObjectPropertyExpression::ObjectProperty(
-                            crate::ontology::ObjectProperty {
-                                iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
-                            },
-                        ),
+                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                            iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                        }),
                         *cardinality,
                         ClassExpression::Class(crate::ontology::Class::new(IRI::new(
                             "http://www.w3.org/2002/07/owl#Thing",
@@ -936,17 +935,17 @@ impl CompletionRuleSet {
                     ));
                     result.datatype_constraints.push((
                         constraint_id,
-                        DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#nonNegativeInteger")),
+                        DataRange::Datatype(IRI::new(
+                            "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+                        )),
                         Arc::clone(dependencies),
                     ));
                     // Min constraint
                     result.cardinality_constraints.push((
                         individual.clone(),
-                        ObjectPropertyExpression::ObjectProperty(
-                            crate::ontology::ObjectProperty {
-                                iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
-                            },
-                        ),
+                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                            iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                        }),
                         *cardinality,
                         ClassExpression::Class(crate::ontology::Class::new(IRI::new(
                             "http://www.w3.org/2002/07/owl#Thing",
@@ -957,11 +956,9 @@ impl CompletionRuleSet {
                     // Max constraint
                     result.cardinality_constraints.push((
                         individual.clone(),
-                        ObjectPropertyExpression::ObjectProperty(
-                            crate::ontology::ObjectProperty {
-                                iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
-                            },
-                        ),
+                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                            iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                        }),
                         *cardinality,
                         ClassExpression::Class(crate::ontology::Class::new(IRI::new(
                             "http://www.w3.org/2002/07/owl#Thing",
@@ -1008,16 +1005,12 @@ impl CompletionRuleSet {
             DataRange::DataComplementOf(inner) => {
                 !self.validate_literal_against_range(literal, inner.as_ref())
             }
-            DataRange::DataIntersectionOf(ranges) => {
-                ranges
-                    .iter()
-                    .all(|r| self.validate_literal_against_range(literal, r))
-            }
-            DataRange::DataUnionOf(ranges) => {
-                ranges
-                    .iter()
-                    .any(|r| self.validate_literal_against_range(literal, r))
-            }
+            DataRange::DataIntersectionOf(ranges) => ranges
+                .iter()
+                .all(|r| self.validate_literal_against_range(literal, r)),
+            DataRange::DataUnionOf(ranges) => ranges
+                .iter()
+                .any(|r| self.validate_literal_against_range(literal, r)),
             DataRange::DataOneOf(values) => values.contains(literal),
             DataRange::DatatypeRestriction {
                 datatype: _,
@@ -1053,11 +1046,9 @@ impl CompletionRuleSet {
                     true
                 }
             }
-            "http://www.w3.org/2001/XMLSchema#pattern" => {
-                Regex::new(&restriction.value.value)
-                    .map(|re| re.is_match(&literal.value))
-                    .unwrap_or(false)
-            }
+            "http://www.w3.org/2001/XMLSchema#pattern" => Regex::new(&restriction.value.value)
+                .map(|re| re.is_match(&literal.value))
+                .unwrap_or(false),
             "http://www.w3.org/2001/XMLSchema#minInclusive" => {
                 if let (Ok(lit_val), Ok(rest_val)) = (
                     literal.value.parse::<f64>(),
@@ -1100,11 +1091,7 @@ impl CompletionRuleSet {
             }
             "http://www.w3.org/2001/XMLSchema#totalDigits" => {
                 if let Ok(digits) = restriction.value.value.parse::<usize>() {
-                    let num_digits = literal
-                        .value
-                        .chars()
-                        .filter(char::is_ascii_digit)
-                        .count();
+                    let num_digits = literal.value.chars().filter(char::is_ascii_digit).count();
                     num_digits <= digits
                 } else {
                     true

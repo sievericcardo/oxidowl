@@ -2,10 +2,10 @@
 
 use crate::Result;
 use crate::ontology::axioms::*;
-use crate::ontology::{IRI, Literal, NamedIndividual, Ontology};
 use crate::ontology::{
     AnnotationSubject, AnnotationValue, Class, DataProperty, Individual, ObjectProperty,
 };
+use crate::ontology::{IRI, Literal, NamedIndividual, Ontology};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -42,13 +42,15 @@ fn parse_context(val: &Value, ctx: &mut HashMap<String, String>) {
                     }
                     Value::Object(obj) => {
                         if let Some(id_val) = obj.get("@id")
-                            && let Some(s) = id_val.as_str() {
-                                ctx.insert(k.clone(), s.to_string());
-                            }
+                            && let Some(s) = id_val.as_str()
+                        {
+                            ctx.insert(k.clone(), s.to_string());
+                        }
                         if let Some(type_val) = obj.get("@type")
-                            && let Some(s) = type_val.as_str() {
-                                ctx.insert(k.clone(), s.to_string());
-                            }
+                            && let Some(s) = type_val.as_str()
+                        {
+                            ctx.insert(k.clone(), s.to_string());
+                        }
                     }
                     _ => {}
                 }
@@ -87,9 +89,10 @@ fn expand_term(term: &str, ctx: &HashMap<String, String>) -> String {
 
 fn extract_id(node: &Value) -> Option<String> {
     if let Some(id) = node.get("@id")
-        && let Some(s) = id.as_str() {
-            return Some(s.to_string());
-        }
+        && let Some(s) = id.as_str()
+    {
+        return Some(s.to_string());
+    }
     None
 }
 
@@ -113,9 +116,16 @@ fn extract_type(node: &Value) -> Vec<String> {
 
 fn extract_value(node: &Value) -> Option<(String, Option<String>, Option<String>)> {
     if let Some(val) = node.get("@value") {
-        let value_str = val.as_str().map(std::string::ToString::to_string).unwrap_or_default();
-        let lang = node.get("@language").and_then(|v| v.as_str().map(String::from));
-        let datatype = node.get("@datatype").and_then(|v| v.as_str().map(String::from));
+        let value_str = val
+            .as_str()
+            .map(std::string::ToString::to_string)
+            .unwrap_or_default();
+        let lang = node
+            .get("@language")
+            .and_then(|v| v.as_str().map(String::from));
+        let datatype = node
+            .get("@datatype")
+            .and_then(|v| v.as_str().map(String::from));
         Some((value_str, lang, datatype))
     } else {
         None
@@ -336,13 +346,17 @@ impl JsonLdParser {
                         iri: IRI::new(&expanded),
                     });
                     let prop = ObjectProperty::new(IRI::new(predicate))?;
-                    o.add_axiom(Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom {
-                        id: axiom_id(),
-                        source: individual,
-                        target,
-                        property: crate::ontology::ObjectPropertyExpression::ObjectProperty(prop),
-                        annotations: vec![],
-                    }));
+                    o.add_axiom(Axiom::ObjectPropertyAssertion(
+                        ObjectPropertyAssertionAxiom {
+                            id: axiom_id(),
+                            source: individual,
+                            target,
+                            property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                                prop,
+                            ),
+                            annotations: vec![],
+                        },
+                    ));
                 }
                 Value::Object(obj) => {
                     if let (Some((value_str, lang, datatype)),) = (extract_value(val),) {
@@ -406,9 +420,7 @@ impl JsonLdRenderer {
                         items.push(format!(r#"{{"@id":"{iri}","@type":"owl:Class"}}"#));
                     }
                     Entity::ObjectProperty(iri) => {
-                        items.push(format!(
-                            r#"{{"@id":"{iri}","@type":"owl:ObjectProperty"}}"#
-                        ));
+                        items.push(format!(r#"{{"@id":"{iri}","@type":"owl:ObjectProperty"}}"#));
                     }
                     Entity::DataProperty(iri) => {
                         items.push(format!(r#"{{"@id":"{iri}","@type":"owl:DataProperty"}}"#));
@@ -424,10 +436,7 @@ impl JsonLdRenderer {
                     if let crate::ontology::ClassExpression::Class(class) = &a.class
                         && let Some(iri) = a.individual.iri()
                     {
-                        items.push(format!(
-                            r#"{{"@id":"{iri}","@type":"{}"}}"#,
-                            class.iri
-                        ));
+                        items.push(format!(r#"{{"@id":"{iri}","@type":"{}"}}"#, class.iri));
                     }
                 }
                 Axiom::ObjectPropertyAssertion(a) => {
@@ -442,8 +451,7 @@ impl JsonLdRenderer {
                     }
                 }
                 Axiom::DataPropertyAssertion(a) => {
-                    if let crate::ontology::DataPropertyExpression::DataProperty(prop) =
-                        &a.property
+                    if let crate::ontology::DataPropertyExpression::DataProperty(prop) = &a.property
                         && let Some(iri) = a.individual.iri()
                     {
                         items.push(format!(
@@ -455,13 +463,14 @@ impl JsonLdRenderer {
                 }
                 Axiom::AnnotationAssertion(a) => {
                     if let AnnotationSubject::IRI(iri) = &a.subject
-                        && let AnnotationValue::Literal(lit) = &a.value {
-                            items.push(format!(
-                                r#"{{"@id":"{iri}","{}":{{"@value":"{}"}}}}"#,
-                                a.property.iri,
-                                lit.value.replace('"', "\\\"")
-                            ));
-                        }
+                        && let AnnotationValue::Literal(lit) = &a.value
+                    {
+                        items.push(format!(
+                            r#"{{"@id":"{iri}","{}":{{"@value":"{}"}}}}"#,
+                            a.property.iri,
+                            lit.value.replace('"', "\\\"")
+                        ));
+                    }
                 }
                 _ => {}
             }

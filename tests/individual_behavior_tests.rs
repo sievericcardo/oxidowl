@@ -3,9 +3,9 @@ mod helpers;
 
 use helpers::df::DF;
 use helpers::test_base::TestBase;
+use oxidowl::ontology::OntologyFormat;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
-use oxidowl::ontology::OntologyFormat;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. Named Individual Creation and Identity
@@ -22,16 +22,26 @@ fn test_named_individual_creation_and_identity() {
     assert_eq!(ni1, ni2, "Named individuals with same IRI must be equal");
 
     let ni3 = NamedIndividual::new(IRI::new("http://ex.org/Person2"));
-    assert_ne!(ni1, ni3, "Named individuals with different IRIs must not be equal");
+    assert_ne!(
+        ni1, ni3,
+        "Named individuals with different IRIs must not be equal"
+    );
 
     let i1 = df.named("http://ex.org/Person1");
     let i2 = Individual::Named(ni2);
-    assert_eq!(i1, i2, "DF::named and NamedIndividual::new produce equal individual");
+    assert_eq!(
+        i1, i2,
+        "DF::named and NamedIndividual::new produce equal individual"
+    );
     assert!(i1.is_named());
     assert!(!i1.is_anonymous());
 
     let i3 = df.named_individual("http://ex.org/Person1");
-    assert_eq!(Individual::Named(i3), i1, "DF::named_individual matches DF::named");
+    assert_eq!(
+        Individual::Named(i3),
+        i1,
+        "DF::named_individual matches DF::named"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -61,7 +71,10 @@ fn test_anonymous_individual_unique_ids() {
 
     let a3 = df.anon();
     let a4 = df.anon();
-    assert_ne!(a3, a4, "DF::anon must produce distinct anonymous individuals");
+    assert_ne!(
+        a3, a4,
+        "DF::anon must produce distinct anonymous individuals"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -76,19 +89,18 @@ fn test_anonymous_individual_scoping() {
     let anon1 = df.anon();
     let anon2 = df.anon();
 
-    let mut ont1 = df.build_ontology(vec![
-        df.class_assertion(a_class.clone(), anon1.clone()),
-    ]);
+    let mut ont1 = df.build_ontology(vec![df.class_assertion(a_class.clone(), anon1.clone())]);
     df.auto_declare(&mut ont1);
 
-    let mut ont2 = df.build_ontology(vec![
-        df.class_assertion(a_class.clone(), anon2.clone()),
-    ]);
+    let mut ont2 = df.build_ontology(vec![df.class_assertion(a_class.clone(), anon2.clone())]);
     df.auto_declare(&mut ont2);
 
     assert!(anon1.is_anonymous(), "anon1 must be anonymous");
     assert!(anon2.is_anonymous(), "anon2 must be anonymous");
-    assert_ne!(anon1, anon2, "Different ontology individuals must be distinct");
+    assert_ne!(
+        anon1, anon2,
+        "Different ontology individuals must be distinct"
+    );
 
     let ont1_ax = ont1.axioms().iter().find_map(|ax| {
         if let Axiom::ClassAssertion(ca) = ax {
@@ -97,8 +109,15 @@ fn test_anonymous_individual_scoping() {
             None
         }
     });
-    assert!(ont1_ax.is_some(), "Ontology 1 should have a class assertion");
-    assert_eq!(ont1_ax.unwrap(), anon1, "Ontology 1 contains the correct anonymous individual");
+    assert!(
+        ont1_ax.is_some(),
+        "Ontology 1 should have a class assertion"
+    );
+    assert_eq!(
+        ont1_ax.unwrap(),
+        anon1,
+        "Ontology 1 contains the correct anonymous individual"
+    );
 
     let ont2_ax = ont2.axioms().iter().find_map(|ax| {
         if let Axiom::ClassAssertion(ca) = ax {
@@ -107,8 +126,15 @@ fn test_anonymous_individual_scoping() {
             None
         }
     });
-    assert!(ont2_ax.is_some(), "Ontology 2 should have a class assertion");
-    assert_eq!(ont2_ax.unwrap(), anon2, "Ontology 2 contains the correct anonymous individual");
+    assert!(
+        ont2_ax.is_some(),
+        "Ontology 2 should have a class assertion"
+    );
+    assert_eq!(
+        ont2_ax.unwrap(),
+        anon2,
+        "Ontology 2 contains the correct anonymous individual"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -157,7 +183,11 @@ fn test_anonymous_in_annotation_chain() {
         df.declaration_axiom(Entity::AnnotationProperty(ann_prop.iri.clone())),
     ]);
 
-    assert_eq!(ont.axioms().len(), 2, "Ontology should have annotation axiom and declaration");
+    assert_eq!(
+        ont.axioms().len(),
+        2,
+        "Ontology should have annotation axiom and declaration"
+    );
 
     for axiom in ont.axioms() {
         if let Axiom::AnnotationAssertion(aa) = axiom {
@@ -229,7 +259,11 @@ fn test_same_individual_axiom() {
 
     match &ax {
         Axiom::SameIndividual(si) => {
-            assert_eq!(si.individuals.len(), 3, "SameIndividual must contain 3 individuals");
+            assert_eq!(
+                si.individuals.len(),
+                3,
+                "SameIndividual must contain 3 individuals"
+            );
             assert!(si.individuals.contains(&a), "Must contain individual a");
             assert!(si.individuals.contains(&b), "Must contain individual b");
             assert!(si.individuals.contains(&c), "Must contain individual c");
@@ -239,10 +273,16 @@ fn test_same_individual_axiom() {
 
     let mut o = df.build_ontology(vec![ax.clone()]);
     df.auto_declare(&mut o);
-    assert!(o.axioms().contains(&ax), "Ontology must contain the SameIndividual axiom");
+    assert!(
+        o.axioms().contains(&ax),
+        "Ontology must contain the SameIndividual axiom"
+    );
 
     let inds = o.get_individuals_in_signature();
-    assert!(inds.len() >= 3, "Expected at least 3 individuals in signature");
+    assert!(
+        inds.len() >= 3,
+        "Expected at least 3 individuals in signature"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -354,7 +394,10 @@ fn test_class_assertion_with_anonymous() {
     let mut o2 = df.build_ontology(vec![ax2.clone()]);
     df.auto_declare(&mut o2);
 
-    assert_ne!(anon, anon2, "Different DF::anon calls produce distinct anonymous individuals");
+    assert_ne!(
+        anon, anon2,
+        "Different DF::anon calls produce distinct anonymous individuals"
+    );
     assert_contains_axiom!(o2, ax2);
 }
 
@@ -393,7 +436,10 @@ fn test_object_property_assertion_between_named() {
     );
 
     let inds = o.get_individuals_in_signature();
-    assert!(inds.len() >= 2, "Expected at least 2 named individuals in signature");
+    assert!(
+        inds.len() >= 2,
+        "Expected at least 2 named individuals in signature"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -505,15 +551,24 @@ fn test_is_anonymous_check() {
 
     let named = df.named("http://ex.org/named");
     assert!(named.is_named(), "Named individual must be named");
-    assert!(!named.is_anonymous(), "Named individual must not be anonymous");
+    assert!(
+        !named.is_anonymous(),
+        "Named individual must not be anonymous"
+    );
     assert!(named.iri().is_some(), "Named individual must have IRI");
     assert!(named.named_iri().is_some());
     assert!(named.anonymous_id().is_none());
 
     let anon = df.anon();
     assert!(!anon.is_named(), "Anonymous individual must not be named");
-    assert!(anon.is_anonymous(), "Anonymous individual must be anonymous");
-    assert!(anon.iri().is_none(), "Anonymous individual must not have IRI");
+    assert!(
+        anon.is_anonymous(),
+        "Anonymous individual must be anonymous"
+    );
+    assert!(
+        anon.iri().is_none(),
+        "Anonymous individual must not have IRI"
+    );
     assert!(anon.named_iri().is_none());
     assert!(anon.anonymous_id().is_some());
 
@@ -524,10 +579,7 @@ fn test_is_anonymous_check() {
     let direct_anon = Individual::anonymous("custom_anon".to_string());
     assert!(!direct_anon.is_named());
     assert!(direct_anon.is_anonymous());
-    assert_eq!(
-        direct_anon.anonymous_id().unwrap().id,
-        "custom_anon"
-    );
+    assert_eq!(direct_anon.anonymous_id().unwrap().id, "custom_anon");
 
     let fresh = Individual::fresh();
     assert!(!fresh.is_named());
@@ -553,7 +605,11 @@ fn test_object_one_of_class_expression() {
 
     match &one_of_ce {
         ClassExpression::ObjectOneOf(individuals) => {
-            assert_eq!(individuals.len(), 3, "ObjectOneOf must contain 3 individuals");
+            assert_eq!(
+                individuals.len(),
+                3,
+                "ObjectOneOf must contain 3 individuals"
+            );
             assert!(individuals.contains(&a), "Must contain a");
             assert!(individuals.contains(&b), "Must contain b");
             assert!(individuals.contains(&c), "Must contain c");
@@ -585,7 +641,10 @@ fn test_object_one_of_class_expression() {
     assert_contains_axiom!(o, ax_class_assertion);
 
     let inds = o.get_individuals_in_signature();
-    assert!(inds.len() >= 4, "Expected at least 4 named individuals (a,b,c,d)");
+    assert!(
+        inds.len() >= 4,
+        "Expected at least 4 named individuals (a,b,c,d)"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -721,11 +780,7 @@ fn test_many_different_individuals() {
     assert_contains_axiom!(o, ax);
 
     let inds = o.get_individuals_in_signature();
-    assert_eq!(
-        inds.len(),
-        7,
-        "All 7 individuals must appear in signature"
-    );
+    assert_eq!(inds.len(), 7, "All 7 individuals must appear in signature");
 
     let mut test_base = TestBase::new();
     let result = test_base.round_trip_and_compare(&o, OntologyFormat::Functional);

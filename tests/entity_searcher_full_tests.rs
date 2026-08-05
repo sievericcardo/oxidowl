@@ -22,7 +22,10 @@ fn test_get_sub_class_axioms_for_lhs() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_sub_class_axioms_for_lhs(&a);
-    assert!(!results.is_empty(), "Should find sub-class axioms where A is LHS");
+    assert!(
+        !results.is_empty(),
+        "Should find sub-class axioms where A is LHS"
+    );
     assert!(results.len() >= 2, "Should find at least 2 axioms");
 }
 
@@ -41,7 +44,10 @@ fn test_get_sub_class_axioms_for_rhs() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_sub_class_axioms_for_rhs(&b);
-    assert!(!results.is_empty(), "Should find sub-class axioms where B is RHS");
+    assert!(
+        !results.is_empty(),
+        "Should find sub-class axioms where B is RHS"
+    );
     assert!(results.len() >= 2, "Should find at least 2 axioms");
 }
 
@@ -58,7 +64,10 @@ fn test_get_equivalent_classes_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_equivalent_classes_axioms(&a);
-    assert!(!results.is_empty(), "Should find equivalent class axioms for A");
+    assert!(
+        !results.is_empty(),
+        "Should find equivalent class axioms for A"
+    );
 }
 
 #[test]
@@ -74,7 +83,10 @@ fn test_get_disjoint_classes_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_disjoint_classes_axioms(&a);
-    assert!(!results.is_empty(), "Should find disjoint class axioms for A");
+    assert!(
+        !results.is_empty(),
+        "Should find disjoint class axioms for A"
+    );
 }
 
 #[test]
@@ -91,7 +103,10 @@ fn test_get_disjoint_union_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_disjoint_union_axioms(&a);
-    assert!(!results.is_empty(), "Should find disjoint union axioms for A");
+    assert!(
+        !results.is_empty(),
+        "Should find disjoint union axioms for A"
+    );
 }
 
 #[test]
@@ -123,7 +138,10 @@ fn test_get_object_property_domain_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_object_property_domain_axioms(&p);
-    assert!(!results.is_empty(), "Should find object property domain axioms for P");
+    assert!(
+        !results.is_empty(),
+        "Should find object property domain axioms for P"
+    );
 }
 
 #[test]
@@ -139,7 +157,10 @@ fn test_get_object_property_range_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_object_property_range_axioms(&p);
-    assert!(!results.is_empty(), "Should find object property range axioms for P");
+    assert!(
+        !results.is_empty(),
+        "Should find object property range axioms for P"
+    );
 }
 
 #[test]
@@ -155,7 +176,10 @@ fn test_get_sub_object_property_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_sub_object_property_axioms(&p);
-    assert!(!results.is_empty(), "Should find sub-object-property axioms for P");
+    assert!(
+        !results.is_empty(),
+        "Should find sub-object-property axioms for P"
+    );
 }
 
 #[test]
@@ -171,7 +195,10 @@ fn test_get_equivalent_object_properties_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_equivalent_object_properties_axioms(&p);
-    assert!(!results.is_empty(), "Should find equivalent object property axioms for P");
+    assert!(
+        !results.is_empty(),
+        "Should find equivalent object property axioms for P"
+    );
 }
 
 #[test]
@@ -187,7 +214,10 @@ fn test_get_disjoint_object_properties_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_disjoint_object_properties_axioms(&p);
-    assert!(!results.is_empty(), "Should find disjoint object property axioms for P");
+    assert!(
+        !results.is_empty(),
+        "Should find disjoint object property axioms for P"
+    );
 }
 
 #[test]
@@ -203,7 +233,10 @@ fn test_get_inverse_object_properties_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_inverse_object_properties_axioms(&p);
-    assert!(!results.is_empty(), "Should find inverse object property axioms for P");
+    assert!(
+        !results.is_empty(),
+        "Should find inverse object property axioms for P"
+    );
 }
 
 #[test]
@@ -219,7 +252,10 @@ fn test_get_class_assertion_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_class_assertion_axioms(&i);
-    assert!(!results.is_empty(), "Should find class assertion axioms for i");
+    assert!(
+        !results.is_empty(),
+        "Should find class assertion axioms for i"
+    );
 }
 
 #[test]
@@ -236,7 +272,10 @@ fn test_get_object_property_assertion_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_object_property_assertion_axioms(&i);
-    assert!(!results.is_empty(), "Should find object property assertion axioms for i");
+    assert!(
+        !results.is_empty(),
+        "Should find object property assertion axioms for i"
+    );
 }
 
 #[test]
@@ -253,7 +292,10 @@ fn test_get_data_property_assertion_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_data_property_assertion_axioms(&i);
-    assert!(!results.is_empty(), "Should find data property assertion axioms for i");
+    assert!(
+        !results.is_empty(),
+        "Should find data property assertion axioms for i"
+    );
 }
 
 #[test]
@@ -270,7 +312,10 @@ fn test_get_negative_object_property_assertion_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_negative_object_property_assertion_axioms(&i);
-    assert!(!results.is_empty(), "Should find negative object property assertion axioms for i");
+    assert!(
+        !results.is_empty(),
+        "Should find negative object property assertion axioms for i"
+    );
 }
 
 #[test]
@@ -287,7 +332,10 @@ fn test_get_negative_data_property_assertion_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_negative_data_property_assertion_axioms(&i);
-    assert!(!results.is_empty(), "Should find negative data property assertion axioms for i");
+    assert!(
+        !results.is_empty(),
+        "Should find negative data property assertion axioms for i"
+    );
 }
 
 #[test]
@@ -303,7 +351,10 @@ fn test_get_different_individual_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_different_individual_axioms(&i);
-    assert!(!results.is_empty(), "Should find different-individual axioms for i");
+    assert!(
+        !results.is_empty(),
+        "Should find different-individual axioms for i"
+    );
 }
 
 #[test]
@@ -319,7 +370,10 @@ fn test_get_same_individual_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_same_individual_axioms(&i);
-    assert!(!results.is_empty(), "Should find same-individual axioms for i");
+    assert!(
+        !results.is_empty(),
+        "Should find same-individual axioms for i"
+    );
 }
 
 #[test]
@@ -335,7 +389,10 @@ fn test_get_annotation_assertion_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_annotation_assertion_axioms(&subject_iri);
-    assert!(!results.is_empty(), "Should find annotation assertion axioms for the subject");
+    assert!(
+        !results.is_empty(),
+        "Should find annotation assertion axioms for the subject"
+    );
 }
 
 #[test]
@@ -353,7 +410,10 @@ fn test_get_declaration_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_declaration_axioms(&entity);
-    assert!(!results.is_empty(), "Should find declaration axioms for entity X");
+    assert!(
+        !results.is_empty(),
+        "Should find declaration axioms for entity X"
+    );
 }
 
 #[test]
@@ -369,7 +429,10 @@ fn test_get_declaration_axioms_by_type() {
 
     let results = searcher.get_declaration_axioms_by_type(&EntityType::Class);
     assert!(!results.is_empty(), "Should find class declaration axioms");
-    assert!(results.len() >= 2, "Should have at least 2 class declarations");
+    assert!(
+        results.len() >= 2,
+        "Should have at least 2 class declarations"
+    );
 }
 
 #[test]
@@ -386,5 +449,8 @@ fn test_get_datatype_definition_axioms() {
     let searcher = EntitySearcher::new(&ont, &index);
 
     let results = searcher.get_datatype_definition_axioms(&dt_iri);
-    assert!(results.is_empty(), "No datatype definition axioms exist, only declarations");
+    assert!(
+        results.is_empty(),
+        "No datatype definition axioms exist, only declarations"
+    );
 }

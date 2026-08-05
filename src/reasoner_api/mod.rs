@@ -608,9 +608,7 @@ pub trait OWLReasoner: Send + Sync {
     fn get_bottom_data_property_node(&self) -> Result<Node<DataPropertyExpression>> {
         Ok(Node::bottom_node(DataPropertyExpression::DataProperty(
             crate::ontology::DataProperty {
-                iri: crate::ontology::IRI::new(
-                    "http://www.w3.org/2002/07/owl#bottomDataProperty",
-                ),
+                iri: crate::ontology::IRI::new("http://www.w3.org/2002/07/owl#bottomDataProperty"),
             },
         )))
     }
@@ -669,7 +667,10 @@ pub trait OWLReasoner: Send + Sync {
     }
 
     /// Check whether entailment checking is supported for a given axiom type.
-    fn is_entailment_checking_supported(&self, axiom_type: &crate::ontology::axioms::AxiomType) -> bool {
+    fn is_entailment_checking_supported(
+        &self,
+        axiom_type: &crate::ontology::axioms::AxiomType,
+    ) -> bool {
         matches!(
             axiom_type,
             crate::ontology::axioms::AxiomType::SubClassOf
@@ -747,14 +748,12 @@ struct PropertyHierarchyCache {
         HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
     disjoint_object_properties:
         HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
-    inverse_object_properties:
-        HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
+    inverse_object_properties: HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
     object_property_domains: HashMap<ObjectPropertyExpression, HashSet<ClassExpression>>,
     object_property_ranges: HashMap<ObjectPropertyExpression, HashSet<ClassExpression>>,
     sub_data_properties: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
     super_data_properties: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
-    equivalent_data_properties:
-        HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
+    equivalent_data_properties: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
     disjoint_data_properties: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
     data_property_domains: HashMap<DataPropertyExpression, HashSet<ClassExpression>>,
     data_property_ranges: HashMap<DataPropertyExpression, HashSet<DataRange>>,
@@ -819,10 +818,11 @@ impl TableauOWLReasoner {
         for (sub, supers) in &classification.hierarchy {
             for sup in supers {
                 if let Some(sub_supers) = classification.hierarchy.get(sup)
-                    && sub_supers.contains(sub) {
-                        eqm.entry(sub.clone()).or_default().insert(sup.clone());
-                        eqm.entry(sup.clone()).or_default().insert(sub.clone());
-                    }
+                    && sub_supers.contains(sub)
+                {
+                    eqm.entry(sub.clone()).or_default().insert(sup.clone());
+                    eqm.entry(sup.clone()).or_default().insert(sub.clone());
+                }
             }
         }
 
@@ -866,12 +866,12 @@ impl TableauOWLReasoner {
 
     /// Ensure property hierarchy has been computed, populating the cache.
     fn ensure_property_hierarchy(&self) -> Result<()> {
-        let mut cache = self
-            .cached_property_hierarchy
-            .lock()
-            .map_err(|e| crate::Error::Internal {
-                message: format!("Lock poisoned: {e}"),
-            })?;
+        let mut cache =
+            self.cached_property_hierarchy
+                .lock()
+                .map_err(|e| crate::Error::Internal {
+                    message: format!("Lock poisoned: {e}"),
+                })?;
         if cache.is_some() {
             return Ok(());
         }
@@ -1006,7 +1006,10 @@ impl TableauOWLReasoner {
                     }
                 }
                 for t in to_add {
-                    phc.sub_object_properties.entry(k.clone()).or_default().insert(t);
+                    phc.sub_object_properties
+                        .entry(k.clone())
+                        .or_default()
+                        .insert(t);
                 }
             }
             let op_keys2: Vec<_> = phc.super_object_properties.keys().cloned().collect();
@@ -1022,7 +1025,10 @@ impl TableauOWLReasoner {
                     }
                 }
                 for t in to_add {
-                    phc.super_object_properties.entry(k.clone()).or_default().insert(t);
+                    phc.super_object_properties
+                        .entry(k.clone())
+                        .or_default()
+                        .insert(t);
                 }
             }
             // Data properties
@@ -1039,7 +1045,10 @@ impl TableauOWLReasoner {
                     }
                 }
                 for t in to_add {
-                    phc.sub_data_properties.entry(k.clone()).or_default().insert(t);
+                    phc.sub_data_properties
+                        .entry(k.clone())
+                        .or_default()
+                        .insert(t);
                 }
             }
             let dp_keys2: Vec<_> = phc.super_data_properties.keys().cloned().collect();
@@ -1055,7 +1064,10 @@ impl TableauOWLReasoner {
                     }
                 }
                 for t in to_add {
-                    phc.super_data_properties.entry(k.clone()).or_default().insert(t);
+                    phc.super_data_properties
+                        .entry(k.clone())
+                        .or_default()
+                        .insert(t);
                 }
             }
         }
@@ -1359,7 +1371,9 @@ impl OWLReasoner for TableauOWLReasoner {
         let cache = cache.as_ref().unwrap();
         if let Some(subs) = cache.super_object_properties.get(prop) {
             if direct {
-                Ok(NodeSet::new(subs.iter().map(|s| Node::singleton(s.clone())).collect()))
+                Ok(NodeSet::new(
+                    subs.iter().map(|s| Node::singleton(s.clone())).collect(),
+                ))
             } else {
                 let mut all = subs.clone();
                 let mut stack: Vec<_> = subs.iter().cloned().collect();
@@ -1394,7 +1408,9 @@ impl OWLReasoner for TableauOWLReasoner {
         let cache = cache.as_ref().unwrap();
         if let Some(sups) = cache.sub_object_properties.get(prop) {
             if direct {
-                Ok(NodeSet::new(sups.iter().map(|s| Node::singleton(s.clone())).collect()))
+                Ok(NodeSet::new(
+                    sups.iter().map(|s| Node::singleton(s.clone())).collect(),
+                ))
             } else {
                 let mut all = sups.clone();
                 let mut stack: Vec<_> = sups.iter().cloned().collect();
@@ -1448,7 +1464,9 @@ impl OWLReasoner for TableauOWLReasoner {
             })?;
         let cache = cache.as_ref().unwrap();
         if let Some(disj) = cache.disjoint_object_properties.get(prop) {
-            Ok(NodeSet::new(disj.iter().map(|d| Node::singleton(d.clone())).collect()))
+            Ok(NodeSet::new(
+                disj.iter().map(|d| Node::singleton(d.clone())).collect(),
+            ))
         } else {
             Ok(NodeSet::empty())
         }
@@ -1500,7 +1518,9 @@ impl OWLReasoner for TableauOWLReasoner {
             })?;
         let cache = cache.as_ref().unwrap();
         if let Some(domains) = cache.object_property_domains.get(prop) {
-            Ok(NodeSet::new(domains.iter().map(|d| Node::singleton(d.clone())).collect()))
+            Ok(NodeSet::new(
+                domains.iter().map(|d| Node::singleton(d.clone())).collect(),
+            ))
         } else {
             Ok(NodeSet::empty())
         }
@@ -1520,7 +1540,9 @@ impl OWLReasoner for TableauOWLReasoner {
             })?;
         let cache = cache.as_ref().unwrap();
         if let Some(ranges) = cache.object_property_ranges.get(prop) {
-            Ok(NodeSet::new(ranges.iter().map(|r| Node::singleton(r.clone())).collect()))
+            Ok(NodeSet::new(
+                ranges.iter().map(|r| Node::singleton(r.clone())).collect(),
+            ))
         } else {
             Ok(NodeSet::empty())
         }
@@ -1553,7 +1575,9 @@ impl OWLReasoner for TableauOWLReasoner {
         let cache = cache.as_ref().unwrap();
         if let Some(subs) = cache.super_data_properties.get(prop) {
             if direct {
-                Ok(NodeSet::new(subs.iter().map(|s| Node::singleton(s.clone())).collect()))
+                Ok(NodeSet::new(
+                    subs.iter().map(|s| Node::singleton(s.clone())).collect(),
+                ))
             } else {
                 let mut all = subs.clone();
                 let mut stack: Vec<_> = subs.iter().cloned().collect();
@@ -1588,7 +1612,9 @@ impl OWLReasoner for TableauOWLReasoner {
         let cache = cache.as_ref().unwrap();
         if let Some(sups) = cache.sub_data_properties.get(prop) {
             if direct {
-                Ok(NodeSet::new(sups.iter().map(|s| Node::singleton(s.clone())).collect()))
+                Ok(NodeSet::new(
+                    sups.iter().map(|s| Node::singleton(s.clone())).collect(),
+                ))
             } else {
                 let mut all = sups.clone();
                 let mut stack: Vec<_> = sups.iter().cloned().collect();
@@ -1642,7 +1668,9 @@ impl OWLReasoner for TableauOWLReasoner {
             })?;
         let cache = cache.as_ref().unwrap();
         if let Some(disj) = cache.disjoint_data_properties.get(prop) {
-            Ok(NodeSet::new(disj.iter().map(|d| Node::singleton(d.clone())).collect()))
+            Ok(NodeSet::new(
+                disj.iter().map(|d| Node::singleton(d.clone())).collect(),
+            ))
         } else {
             Ok(NodeSet::empty())
         }
@@ -1662,7 +1690,9 @@ impl OWLReasoner for TableauOWLReasoner {
             })?;
         let cache = cache.as_ref().unwrap();
         if let Some(domains) = cache.data_property_domains.get(prop) {
-            Ok(NodeSet::new(domains.iter().map(|d| Node::singleton(d.clone())).collect()))
+            Ok(NodeSet::new(
+                domains.iter().map(|d| Node::singleton(d.clone())).collect(),
+            ))
         } else {
             Ok(NodeSet::empty())
         }
@@ -1682,7 +1712,9 @@ impl OWLReasoner for TableauOWLReasoner {
             })?;
         let cache = cache.as_ref().unwrap();
         if let Some(ranges) = cache.data_property_ranges.get(prop) {
-            Ok(NodeSet::new(ranges.iter().map(|r| Node::singleton(r.clone())).collect()))
+            Ok(NodeSet::new(
+                ranges.iter().map(|r| Node::singleton(r.clone())).collect(),
+            ))
         } else {
             Ok(NodeSet::empty())
         }

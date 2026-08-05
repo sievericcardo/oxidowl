@@ -838,8 +838,18 @@ impl OntologyVisitor<std::collections::HashSet<crate::ontology::Class>> for Clas
 pub trait OntologyChangeVisitor {
     fn visit_add_axiom(&mut self, _ontology_iri: &crate::ontology::IRI, _axiom: &Axiom) {}
     fn visit_remove_axiom(&mut self, _ontology_iri: &crate::ontology::IRI, _axiom: &Axiom) {}
-    fn visit_add_import(&mut self, _ontology_iri: &crate::ontology::IRI, _import: &crate::import::ImportDeclaration) {}
-    fn visit_remove_import(&mut self, _ontology_iri: &crate::ontology::IRI, _import: &crate::import::ImportDeclaration) {}
+    fn visit_add_import(
+        &mut self,
+        _ontology_iri: &crate::ontology::IRI,
+        _import: &crate::import::ImportDeclaration,
+    ) {
+    }
+    fn visit_remove_import(
+        &mut self,
+        _ontology_iri: &crate::ontology::IRI,
+        _import: &crate::import::ImportDeclaration,
+    ) {
+    }
     fn visit_add_ontology_annotation(
         &mut self,
         _ontology_iri: &crate::ontology::IRI,
@@ -862,7 +872,10 @@ pub trait OntologyChangeVisitor {
 }
 
 /// Dispatch an OntologyChange to the appropriate visitor method.
-pub fn dispatch_change(change: &crate::manager::changes::OntologyChange, visitor: &mut dyn OntologyChangeVisitor) {
+pub fn dispatch_change(
+    change: &crate::manager::changes::OntologyChange,
+    visitor: &mut dyn OntologyChangeVisitor,
+) {
     match change {
         crate::manager::changes::OntologyChange::AddAxiom {
             ontology_iri,

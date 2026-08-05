@@ -2,11 +2,11 @@
 
 use crate::Result;
 use crate::ontology::axioms::*;
-use crate::ontology::{IRI, Literal, NamedIndividual, Ontology};
 use crate::ontology::{
     Class, DataProperty, DataPropertyExpression, Individual, ObjectProperty,
     ObjectPropertyExpression,
 };
+use crate::ontology::{IRI, Literal, NamedIndividual, Ontology};
 use std::collections::HashMap;
 
 fn axiom_id() -> u64 {
@@ -54,10 +54,7 @@ fn parse_prefix_mapping(content: &str) -> HashMap<String, String> {
         "http://www.w3.org/2000/01/rdf-schema#".into(),
     );
     prefixes.insert("owl".into(), "http://www.w3.org/2002/07/owl#".into());
-    prefixes.insert(
-        "xsd".into(),
-        "http://www.w3.org/2001/XMLSchema#".into(),
-    );
+    prefixes.insert("xsd".into(), "http://www.w3.org/2001/XMLSchema#".into());
 
     for line in content.lines() {
         if let Some(prefix_val) = extract_attr_value(line, "prefix") {
@@ -138,15 +135,56 @@ impl RDFaParser {
             }
 
             if let Some(property) = extract_attr_value(trimmed, "property")
-                && let Some(ref subj) = current_subject {
-                    let resolved_prop = resolve_term(&property, &prefixes, current_vocab.as_deref());
-                    if let Some(content_val) = extract_attr_value(trimmed, "content") {
-                        let dt = extract_attr_value(trimmed, "datatype");
-                        let dt_url = dt.as_ref().and_then(|d| url::Url::parse(d).ok());
+                && let Some(ref subj) = current_subject
+            {
+                let resolved_prop = resolve_term(&property, &prefixes, current_vocab.as_deref());
+                if let Some(content_val) = extract_attr_value(trimmed, "content") {
+                    let dt = extract_attr_value(trimmed, "datatype");
+                    let dt_url = dt.as_ref().and_then(|d| url::Url::parse(d).ok());
+                    let literal = Literal {
+                        value: content_val,
+                        language: None,
+                        datatype: dt_url,
+                    };
+                    let individual = Individual::Named(NamedIndividual {
+                        iri: IRI::new(subj),
+                    });
+                    let data_property = DataProperty {
+                        iri: IRI::new(&resolved_prop),
+                    };
+                    o.add_axiom(Axiom::DataPropertyAssertion(DataPropertyAssertionAxiom {
+                        id: axiom_id(),
+                        individual,
+                        property: DataPropertyExpression::DataProperty(data_property),
+                        value: literal,
+                        annotations: vec![],
+                    }));
+                } else if let Some(resource_val) = extract_attr_value(trimmed, "resource") {
+                    let resolved_res =
+                        resolve_term(&resource_val, &prefixes, current_vocab.as_deref());
+                    let individual = Individual::Named(NamedIndividual {
+                        iri: IRI::new(subj),
+                    });
+                    let target = Individual::Named(NamedIndividual {
+                        iri: IRI::new(&resolved_res),
+                    });
+                    let prop = ObjectProperty::new(IRI::new(&resolved_prop))?;
+                    o.add_axiom(Axiom::ObjectPropertyAssertion(
+                        ObjectPropertyAssertionAxiom {
+                            id: axiom_id(),
+                            source: individual,
+                            target,
+                            property: ObjectPropertyExpression::ObjectProperty(prop),
+                            annotations: vec![],
+                        },
+                    ));
+                } else {
+                    let text_val = Self::extract_text_content(trimmed);
+                    if !text_val.is_empty() {
                         let literal = Literal {
-                            value: content_val,
+                            value: text_val,
                             language: None,
-                            datatype: dt_url,
+                            datatype: None,
                         };
                         let individual = Individual::Named(NamedIndividual {
                             iri: IRI::new(subj),
@@ -154,84 +192,40 @@ impl RDFaParser {
                         let data_property = DataProperty {
                             iri: IRI::new(&resolved_prop),
                         };
-                        o.add_axiom(Axiom::DataPropertyAssertion(
-                            DataPropertyAssertionAxiom {
-                                id: axiom_id(),
-                                individual,
-                                property: DataPropertyExpression::DataProperty(data_property),
-                                value: literal,
-                                annotations: vec![],
-                            },
-                        ));
-                    } else if let Some(resource_val) = extract_attr_value(trimmed, "resource") {
-                        let resolved_res =
-                            resolve_term(&resource_val, &prefixes, current_vocab.as_deref());
-                        let individual = Individual::Named(NamedIndividual {
-                            iri: IRI::new(subj),
-                        });
-                        let target = Individual::Named(NamedIndividual {
-                            iri: IRI::new(&resolved_res),
-                        });
-                        let prop = ObjectProperty::new(IRI::new(&resolved_prop))?;
-                        o.add_axiom(Axiom::ObjectPropertyAssertion(
-                            ObjectPropertyAssertionAxiom {
-                                id: axiom_id(),
-                                source: individual,
-                                target,
-                                property: ObjectPropertyExpression::ObjectProperty(prop),
-                                annotations: vec![],
-                            },
-                        ));
-                    } else {
-                        let text_val = Self::extract_text_content(trimmed);
-                        if !text_val.is_empty() {
-                            let literal = Literal {
-                                value: text_val,
-                                language: None,
-                                datatype: None,
-                            };
-                            let individual = Individual::Named(NamedIndividual {
-                                iri: IRI::new(subj),
-                            });
-                            let data_property = DataProperty {
-                                iri: IRI::new(&resolved_prop),
-                            };
-                            o.add_axiom(Axiom::DataPropertyAssertion(
-                                DataPropertyAssertionAxiom {
-                                    id: axiom_id(),
-                                    individual,
-                                    property: DataPropertyExpression::DataProperty(data_property),
-                                    value: literal,
-                                    annotations: vec![],
-                                },
-                            ));
-                        }
+                        o.add_axiom(Axiom::DataPropertyAssertion(DataPropertyAssertionAxiom {
+                            id: axiom_id(),
+                            individual,
+                            property: DataPropertyExpression::DataProperty(data_property),
+                            value: literal,
+                            annotations: vec![],
+                        }));
                     }
                 }
+            }
 
             if let Some(rel) = extract_attr_value(trimmed, "rel")
                 && let Some(ref subj) = current_subject
-                    && let Some(resource_val) = extract_attr_value(trimmed, "resource") {
-                        let resolved_rel = resolve_term(&rel, &prefixes, current_vocab.as_deref());
-                        let resolved_res =
-                            resolve_term(&resource_val, &prefixes, current_vocab.as_deref());
-                        let individual = Individual::Named(NamedIndividual {
-                            iri: IRI::new(subj),
-                        });
-                        let target = Individual::Named(NamedIndividual {
-                            iri: IRI::new(&resolved_res),
-                        });
-                        let prop = ObjectProperty::new(IRI::new(&resolved_rel))?;
-                        o.add_axiom(Axiom::ObjectPropertyAssertion(
-                            ObjectPropertyAssertionAxiom {
-                                id: axiom_id(),
-                                source: individual,
-                                target,
-                                property: ObjectPropertyExpression::ObjectProperty(prop),
-                                annotations: vec![],
-                            },
-                        ));
-                    }
+                && let Some(resource_val) = extract_attr_value(trimmed, "resource")
+            {
+                let resolved_rel = resolve_term(&rel, &prefixes, current_vocab.as_deref());
+                let resolved_res = resolve_term(&resource_val, &prefixes, current_vocab.as_deref());
+                let individual = Individual::Named(NamedIndividual {
+                    iri: IRI::new(subj),
+                });
+                let target = Individual::Named(NamedIndividual {
+                    iri: IRI::new(&resolved_res),
+                });
+                let prop = ObjectProperty::new(IRI::new(&resolved_rel))?;
+                o.add_axiom(Axiom::ObjectPropertyAssertion(
+                    ObjectPropertyAssertionAxiom {
+                        id: axiom_id(),
+                        source: individual,
+                        target,
+                        property: ObjectPropertyExpression::ObjectProperty(prop),
+                        annotations: vec![],
+                    },
+                ));
+            }
         }
         Ok(o)
     }
@@ -262,9 +256,7 @@ impl RDFaRenderer {
     }
 
     pub fn serialize(&self, ontology: &Ontology) -> Result<String> {
-        let mut buf = String::from(
-            "<!DOCTYPE html>\n<html>\n<head>\n</head>\n<body>\n",
-        );
+        let mut buf = String::from("<!DOCTYPE html>\n<html>\n<head>\n</head>\n<body>\n");
 
         for axiom in ontology.axioms() {
             match axiom {
@@ -303,8 +295,7 @@ impl RDFaRenderer {
                 }
                 Axiom::ObjectPropertyAssertion(a) => {
                     if let ObjectPropertyExpression::ObjectProperty(prop) = &a.property
-                        && let (Some(source), Some(target)) =
-                            (a.source.iri(), a.target.iri())
+                        && let (Some(source), Some(target)) = (a.source.iri(), a.target.iri())
                     {
                         buf.push_str(&format!(
                             "  <div resource=\"{source}\">\n    <a property=\"{}\" resource=\"{target}\"></a>\n  </div>\n",

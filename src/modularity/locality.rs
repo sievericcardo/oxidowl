@@ -60,9 +60,7 @@ impl LocalityEvaluator for SyntacticLocalityEvaluator {
                 }
             }
             Axiom::EquivalentClasses(a) => {
-                a.classes
-                    .iter()
-                    .all(|c| self.ce_is_top_local(c, signature))
+                a.classes.iter().all(|c| self.ce_is_top_local(c, signature))
                     || a.classes
                         .iter()
                         .all(|c| self.ce_is_bottom_local(c, signature))
@@ -110,30 +108,16 @@ impl LocalityEvaluator for SyntacticLocalityEvaluator {
                 self.ope_is_top_local(&a.property, signature)
                     || self.ce_is_top_local(&a.range, signature)
             }
-            Axiom::FunctionalObjectProperty(a) => {
-                self.ope_is_top_local(&a.property, signature)
-            }
+            Axiom::FunctionalObjectProperty(a) => self.ope_is_top_local(&a.property, signature),
             Axiom::InverseFunctionalObjectProperty(a) => {
                 self.ope_is_top_local(&a.property, signature)
             }
-            Axiom::ReflexiveObjectProperty(a) => {
-                self.ope_is_top_local(&a.property, signature)
-            }
-            Axiom::IrreflexiveObjectProperty(a) => {
-                self.ope_is_top_local(&a.property, signature)
-            }
-            Axiom::SymmetricObjectProperty(a) => {
-                self.ope_is_top_local(&a.property, signature)
-            }
-            Axiom::AsymmetricObjectProperty(a) => {
-                self.ope_is_top_local(&a.property, signature)
-            }
-            Axiom::TransitiveObjectProperty(a) => {
-                self.ope_is_top_local(&a.property, signature)
-            }
-            Axiom::ObjectPropertyAssertion(a) => {
-                self.ope_is_bottom_local(&a.property, signature)
-            }
+            Axiom::ReflexiveObjectProperty(a) => self.ope_is_top_local(&a.property, signature),
+            Axiom::IrreflexiveObjectProperty(a) => self.ope_is_top_local(&a.property, signature),
+            Axiom::SymmetricObjectProperty(a) => self.ope_is_top_local(&a.property, signature),
+            Axiom::AsymmetricObjectProperty(a) => self.ope_is_top_local(&a.property, signature),
+            Axiom::TransitiveObjectProperty(a) => self.ope_is_top_local(&a.property, signature),
+            Axiom::ObjectPropertyAssertion(a) => self.ope_is_bottom_local(&a.property, signature),
             Axiom::NegativeObjectPropertyAssertion(a) => {
                 self.ope_is_bottom_local(&a.property, signature)
             }
@@ -163,12 +147,8 @@ impl LocalityEvaluator for SyntacticLocalityEvaluator {
                 // Range can contain data ranges; if property is top-local, axiom is local
                 self.dpe_is_top_local(&a.property, signature)
             }
-            Axiom::FunctionalDataProperty(a) => {
-                self.dpe_is_top_local(&a.property, signature)
-            }
-            Axiom::DataPropertyAssertion(a) => {
-                self.dpe_is_bottom_local(&a.property, signature)
-            }
+            Axiom::FunctionalDataProperty(a) => self.dpe_is_top_local(&a.property, signature),
+            Axiom::DataPropertyAssertion(a) => self.dpe_is_bottom_local(&a.property, signature),
             Axiom::NegativeDataPropertyAssertion(a) => {
                 self.dpe_is_bottom_local(&a.property, signature)
             }
@@ -274,21 +254,21 @@ impl SyntacticLocalityEvaluator {
     fn ce_uses_signature(ce: &ClassExpression, sig: &HashSet<IRI>) -> bool {
         match ce {
             ClassExpression::Class(cls) => sig.contains(&cls.iri),
-            ClassExpression::ObjectIntersectionOf(ops)
-            | ClassExpression::ObjectUnionOf(ops) => {
+            ClassExpression::ObjectIntersectionOf(ops) | ClassExpression::ObjectUnionOf(ops) => {
                 ops.iter().any(|op| Self::ce_uses_signature(op, sig))
             }
-            ClassExpression::ObjectComplementOf(inner) => {
-                Self::ce_uses_signature(inner, sig)
-            }
+            ClassExpression::ObjectComplementOf(inner) => Self::ce_uses_signature(inner, sig),
             ClassExpression::ObjectSomeValuesFrom { property, filler }
             | ClassExpression::ObjectAllValuesFrom { property, filler }
-            | ClassExpression::ObjectMinCardinality { property, filler, .. }
-            | ClassExpression::ObjectMaxCardinality { property, filler, .. }
-            | ClassExpression::ObjectExactCardinality { property, filler, .. } => {
-                Self::ope_uses_signature(property, sig)
-                    || Self::ce_uses_signature(filler, sig)
+            | ClassExpression::ObjectMinCardinality {
+                property, filler, ..
             }
+            | ClassExpression::ObjectMaxCardinality {
+                property, filler, ..
+            }
+            | ClassExpression::ObjectExactCardinality {
+                property, filler, ..
+            } => Self::ope_uses_signature(property, sig) || Self::ce_uses_signature(filler, sig),
             ClassExpression::ObjectHasValue { property, .. }
             | ClassExpression::ObjectHasSelf { property } => {
                 Self::ope_uses_signature(property, sig)
@@ -365,36 +345,18 @@ impl SyntacticLocalityEvaluator {
                 !Self::ope_uses_signature(&a.property1, sig)
                     && !Self::ope_uses_signature(&a.property2, sig)
             }
-            Axiom::ObjectPropertyDomain(a) => {
-                !Self::ope_uses_signature(&a.property, sig)
-            }
-            Axiom::ObjectPropertyRange(a) => {
-                !Self::ope_uses_signature(&a.property, sig)
-            }
-            Axiom::FunctionalObjectProperty(a) => {
-                !Self::ope_uses_signature(&a.property, sig)
-            }
+            Axiom::ObjectPropertyDomain(a) => !Self::ope_uses_signature(&a.property, sig),
+            Axiom::ObjectPropertyRange(a) => !Self::ope_uses_signature(&a.property, sig),
+            Axiom::FunctionalObjectProperty(a) => !Self::ope_uses_signature(&a.property, sig),
             Axiom::InverseFunctionalObjectProperty(a) => {
                 !Self::ope_uses_signature(&a.property, sig)
             }
-            Axiom::ReflexiveObjectProperty(a) => {
-                !Self::ope_uses_signature(&a.property, sig)
-            }
-            Axiom::IrreflexiveObjectProperty(a) => {
-                !Self::ope_uses_signature(&a.property, sig)
-            }
-            Axiom::SymmetricObjectProperty(a) => {
-                !Self::ope_uses_signature(&a.property, sig)
-            }
-            Axiom::AsymmetricObjectProperty(a) => {
-                !Self::ope_uses_signature(&a.property, sig)
-            }
-            Axiom::TransitiveObjectProperty(a) => {
-                !Self::ope_uses_signature(&a.property, sig)
-            }
-            Axiom::ObjectPropertyAssertion(a) => {
-                !Self::ope_uses_signature(&a.property, sig)
-            }
+            Axiom::ReflexiveObjectProperty(a) => !Self::ope_uses_signature(&a.property, sig),
+            Axiom::IrreflexiveObjectProperty(a) => !Self::ope_uses_signature(&a.property, sig),
+            Axiom::SymmetricObjectProperty(a) => !Self::ope_uses_signature(&a.property, sig),
+            Axiom::AsymmetricObjectProperty(a) => !Self::ope_uses_signature(&a.property, sig),
+            Axiom::TransitiveObjectProperty(a) => !Self::ope_uses_signature(&a.property, sig),
+            Axiom::ObjectPropertyAssertion(a) => !Self::ope_uses_signature(&a.property, sig),
             Axiom::NegativeObjectPropertyAssertion(a) => {
                 !Self::ope_uses_signature(&a.property, sig)
             }
@@ -415,21 +377,11 @@ impl SyntacticLocalityEvaluator {
                 .properties
                 .iter()
                 .all(|p| !Self::dpe_uses_signature(p, sig)),
-            Axiom::DataPropertyDomain(a) => {
-                !Self::dpe_uses_signature(&a.property, sig)
-            }
-            Axiom::DataPropertyRange(a) => {
-                !Self::dpe_uses_signature(&a.property, sig)
-            }
-            Axiom::FunctionalDataProperty(a) => {
-                !Self::dpe_uses_signature(&a.property, sig)
-            }
-            Axiom::DataPropertyAssertion(a) => {
-                !Self::dpe_uses_signature(&a.property, sig)
-            }
-            Axiom::NegativeDataPropertyAssertion(a) => {
-                !Self::dpe_uses_signature(&a.property, sig)
-            }
+            Axiom::DataPropertyDomain(a) => !Self::dpe_uses_signature(&a.property, sig),
+            Axiom::DataPropertyRange(a) => !Self::dpe_uses_signature(&a.property, sig),
+            Axiom::FunctionalDataProperty(a) => !Self::dpe_uses_signature(&a.property, sig),
+            Axiom::DataPropertyAssertion(a) => !Self::dpe_uses_signature(&a.property, sig),
+            Axiom::NegativeDataPropertyAssertion(a) => !Self::dpe_uses_signature(&a.property, sig),
 
             _ => {
                 let eval = SyntacticLocalityEvaluator::new(LocalityClass::Top);

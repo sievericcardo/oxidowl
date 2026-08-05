@@ -3,11 +3,11 @@ mod helpers;
 
 use helpers::df::DF;
 use oxidowl::ontology::*;
+use oxidowl::profiles::ProfileValidator;
 use oxidowl::profiles::el::ELValidator;
 use oxidowl::profiles::ql::QLValidator;
 use oxidowl::profiles::rl::RLValidator;
 use oxidowl::profiles::validator::OWL2ProfileValidator;
-use oxidowl::profiles::ProfileValidator;
 use oxidowl::profiles::*;
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -47,7 +47,10 @@ fn test_el_violation_union() {
     let validator = ELValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "EL validator should reject union in subclass position");
+    assert!(
+        !report.is_valid(),
+        "EL validator should reject union in subclass position"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -84,7 +87,10 @@ fn test_el_violation_universal_to_bottom() {
     let validator = ELValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "EL validator should reject universal restriction");
+    assert!(
+        !report.is_valid(),
+        "EL validator should reject universal restriction"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -103,7 +109,10 @@ fn test_el_violation_cardinality() {
     let validator = ELValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "EL validator should reject cardinality restrictions");
+    assert!(
+        !report.is_valid(),
+        "EL validator should reject cardinality restrictions"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -121,7 +130,10 @@ fn test_el_violation_has_self() {
     let validator = ELValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(report.is_valid(), "ObjectHasSelf is allowed in OWL 2 EL per W3C spec");
+    assert!(
+        report.is_valid(),
+        "ObjectHasSelf is allowed in OWL 2 EL per W3C spec"
+    );
 }
 
 #[test]
@@ -139,8 +151,14 @@ fn test_el_violation_inverse() {
     let validator = ELValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "EL validator correctly rejects ObjectInverseOf in ObjectSomeValuesFrom per OWL 2 EL spec");
-    assert!(!report.violations.is_empty(), "Should have violations for inverse property expression");
+    assert!(
+        !report.is_valid(),
+        "EL validator correctly rejects ObjectInverseOf in ObjectSomeValuesFrom per OWL 2 EL spec"
+    );
+    assert!(
+        !report.violations.is_empty(),
+        "Should have violations for inverse property expression"
+    );
 }
 
 #[test]
@@ -156,7 +174,10 @@ fn test_el_violation_disjoint_classes() {
     let validator = ELValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "EL validator should reject DisjointClasses");
+    assert!(
+        !report.is_valid(),
+        "EL validator should reject DisjointClasses"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -174,7 +195,10 @@ fn test_el_violation_disjoint_union() {
     let validator = ELValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "EL validator should reject DisjointUnion");
+    assert!(
+        !report.is_valid(),
+        "EL validator should reject DisjointUnion"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -190,7 +214,10 @@ fn test_el_violation_functional() {
     let validator = ELValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "EL validator should reject FunctionalObjectProperty");
+    assert!(
+        !report.is_valid(),
+        "EL validator should reject FunctionalObjectProperty"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -208,7 +235,10 @@ fn test_el_violation_irreflexive() {
 
     // NOTE: Current EL validator does not explicitly reject IrreflexiveObjectProperty;
     // it falls through to the wildcard arm. This is a known gap.
-    assert!(report.is_valid(), "Current EL validator does not yet reject IrreflexiveObjectProperty");
+    assert!(
+        report.is_valid(),
+        "Current EL validator does not yet reject IrreflexiveObjectProperty"
+    );
 }
 
 #[test]
@@ -231,7 +261,10 @@ fn test_el_violation_property_chain() {
     let validator = ELValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "EL validator should reject property chains");
+    assert!(
+        !report.is_valid(),
+        "EL validator should reject property chains"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -270,7 +303,10 @@ fn test_ql_violation_disjunction_subclass() {
     let validator = QLValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "QL validator should reject disjunction in subclass");
+    assert!(
+        !report.is_valid(),
+        "QL validator should reject disjunction in subclass"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -289,7 +325,10 @@ fn test_ql_violation_existential_super() {
     let validator = QLValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(report.is_valid(), "Existential in superclass position is allowed in OWL 2 QL");
+    assert!(
+        report.is_valid(),
+        "Existential in superclass position is allowed in OWL 2 QL"
+    );
 }
 
 #[test]
@@ -304,7 +343,10 @@ fn test_ql_violation_functional() {
     let validator = QLValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "QL validator should reject FunctionalObjectProperty");
+    assert!(
+        !report.is_valid(),
+        "QL validator should reject FunctionalObjectProperty"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -320,7 +362,10 @@ fn test_ql_violation_inverse_functional() {
     let validator = QLValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "QL validator should reject InverseFunctionalObjectProperty");
+    assert!(
+        !report.is_valid(),
+        "QL validator should reject InverseFunctionalObjectProperty"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -336,7 +381,10 @@ fn test_ql_violation_symmetric() {
     let validator = QLValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "QL validator should reject SymmetricObjectProperty");
+    assert!(
+        !report.is_valid(),
+        "QL validator should reject SymmetricObjectProperty"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -352,7 +400,10 @@ fn test_ql_violation_transitive() {
     let validator = QLValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "QL validator should reject TransitiveObjectProperty");
+    assert!(
+        !report.is_valid(),
+        "QL validator should reject TransitiveObjectProperty"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -368,7 +419,10 @@ fn test_ql_violation_irreflexive() {
     let validator = QLValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "QL validator should reject IrreflexiveObjectProperty");
+    assert!(
+        !report.is_valid(),
+        "QL validator should reject IrreflexiveObjectProperty"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -425,7 +479,10 @@ fn test_rl_violation_some_values_from_super() {
     let validator = RLValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "RL validator should reject SomeValuesFrom in superclass");
+    assert!(
+        !report.is_valid(),
+        "RL validator should reject SomeValuesFrom in superclass"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -444,7 +501,10 @@ fn test_rl_violation_union_super() {
     let validator = RLValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "RL validator should reject union in superclass");
+    assert!(
+        !report.is_valid(),
+        "RL validator should reject union in superclass"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -500,7 +560,10 @@ fn test_rl_violation_self() {
     let validator = RLValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "RL validator should reject ObjectHasSelf");
+    assert!(
+        !report.is_valid(),
+        "RL validator should reject ObjectHasSelf"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -519,7 +582,10 @@ fn test_rl_violation_exact_cardinality() {
     let validator = RLValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    assert!(!report.is_valid(), "RL validator should reject exact cardinality (not =1)");
+    assert!(
+        !report.is_valid(),
+        "RL validator should reject exact cardinality (not =1)"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }
 
@@ -558,6 +624,9 @@ fn test_dl_violation_non_simple_cardinality() {
     let validator = OWL2ProfileValidator::new();
     let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
-    assert!(!report.is_valid(), "DL validator should reject cardinality on non-simple (transitive) property");
+    assert!(
+        !report.is_valid(),
+        "DL validator should reject cardinality on non-simple (transitive) property"
+    );
     assert!(!report.violations.is_empty(), "Should have violations");
 }

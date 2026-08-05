@@ -30,24 +30,25 @@ impl InferredAxiomGenerator<SubClassOfAxiom> for InferredSubClassOfAxiomGenerato
         let mut result = Vec::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && let Entity::Class(iri) = &d.entity {
-                    let ce = ClassExpression::Class(crate::ontology::Class { iri: iri.clone() });
-                    if let Ok(subs) = reasoner.get_sub_classes(&ce, true) {
-                        for node in subs.get_nodes() {
-                            for sub in node.get_entities() {
-                                if !seen_pairs.insert((ce.clone(), sub.clone())) {
-                                    continue;
-                                }
-                                result.push(SubClassOfAxiom {
-                                    id: 0,
-                                    subclass: sub.clone(),
-                                    superclass: ce.clone(),
-                                    annotations: vec![],
-                                });
+                && let Entity::Class(iri) = &d.entity
+            {
+                let ce = ClassExpression::Class(crate::ontology::Class { iri: iri.clone() });
+                if let Ok(subs) = reasoner.get_sub_classes(&ce, true) {
+                    for node in subs.get_nodes() {
+                        for sub in node.get_entities() {
+                            if !seen_pairs.insert((ce.clone(), sub.clone())) {
+                                continue;
                             }
+                            result.push(SubClassOfAxiom {
+                                id: 0,
+                                subclass: sub.clone(),
+                                superclass: ce.clone(),
+                                annotations: vec![],
+                            });
                         }
                     }
                 }
+            }
         }
         result
     }
@@ -67,20 +68,21 @@ impl InferredAxiomGenerator<EquivalentClassesAxiom> for InferredEquivalentClassA
         let mut seen_sets = HashSet::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && let Entity::Class(iri) = &d.entity {
-                    let ce = ClassExpression::Class(crate::ontology::Class { iri: iri.clone() });
-                    if let Ok(node) = reasoner.get_equivalent_classes(&ce) {
-                        let mut eq_set: Vec<_> = node.get_entities().iter().cloned().collect();
-                        eq_set.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
-                        if eq_set.len() > 1 && seen_sets.insert(format!("{eq_set:?}")) {
-                            result.push(EquivalentClassesAxiom {
-                                id: 0,
-                                classes: eq_set,
-                                annotations: vec![],
-                            });
-                        }
+                && let Entity::Class(iri) = &d.entity
+            {
+                let ce = ClassExpression::Class(crate::ontology::Class { iri: iri.clone() });
+                if let Ok(node) = reasoner.get_equivalent_classes(&ce) {
+                    let mut eq_set: Vec<_> = node.get_entities().iter().cloned().collect();
+                    eq_set.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+                    if eq_set.len() > 1 && seen_sets.insert(format!("{eq_set:?}")) {
+                        result.push(EquivalentClassesAxiom {
+                            id: 0,
+                            classes: eq_set,
+                            annotations: vec![],
+                        });
                     }
                 }
+            }
         }
         result
     }
@@ -99,20 +101,21 @@ impl InferredAxiomGenerator<DisjointClassesAxiom> for InferredDisjointClassesAxi
         let mut result = Vec::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && let Entity::Class(iri) = &d.entity {
-                    let ce = ClassExpression::Class(crate::ontology::Class { iri: iri.clone() });
-                    if let Ok(disj) = reasoner.get_disjoint_classes(&ce) {
-                        for node in disj.get_nodes() {
-                            for other in node.get_entities() {
-                                result.push(DisjointClassesAxiom {
-                                    id: 0,
-                                    classes: vec![ce.clone(), other.clone()],
-                                    annotations: vec![],
-                                });
-                            }
+                && let Entity::Class(iri) = &d.entity
+            {
+                let ce = ClassExpression::Class(crate::ontology::Class { iri: iri.clone() });
+                if let Ok(disj) = reasoner.get_disjoint_classes(&ce) {
+                    for node in disj.get_nodes() {
+                        for other in node.get_entities() {
+                            result.push(DisjointClassesAxiom {
+                                id: 0,
+                                classes: vec![ce.clone(), other.clone()],
+                                annotations: vec![],
+                            });
                         }
                     }
                 }
+            }
         }
         result
     }
@@ -131,21 +134,22 @@ impl InferredAxiomGenerator<ClassAssertionAxiom> for InferredClassAssertionAxiom
         let mut result = Vec::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && let Entity::Class(iri) = &d.entity {
-                    let ce = ClassExpression::Class(crate::ontology::Class { iri: iri.clone() });
-                    if let Ok(instances) = reasoner.get_instances(&ce, false) {
-                        for node in instances.get_nodes() {
-                            for ind in node.get_entities() {
-                                result.push(ClassAssertionAxiom {
-                                    id: 0,
-                                    class: ce.clone(),
-                                    individual: ind.clone(),
-                                    annotations: vec![],
-                                });
-                            }
+                && let Entity::Class(iri) = &d.entity
+            {
+                let ce = ClassExpression::Class(crate::ontology::Class { iri: iri.clone() });
+                if let Ok(instances) = reasoner.get_instances(&ce, false) {
+                    for node in instances.get_nodes() {
+                        for ind in node.get_entities() {
+                            result.push(ClassAssertionAxiom {
+                                id: 0,
+                                class: ce.clone(),
+                                individual: ind.clone(),
+                                annotations: vec![],
+                            });
                         }
                     }
                 }
+            }
         }
         result
     }
@@ -164,24 +168,25 @@ impl InferredAxiomGenerator<SubObjectPropertyOfAxiom> for InferredSubObjectPrope
         let mut result = Vec::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && let Entity::ObjectProperty(iri) = &d.entity {
-                    let ope =
-                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
-                            iri: iri.clone(),
-                        });
-                    if let Ok(subs) = reasoner.get_sub_object_properties(&ope, false) {
-                        for node in subs.get_nodes() {
-                            for sub in node.get_entities() {
-                                result.push(SubObjectPropertyOfAxiom {
-                                    id: 0,
-                                    sub_property: sub.clone(),
-                                    super_property: ope.clone(),
-                                    annotations: vec![],
-                                });
-                            }
+                && let Entity::ObjectProperty(iri) = &d.entity
+            {
+                let ope =
+                    ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                        iri: iri.clone(),
+                    });
+                if let Ok(subs) = reasoner.get_sub_object_properties(&ope, false) {
+                    for node in subs.get_nodes() {
+                        for sub in node.get_entities() {
+                            result.push(SubObjectPropertyOfAxiom {
+                                id: 0,
+                                sub_property: sub.clone(),
+                                super_property: ope.clone(),
+                                annotations: vec![],
+                            });
                         }
                     }
                 }
+            }
         }
         result
     }
@@ -200,23 +205,24 @@ impl InferredAxiomGenerator<SubDataPropertyOfAxiom> for InferredSubDataPropertyA
         let mut result = Vec::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && let Entity::DataProperty(iri) = &d.entity {
-                    let dpe = DataPropertyExpression::DataProperty(crate::ontology::DataProperty {
-                        iri: iri.clone(),
-                    });
-                    if let Ok(subs) = reasoner.get_sub_data_properties(&dpe, false) {
-                        for node in subs.get_nodes() {
-                            for sub in node.get_entities() {
-                                result.push(SubDataPropertyOfAxiom {
-                                    id: 0,
-                                    sub_property: sub.clone(),
-                                    super_property: dpe.clone(),
-                                    annotations: vec![],
-                                });
-                            }
+                && let Entity::DataProperty(iri) = &d.entity
+            {
+                let dpe = DataPropertyExpression::DataProperty(crate::ontology::DataProperty {
+                    iri: iri.clone(),
+                });
+                if let Ok(subs) = reasoner.get_sub_data_properties(&dpe, false) {
+                    for node in subs.get_nodes() {
+                        for sub in node.get_entities() {
+                            result.push(SubDataPropertyOfAxiom {
+                                id: 0,
+                                sub_property: sub.clone(),
+                                super_property: dpe.clone(),
+                                annotations: vec![],
+                            });
                         }
                     }
                 }
+            }
         }
         result
     }
@@ -237,34 +243,33 @@ impl InferredAxiomGenerator<ObjectPropertyAssertionAxiom>
         let mut result = Vec::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && let Entity::ObjectProperty(op_iri) = &d.entity {
-                    let ope =
-                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
-                            iri: op_iri.clone(),
-                        });
-                    for axiom in ontology.axioms() {
-                        if let Axiom::Declaration(d2) = axiom
-                            && let Entity::NamedIndividual(ind_iri) = &d2.entity {
-                                let ni =
-                                    crate::ontology::NamedIndividual::new(ind_iri.clone());
-                                if let Ok(values) =
-                                    reasoner.get_object_property_values(&ni, &ope)
-                                {
-                                    for node in values.get_nodes() {
-                                        for target in node.get_entities() {
-                                            result.push(ObjectPropertyAssertionAxiom {
-                                                id: 0,
-                                                source: Individual::Named(ni.clone()),
-                                                target: Individual::Named(target.clone()),
-                                                property: ope.clone(),
-                                                annotations: vec![],
-                                            });
-                                        }
-                                    }
+                && let Entity::ObjectProperty(op_iri) = &d.entity
+            {
+                let ope =
+                    ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                        iri: op_iri.clone(),
+                    });
+                for axiom in ontology.axioms() {
+                    if let Axiom::Declaration(d2) = axiom
+                        && let Entity::NamedIndividual(ind_iri) = &d2.entity
+                    {
+                        let ni = crate::ontology::NamedIndividual::new(ind_iri.clone());
+                        if let Ok(values) = reasoner.get_object_property_values(&ni, &ope) {
+                            for node in values.get_nodes() {
+                                for target in node.get_entities() {
+                                    result.push(ObjectPropertyAssertionAxiom {
+                                        id: 0,
+                                        source: Individual::Named(ni.clone()),
+                                        target: Individual::Named(target.clone()),
+                                        property: ope.clone(),
+                                        annotations: vec![],
+                                    });
                                 }
                             }
+                        }
                     }
                 }
+            }
         }
         result
     }
@@ -274,9 +279,7 @@ impl InferredAxiomGenerator<ObjectPropertyAssertionAxiom>
 }
 
 pub struct InferredDataPropertyAssertionGenerator;
-impl InferredAxiomGenerator<DataPropertyAssertionAxiom>
-    for InferredDataPropertyAssertionGenerator
-{
+impl InferredAxiomGenerator<DataPropertyAssertionAxiom> for InferredDataPropertyAssertionGenerator {
     fn create_axioms(
         &self,
         ontology: &Ontology,
@@ -285,33 +288,32 @@ impl InferredAxiomGenerator<DataPropertyAssertionAxiom>
         let mut result = Vec::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && let Entity::DataProperty(dp_iri) = &d.entity {
-                    let dpe = DataPropertyExpression::DataProperty(crate::ontology::DataProperty {
-                        iri: dp_iri.clone(),
-                    });
-                    for axiom in ontology.axioms() {
-                        if let Axiom::Declaration(d2) = axiom
-                            && let Entity::NamedIndividual(ind_iri) = &d2.entity {
-                                let ni =
-                                    crate::ontology::NamedIndividual::new(ind_iri.clone());
-                                if let Ok(values) =
-                                    reasoner.get_data_property_values(&ni, &dpe)
-                                {
-                                    for node in values.get_nodes() {
-                                        for lit in node.get_entities() {
-                                            result.push(DataPropertyAssertionAxiom {
-                                                id: 0,
-                                                individual: Individual::Named(ni.clone()),
-                                                property: dpe.clone(),
-                                                value: lit.clone(),
-                                                annotations: vec![],
-                                            });
-                                        }
-                                    }
+                && let Entity::DataProperty(dp_iri) = &d.entity
+            {
+                let dpe = DataPropertyExpression::DataProperty(crate::ontology::DataProperty {
+                    iri: dp_iri.clone(),
+                });
+                for axiom in ontology.axioms() {
+                    if let Axiom::Declaration(d2) = axiom
+                        && let Entity::NamedIndividual(ind_iri) = &d2.entity
+                    {
+                        let ni = crate::ontology::NamedIndividual::new(ind_iri.clone());
+                        if let Ok(values) = reasoner.get_data_property_values(&ni, &dpe) {
+                            for node in values.get_nodes() {
+                                for lit in node.get_entities() {
+                                    result.push(DataPropertyAssertionAxiom {
+                                        id: 0,
+                                        individual: Individual::Named(ni.clone()),
+                                        property: dpe.clone(),
+                                        value: lit.clone(),
+                                        annotations: vec![],
+                                    });
                                 }
                             }
+                        }
                     }
                 }
+            }
         }
         result
     }
@@ -333,24 +335,24 @@ impl InferredAxiomGenerator<EquivalentObjectPropertiesAxiom>
         let mut seen_sets = HashSet::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && let Entity::ObjectProperty(iri) = &d.entity {
-                    let ope =
-                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
-                            iri: iri.clone(),
+                && let Entity::ObjectProperty(iri) = &d.entity
+            {
+                let ope =
+                    ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                        iri: iri.clone(),
+                    });
+                if let Ok(node) = reasoner.get_equivalent_object_properties(&ope) {
+                    let mut eq_set: Vec<_> = node.get_entities().iter().cloned().collect();
+                    eq_set.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+                    if eq_set.len() > 1 && seen_sets.insert(format!("{eq_set:?}")) {
+                        result.push(EquivalentObjectPropertiesAxiom {
+                            id: 0,
+                            properties: eq_set,
+                            annotations: vec![],
                         });
-                    if let Ok(node) = reasoner.get_equivalent_object_properties(&ope) {
-                        let mut eq_set: Vec<_> =
-                            node.get_entities().iter().cloned().collect();
-                        eq_set.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
-                        if eq_set.len() > 1 && seen_sets.insert(format!("{eq_set:?}")) {
-                            result.push(EquivalentObjectPropertiesAxiom {
-                                id: 0,
-                                properties: eq_set,
-                                annotations: vec![],
-                            });
-                        }
                     }
                 }
+            }
         }
         result
     }
@@ -372,23 +374,23 @@ impl InferredAxiomGenerator<EquivalentDataPropertiesAxiom>
         let mut seen_sets = HashSet::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && let Entity::DataProperty(iri) = &d.entity {
-                    let dpe = DataPropertyExpression::DataProperty(crate::ontology::DataProperty {
-                        iri: iri.clone(),
-                    });
-                    if let Ok(node) = reasoner.get_equivalent_data_properties(&dpe) {
-                        let mut eq_set: Vec<_> =
-                            node.get_entities().iter().cloned().collect();
-                        eq_set.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
-                        if eq_set.len() > 1 && seen_sets.insert(format!("{eq_set:?}")) {
-                            result.push(EquivalentDataPropertiesAxiom {
-                                id: 0,
-                                properties: eq_set,
-                                annotations: vec![],
-                            });
-                        }
+                && let Entity::DataProperty(iri) = &d.entity
+            {
+                let dpe = DataPropertyExpression::DataProperty(crate::ontology::DataProperty {
+                    iri: iri.clone(),
+                });
+                if let Ok(node) = reasoner.get_equivalent_data_properties(&dpe) {
+                    let mut eq_set: Vec<_> = node.get_entities().iter().cloned().collect();
+                    eq_set.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+                    if eq_set.len() > 1 && seen_sets.insert(format!("{eq_set:?}")) {
+                        result.push(EquivalentDataPropertiesAxiom {
+                            id: 0,
+                            properties: eq_set,
+                            annotations: vec![],
+                        });
                     }
                 }
+            }
         }
         result
     }
@@ -409,24 +411,25 @@ impl InferredAxiomGenerator<InverseObjectPropertiesAxiom>
         let mut result = Vec::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && let Entity::ObjectProperty(iri) = &d.entity {
-                    let ope =
-                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
-                            iri: iri.clone(),
-                        });
-                    if let Ok(node) = reasoner.get_inverse_object_properties(&ope) {
-                        for inverse in node.get_entities() {
-                            if &ope != inverse {
-                                result.push(InverseObjectPropertiesAxiom {
-                                    id: 0,
-                                    property1: ope.clone(),
-                                    property2: inverse.clone(),
-                                    annotations: vec![],
-                                });
-                            }
+                && let Entity::ObjectProperty(iri) = &d.entity
+            {
+                let ope =
+                    ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                        iri: iri.clone(),
+                    });
+                if let Ok(node) = reasoner.get_inverse_object_properties(&ope) {
+                    for inverse in node.get_entities() {
+                        if &ope != inverse {
+                            result.push(InverseObjectPropertiesAxiom {
+                                id: 0,
+                                property1: ope.clone(),
+                                property2: inverse.clone(),
+                                annotations: vec![],
+                            });
                         }
                     }
                 }
+            }
         }
         result
     }
@@ -437,31 +440,28 @@ impl InferredAxiomGenerator<InverseObjectPropertiesAxiom>
 
 pub struct InferredPropertyCharacteristicAxiomGenerator;
 impl InferredAxiomGenerator<Axiom> for InferredPropertyCharacteristicAxiomGenerator {
-    fn create_axioms(
-        &self,
-        ontology: &Ontology,
-        reasoner: &dyn OWLReasoner,
-    ) -> Vec<Axiom> {
+    fn create_axioms(&self, ontology: &Ontology, reasoner: &dyn OWLReasoner) -> Vec<Axiom> {
         let mut result = Vec::new();
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom {
                 match &d.entity {
                     Entity::ObjectProperty(iri) => {
-                        let ope =
-                            ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
-                                iri: iri.clone(),
-                            });
+                        let ope = ObjectPropertyExpression::ObjectProperty(
+                            crate::ontology::ObjectProperty { iri: iri.clone() },
+                        );
                         let checks: Vec<Axiom> = vec![
                             Axiom::FunctionalObjectProperty(FunctionalObjectPropertyAxiom {
                                 id: 0,
                                 property: ope.clone(),
                                 annotations: vec![],
                             }),
-                            Axiom::InverseFunctionalObjectProperty(InverseFunctionalObjectPropertyAxiom {
-                                id: 0,
-                                property: ope.clone(),
-                                annotations: vec![],
-                            }),
+                            Axiom::InverseFunctionalObjectProperty(
+                                InverseFunctionalObjectPropertyAxiom {
+                                    id: 0,
+                                    property: ope.clone(),
+                                    annotations: vec![],
+                                },
+                            ),
                             Axiom::ReflexiveObjectProperty(ReflexiveObjectPropertyAxiom {
                                 id: 0,
                                 property: ope.clone(),
@@ -495,9 +495,10 @@ impl InferredAxiomGenerator<Axiom> for InferredPropertyCharacteristicAxiomGenera
                         }
                     }
                     Entity::DataProperty(iri) => {
-                        let dpe = DataPropertyExpression::DataProperty(
-                            crate::ontology::DataProperty { iri: iri.clone() },
-                        );
+                        let dpe =
+                            DataPropertyExpression::DataProperty(crate::ontology::DataProperty {
+                                iri: iri.clone(),
+                            });
                         let func_dp = Axiom::FunctionalDataProperty(
                             crate::ontology::axioms::FunctionalDataPropertyAxiom {
                                 id: 0,

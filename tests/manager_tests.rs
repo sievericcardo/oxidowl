@@ -4,11 +4,11 @@ mod helpers;
 use helpers::df::DF;
 use helpers::test_base::TestBase;
 use helpers::*;
+use oxidowl::OntologyManager;
 use oxidowl::manager::changes::OntologyChange;
+use oxidowl::manager::*;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
-use oxidowl::manager::*;
-use oxidowl::OntologyManager;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // OntologyManager — Create and Register
@@ -48,7 +48,11 @@ fn manager_remove_ontology() {
 #[test]
 fn manager_get_nonexistent_ontology() {
     let manager = OntologyManager::new();
-    assert!(manager.get_ontology(&IRI::new("http://ex.org/nonexistent")).is_none());
+    assert!(
+        manager
+            .get_ontology(&IRI::new("http://ex.org/nonexistent"))
+            .is_none()
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -160,10 +164,7 @@ fn manager_undo_redo() {
     let a = df.class_ce("http://ex.org/A");
     let b = df.class_ce("http://ex.org/B");
     let ax1 = df.sub_class_of(a, b);
-    let ax2 = df.class_assertion(
-        df.class_ce("http://ex.org/A"),
-        df.named("http://ex.org/i"),
-    );
+    let ax2 = df.class_assertion(df.class_ce("http://ex.org/A"), df.named("http://ex.org/i"));
 
     manager.apply_change(OntologyChange::AddAxiom {
         ontology_iri: iri.clone(),

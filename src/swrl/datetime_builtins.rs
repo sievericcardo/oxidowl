@@ -2,7 +2,7 @@ use crate::error::{Error, Result};
 use crate::ontology::Literal;
 use crate::swrl::temporal::{TemporalError, TemporalValue, utils};
 use crate::swrl::{SWRLBuiltIn, SWRLValue};
-use chrono::{NaiveDate, Timelike, Datelike};
+use chrono::{Datelike, NaiveDate, Timelike};
 use std::collections::HashMap;
 
 /// Parse a day-time duration from a string
@@ -1373,20 +1373,30 @@ pub struct SubtractDatesBuiltIn;
 impl SWRLBuiltIn for SubtractDatesBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("subtractDates requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "subtractDates requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(d1), SWRLValue::Literal(d2)) => {
                 let date1 = parse_date(&d1.value)?;
                 let date2 = parse_date(&d2.value)?;
                 let duration = date1.signed_duration_since(date2);
-                Ok(SWRLValue::Literal(Literal::new(format_day_time_duration(duration))))
+                Ok(SWRLValue::Literal(Literal::new(format_day_time_duration(
+                    duration,
+                ))))
             }
-            _ => Err(Error::reasoning("subtractDates requires literal date arguments")),
+            _ => Err(Error::reasoning(
+                "subtractDates requires literal date arguments",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#subtractDates" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#subtractDates"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// subtractTimes built-in: (result, time1, time2) → dayTimeDuration
@@ -1396,7 +1406,9 @@ pub struct SubtractTimesBuiltIn;
 impl SWRLBuiltIn for SubtractTimesBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("subtractTimes requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "subtractTimes requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(t1), SWRLValue::Literal(t2)) => {
@@ -1409,11 +1421,17 @@ impl SWRLBuiltIn for SubtractTimesBuiltIn {
                     chrono::Duration::seconds(diff),
                 ))))
             }
-            _ => Err(Error::reasoning("subtractTimes requires literal time arguments")),
+            _ => Err(Error::reasoning(
+                "subtractTimes requires literal time arguments",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#subtractTimes" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#subtractTimes"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// subtractYearMonthDurations built-in
@@ -1423,22 +1441,30 @@ pub struct SubtractYearMonthDurationsBuiltIn;
 impl SWRLBuiltIn for SubtractYearMonthDurationsBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("subtractYearMonthDurations requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "subtractYearMonthDurations requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(d1), SWRLValue::Literal(d2)) => {
                 let (y1, m1) = parse_year_month_duration(&d1.value)?;
                 let (y2, m2) = parse_year_month_duration(&d2.value)?;
                 let total_months = (y1 * 12 + m1) - (y2 * 12 + m2);
-                Ok(SWRLValue::Literal(Literal::new(format_year_month_duration(
-                    total_months / 12, total_months % 12,
-                ))))
+                Ok(SWRLValue::Literal(Literal::new(
+                    format_year_month_duration(total_months / 12, total_months % 12),
+                )))
             }
-            _ => Err(Error::reasoning("subtractYearMonthDurations requires literal duration arguments")),
+            _ => Err(Error::reasoning(
+                "subtractYearMonthDurations requires literal duration arguments",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#subtractYearMonthDurations" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#subtractYearMonthDurations"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// multiplyYearMonthDurations built-in
@@ -1448,22 +1474,33 @@ pub struct MultiplyYearMonthDurationsBuiltIn;
 impl SWRLBuiltIn for MultiplyYearMonthDurationsBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("multiplyYearMonthDurations requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "multiplyYearMonthDurations requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(d), SWRLValue::Literal(f)) => {
                 let (y, m) = parse_year_month_duration(&d.value)?;
-                let factor: f64 = f.value.parse().map_err(|_| Error::reasoning("Invalid scalar"))?;
+                let factor: f64 = f
+                    .value
+                    .parse()
+                    .map_err(|_| Error::reasoning("Invalid scalar"))?;
                 let total_months = (f64::from(y * 12 + m) * factor) as i32;
-                Ok(SWRLValue::Literal(Literal::new(format_year_month_duration(
-                    total_months / 12, total_months % 12,
-                ))))
+                Ok(SWRLValue::Literal(Literal::new(
+                    format_year_month_duration(total_months / 12, total_months % 12),
+                )))
             }
-            _ => Err(Error::reasoning("multiplyYearMonthDurations requires literal duration and scalar")),
+            _ => Err(Error::reasoning(
+                "multiplyYearMonthDurations requires literal duration and scalar",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#multiplyYearMonthDurations" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#multiplyYearMonthDurations"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// divideYearMonthDurations built-in
@@ -1473,25 +1510,36 @@ pub struct DivideYearMonthDurationsBuiltIn;
 impl SWRLBuiltIn for DivideYearMonthDurationsBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("divideYearMonthDurations requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "divideYearMonthDurations requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(d), SWRLValue::Literal(f)) => {
                 let (y, m) = parse_year_month_duration(&d.value)?;
-                let divisor: f64 = f.value.parse().map_err(|_| Error::reasoning("Invalid scalar"))?;
+                let divisor: f64 = f
+                    .value
+                    .parse()
+                    .map_err(|_| Error::reasoning("Invalid scalar"))?;
                 if divisor == 0.0 {
                     return Err(Error::reasoning("Division by zero"));
                 }
                 let total_months = (f64::from(y * 12 + m) / divisor) as i32;
-                Ok(SWRLValue::Literal(Literal::new(format_year_month_duration(
-                    total_months / 12, total_months % 12,
-                ))))
+                Ok(SWRLValue::Literal(Literal::new(
+                    format_year_month_duration(total_months / 12, total_months % 12),
+                )))
             }
-            _ => Err(Error::reasoning("divideYearMonthDurations requires literal duration and scalar")),
+            _ => Err(Error::reasoning(
+                "divideYearMonthDurations requires literal duration and scalar",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#divideYearMonthDurations" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#divideYearMonthDurations"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// addDayTimeDurations built-in
@@ -1501,21 +1549,32 @@ pub struct AddDayTimeDurationsBuiltIn;
 impl SWRLBuiltIn for AddDayTimeDurationsBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("addDayTimeDurations requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "addDayTimeDurations requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(d1), SWRLValue::Literal(d2)) => {
                 let dur1 = parse_day_time_duration(&d1.value)?;
                 let dur2 = parse_day_time_duration(&d2.value)?;
-                let result = dur1.checked_add(&dur2)
+                let result = dur1
+                    .checked_add(&dur2)
                     .ok_or_else(|| Error::reasoning("Duration addition overflow"))?;
-                Ok(SWRLValue::Literal(Literal::new(format_day_time_duration(result))))
+                Ok(SWRLValue::Literal(Literal::new(format_day_time_duration(
+                    result,
+                ))))
             }
-            _ => Err(Error::reasoning("addDayTimeDurations requires literal duration arguments")),
+            _ => Err(Error::reasoning(
+                "addDayTimeDurations requires literal duration arguments",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#addDayTimeDurations" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#addDayTimeDurations"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// subtractYearMonthDurationFromDateTime built-in
@@ -1525,7 +1584,9 @@ pub struct SubtractYearMonthDurationFromDateTimeBuiltIn;
 impl SWRLBuiltIn for SubtractYearMonthDurationFromDateTimeBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("subtractYearMonthDurationFromDateTime requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "subtractYearMonthDurationFromDateTime requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(dt), SWRLValue::Literal(dur)) => {
@@ -1537,14 +1598,23 @@ impl SWRLBuiltIn for SubtractYearMonthDurationFromDateTimeBuiltIn {
                 } else {
                     datetime.checked_add_months(chrono::Months::new((-total_months) as u32))
                 };
-                result.map(|r| SWRLValue::Literal(Literal::new(r.format("%Y-%m-%dT%H:%M:%S").to_string())))
+                result
+                    .map(|r| {
+                        SWRLValue::Literal(Literal::new(r.format("%Y-%m-%dT%H:%M:%S").to_string()))
+                    })
                     .ok_or_else(|| Error::reasoning("Date arithmetic overflow"))
             }
-            _ => Err(Error::reasoning("subtractYearMonthDurationFromDateTime requires literal datetime and duration")),
+            _ => Err(Error::reasoning(
+                "subtractYearMonthDurationFromDateTime requires literal datetime and duration",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#subtractYearMonthDurationFromDateTime" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#subtractYearMonthDurationFromDateTime"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// subtractDayTimeDurationFromDateTime built-in
@@ -1554,21 +1624,32 @@ pub struct SubtractDayTimeDurationFromDateTimeBuiltIn;
 impl SWRLBuiltIn for SubtractDayTimeDurationFromDateTimeBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("subtractDayTimeDurationFromDateTime requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "subtractDayTimeDurationFromDateTime requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(dt), SWRLValue::Literal(dur)) => {
                 let datetime = parse_date_time(&dt.value)?;
                 let duration = parse_day_time_duration(&dur.value)?;
-                let result = datetime.checked_sub_signed(duration)
+                let result = datetime
+                    .checked_sub_signed(duration)
                     .ok_or_else(|| Error::reasoning("Date arithmetic overflow"))?;
-                Ok(SWRLValue::Literal(Literal::new(result.format("%Y-%m-%dT%H:%M:%S").to_string())))
+                Ok(SWRLValue::Literal(Literal::new(
+                    result.format("%Y-%m-%dT%H:%M:%S").to_string(),
+                )))
             }
-            _ => Err(Error::reasoning("subtractDayTimeDurationFromDateTime requires literal datetime and duration")),
+            _ => Err(Error::reasoning(
+                "subtractDayTimeDurationFromDateTime requires literal datetime and duration",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#subtractDayTimeDurationFromDateTime" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#subtractDayTimeDurationFromDateTime"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// addYearMonthDurationToDate built-in
@@ -1578,7 +1659,9 @@ pub struct AddYearMonthDurationToDateBuiltIn;
 impl SWRLBuiltIn for AddYearMonthDurationToDateBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("addYearMonthDurationToDate requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "addYearMonthDurationToDate requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(date), SWRLValue::Literal(dur)) => {
@@ -1590,14 +1673,21 @@ impl SWRLBuiltIn for AddYearMonthDurationToDateBuiltIn {
                 } else {
                     d.checked_sub_months(chrono::Months::new((-total_months) as u32))
                 };
-                result.map(|r| SWRLValue::Literal(Literal::new(r.format("%Y-%m-%d").to_string())))
+                result
+                    .map(|r| SWRLValue::Literal(Literal::new(r.format("%Y-%m-%d").to_string())))
                     .ok_or_else(|| Error::reasoning("Date arithmetic overflow"))
             }
-            _ => Err(Error::reasoning("addYearMonthDurationToDate requires literal date and duration")),
+            _ => Err(Error::reasoning(
+                "addYearMonthDurationToDate requires literal date and duration",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#addYearMonthDurationToDate" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#addYearMonthDurationToDate"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// addDayTimeDurationToDate built-in
@@ -1607,23 +1697,35 @@ pub struct AddDayTimeDurationToDateBuiltIn;
 impl SWRLBuiltIn for AddDayTimeDurationToDateBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("addDayTimeDurationToDate requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "addDayTimeDurationToDate requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(date), SWRLValue::Literal(dur)) => {
                 let d = parse_date(&date.value)?;
                 let duration = parse_day_time_duration(&dur.value)?;
-                let dt = d.and_hms_opt(0, 0, 0)
+                let dt = d
+                    .and_hms_opt(0, 0, 0)
                     .ok_or_else(|| Error::reasoning("Invalid date"))?;
-                let result = dt.checked_add_signed(duration)
+                let result = dt
+                    .checked_add_signed(duration)
                     .ok_or_else(|| Error::reasoning("Date arithmetic overflow"))?;
-                Ok(SWRLValue::Literal(Literal::new(result.date().format("%Y-%m-%d").to_string())))
+                Ok(SWRLValue::Literal(Literal::new(
+                    result.date().format("%Y-%m-%d").to_string(),
+                )))
             }
-            _ => Err(Error::reasoning("addDayTimeDurationToDate requires literal date and duration")),
+            _ => Err(Error::reasoning(
+                "addDayTimeDurationToDate requires literal date and duration",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#addDayTimeDurationToDate" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#addDayTimeDurationToDate"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// subtractYearMonthDurationFromDate built-in
@@ -1633,7 +1735,9 @@ pub struct SubtractYearMonthDurationFromDateBuiltIn;
 impl SWRLBuiltIn for SubtractYearMonthDurationFromDateBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("subtractYearMonthDurationFromDate requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "subtractYearMonthDurationFromDate requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(date), SWRLValue::Literal(dur)) => {
@@ -1645,14 +1749,21 @@ impl SWRLBuiltIn for SubtractYearMonthDurationFromDateBuiltIn {
                 } else {
                     d.checked_add_months(chrono::Months::new((-total_months) as u32))
                 };
-                result.map(|r| SWRLValue::Literal(Literal::new(r.format("%Y-%m-%d").to_string())))
+                result
+                    .map(|r| SWRLValue::Literal(Literal::new(r.format("%Y-%m-%d").to_string())))
                     .ok_or_else(|| Error::reasoning("Date arithmetic overflow"))
             }
-            _ => Err(Error::reasoning("subtractYearMonthDurationFromDate requires literal date and duration")),
+            _ => Err(Error::reasoning(
+                "subtractYearMonthDurationFromDate requires literal date and duration",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#subtractYearMonthDurationFromDate" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#subtractYearMonthDurationFromDate"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// subtractDayTimeDurationFromDate built-in
@@ -1662,23 +1773,35 @@ pub struct SubtractDayTimeDurationFromDateBuiltIn;
 impl SWRLBuiltIn for SubtractDayTimeDurationFromDateBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("subtractDayTimeDurationFromDate requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "subtractDayTimeDurationFromDate requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(date), SWRLValue::Literal(dur)) => {
                 let d = parse_date(&date.value)?;
                 let duration = parse_day_time_duration(&dur.value)?;
-                let dt = d.and_hms_opt(0, 0, 0)
+                let dt = d
+                    .and_hms_opt(0, 0, 0)
                     .ok_or_else(|| Error::reasoning("Invalid date"))?;
-                let result = dt.checked_sub_signed(duration)
+                let result = dt
+                    .checked_sub_signed(duration)
                     .ok_or_else(|| Error::reasoning("Date arithmetic overflow"))?;
-                Ok(SWRLValue::Literal(Literal::new(result.date().format("%Y-%m-%d").to_string())))
+                Ok(SWRLValue::Literal(Literal::new(
+                    result.date().format("%Y-%m-%d").to_string(),
+                )))
             }
-            _ => Err(Error::reasoning("subtractDayTimeDurationFromDate requires literal date and duration")),
+            _ => Err(Error::reasoning(
+                "subtractDayTimeDurationFromDate requires literal date and duration",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#subtractDayTimeDurationFromDate" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#subtractDayTimeDurationFromDate"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// addDayTimeDurationToTime built-in
@@ -1688,7 +1811,9 @@ pub struct AddDayTimeDurationToTimeBuiltIn;
 impl SWRLBuiltIn for AddDayTimeDurationToTimeBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("addDayTimeDurationToTime requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "addDayTimeDurationToTime requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(t), SWRLValue::Literal(dur)) => {
@@ -1699,13 +1824,21 @@ impl SWRLBuiltIn for AddDayTimeDurationToTimeBuiltIn {
                 let h = wrapped / 3600;
                 let m = (wrapped % 3600) / 60;
                 let s = wrapped % 60;
-                Ok(SWRLValue::Literal(Literal::new(format!("{h:02}:{m:02}:{s:02}"))))
+                Ok(SWRLValue::Literal(Literal::new(format!(
+                    "{h:02}:{m:02}:{s:02}"
+                ))))
             }
-            _ => Err(Error::reasoning("addDayTimeDurationToTime requires literal time and duration")),
+            _ => Err(Error::reasoning(
+                "addDayTimeDurationToTime requires literal time and duration",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#addDayTimeDurationToTime" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#addDayTimeDurationToTime"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// subtractDayTimeDurationFromTime built-in
@@ -1715,7 +1848,9 @@ pub struct SubtractDayTimeDurationFromTimeBuiltIn;
 impl SWRLBuiltIn for SubtractDayTimeDurationFromTimeBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("subtractDayTimeDurationFromTime requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "subtractDayTimeDurationFromTime requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(t), SWRLValue::Literal(dur)) => {
@@ -1726,13 +1861,21 @@ impl SWRLBuiltIn for SubtractDayTimeDurationFromTimeBuiltIn {
                 let h = wrapped / 3600;
                 let m = (wrapped % 3600) / 60;
                 let s = wrapped % 60;
-                Ok(SWRLValue::Literal(Literal::new(format!("{h:02}:{m:02}:{s:02}"))))
+                Ok(SWRLValue::Literal(Literal::new(format!(
+                    "{h:02}:{m:02}:{s:02}"
+                ))))
             }
-            _ => Err(Error::reasoning("subtractDayTimeDurationFromTime requires literal time and duration")),
+            _ => Err(Error::reasoning(
+                "subtractDayTimeDurationFromTime requires literal time and duration",
+            )),
         }
     }
-    fn name(&self) -> &str { "http://www.w3.org/2003/11/swrlb#subtractDayTimeDurationFromTime" }
-    fn arity(&self) -> Option<usize> { Some(2) }
+    fn name(&self) -> &str {
+        "http://www.w3.org/2003/11/swrlb#subtractDayTimeDurationFromTime"
+    }
+    fn arity(&self) -> Option<usize> {
+        Some(2)
+    }
 }
 
 /// subtractDateTimesYieldingYearMonthDuration built-in
@@ -1742,7 +1885,9 @@ pub struct SubtractDateTimesYieldingYearMonthDurationBuiltIn;
 impl SWRLBuiltIn for SubtractDateTimesYieldingYearMonthDurationBuiltIn {
     fn execute(&self, args: &[SWRLValue]) -> Result<SWRLValue> {
         if args.len() != 2 {
-            return Err(Error::reasoning("subtractDateTimesYieldingYearMonthDuration requires exactly 2 arguments"));
+            return Err(Error::reasoning(
+                "subtractDateTimesYieldingYearMonthDuration requires exactly 2 arguments",
+            ));
         }
         match (&args[0], &args[1]) {
             (SWRLValue::Literal(dt1), SWRLValue::Literal(dt2)) => {
@@ -1750,10 +1895,9 @@ impl SWRLBuiltIn for SubtractDateTimesYieldingYearMonthDurationBuiltIn {
                 let d2 = parse_date_time(&dt2.value)?;
                 let months_diff =
                     (d1.year() - d2.year()) * 12 + (d1.month() as i32 - d2.month() as i32);
-                Ok(SWRLValue::Literal(Literal::new(format_year_month_duration(
-                    months_diff / 12,
-                    months_diff % 12,
-                ))))
+                Ok(SWRLValue::Literal(Literal::new(
+                    format_year_month_duration(months_diff / 12, months_diff % 12),
+                )))
             }
             _ => Err(Error::reasoning(
                 "subtractDateTimesYieldingYearMonthDuration requires literal datetime arguments",

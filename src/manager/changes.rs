@@ -321,9 +321,7 @@ impl ChangeRecord {
                 change_type: "SetOntologyId".to_string(),
                 ontology_iri: ontology_iri.to_string(),
                 axiom_iri: None,
-                axiom_debug: Some(format!(
-                    "new_iri={new_iri}, version={new_version_iri:?}"
-                )),
+                axiom_debug: Some(format!("new_iri={new_iri}, version={new_version_iri:?}")),
                 timestamp_ms: now,
                 sequence_number,
             },

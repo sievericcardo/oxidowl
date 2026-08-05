@@ -7,8 +7,7 @@
 use oxidowl::{
     Ontology, ReasonerConfig, ReasoningService,
     ontology::{
-        Class, ClassExpression, IRI,
-        OntologyFormat,
+        Class, ClassExpression, IRI, OntologyFormat,
         axioms::{Axiom, SubClassOfAxiom},
     },
     parsers::{ParserFactory, parse_file_auto},
@@ -29,9 +28,11 @@ fn make_class(iri: &str) -> ClassExpression {
 // ── Helper: parse a functional-syntax ontology string ──────────────────────
 
 fn parse_fs(owl: &str) -> Ontology {
-    let parser = ParserFactory::create_parser(OntologyFormat::Functional)
-        .expect("Failed to create parser");
-    parser.parse(owl).unwrap_or_else(|e| panic!("Parse error: {e}"))
+    let parser =
+        ParserFactory::create_parser(OntologyFormat::Functional).expect("Failed to create parser");
+    parser
+        .parse(owl)
+        .unwrap_or_else(|e| panic!("Parse error: {e}"))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,7 +60,9 @@ Ontology(<http://example.org/ore-mini>
     let service = rt
         .block_on(async { ReasoningService::new(ontology, ReasonerConfig::default()) })
         .expect("Service creation failed");
-    let consistent = rt.block_on(service.is_consistent()).expect("Consistency check failed");
+    let consistent = rt
+        .block_on(service.is_consistent())
+        .expect("Consistency check failed");
     assert!(consistent, "Ontology should be consistent");
 }
 
@@ -90,12 +93,16 @@ Ontology(<http://example.org/ore-transitive>
     let service = rt
         .block_on(async { ReasoningService::new(ontology, ReasonerConfig::default()) })
         .expect("Service creation failed");
-    let consistent = rt.block_on(service.is_consistent()).expect("Consistency check");
+    let consistent = rt
+        .block_on(service.is_consistent())
+        .expect("Consistency check");
     assert!(consistent);
 
     // A should have inferred existential restriction to C via transitivity
     let a = make_class("http://example.org/A");
-    let satisfiable = rt.block_on(service.is_satisfiable(&a)).expect("Satisfiability check");
+    let satisfiable = rt
+        .block_on(service.is_satisfiable(&a))
+        .expect("Satisfiability check");
     assert!(satisfiable, "A should be satisfiable");
 }
 
@@ -127,9 +134,12 @@ Ontology(<http://example.org/ore-equiv>
     // Parent is defined via cardinality restriction; check subsumption
     let parent = make_class("http://example.org/Parent");
     let is_subclass = rt
-        .block_on(service.is_subsumed_by(&parent, &ClassExpression::Class(Class {
-            iri: IRI::new("http://www.w3.org/2002/07/owl#Thing"),
-        })))
+        .block_on(service.is_subsumed_by(
+            &parent,
+            &ClassExpression::Class(Class {
+                iri: IRI::new("http://www.w3.org/2002/07/owl#Thing"),
+            }),
+        ))
         .expect("Subsumption check");
     assert!(is_subclass, "Parent ⊑ owl:Thing should hold");
 }
@@ -188,8 +198,8 @@ Ontology(<http://purl.obolibrary.org/obo/test-go-fragment>
 
 #[test]
 fn test_classification_performance_200_classes() {
-    use std::time::Instant;
     use oxidowl::ontology::axioms::SubClassOfAxiom;
+    use std::time::Instant;
 
     let n = if cfg!(debug_assertions) { 15 } else { 200 };
 
@@ -211,7 +221,9 @@ fn test_classification_performance_200_classes() {
         .expect("Service creation failed");
 
     let start = Instant::now();
-    let _result = rt.block_on(service.classify()).expect("Classification failed");
+    let _result = rt
+        .block_on(service.classify())
+        .expect("Classification failed");
     let elapsed = start.elapsed();
 
     // 5000ms budget for debug mode (15 classes), 1000ms for release (200 classes)
@@ -233,13 +245,13 @@ fn test_single_query_latency() {
 
     let rt = rt();
     let service = rt
-        .block_on(async {
-            ReasoningService::new(Ontology::new(), ReasonerConfig::default())
-        })
+        .block_on(async { ReasoningService::new(Ontology::new(), ReasonerConfig::default()) })
         .expect("Service creation failed");
 
     let start = Instant::now();
-    let _result = rt.block_on(service.is_consistent()).expect("Consistency check failed");
+    let _result = rt
+        .block_on(service.is_consistent())
+        .expect("Consistency check failed");
     let elapsed = start.elapsed();
 
     // Allow up to 10ms for a single query (well within the 1ms target for warm state,

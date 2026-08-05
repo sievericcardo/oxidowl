@@ -27,7 +27,10 @@ fn test_atomic_decomposition_basic() {
     let decomposer = oxidowl::AtomicDecomposer::default();
     let decomposition = decomposer.decompose(&ont);
 
-    assert!(!decomposition.atoms.is_empty(), "Should have at least one atom");
+    assert!(
+        !decomposition.atoms.is_empty(),
+        "Should have at least one atom"
+    );
     assert!(decomposition.atom_count() > 0);
     assert!(decomposition.axiom_count() > 0);
 }
@@ -50,12 +53,19 @@ fn test_module_extraction_upper_bound() {
     sig.insert(IRI::new("http://ex.org/A"));
     let module = extractor.extract_module(&onto, &sig);
 
-    assert!(!module.axioms().is_empty(), "Upper bound module should not be empty");
+    assert!(
+        !module.axioms().is_empty(),
+        "Upper bound module should not be empty"
+    );
 
-    let contains_a = module.axioms().iter().any(|ax| {
-        format!("{:?}", ax).contains("http://ex.org/A")
-    });
-    assert!(contains_a, "Upper bound module should contain axioms mentioning A");
+    let contains_a = module
+        .axioms()
+        .iter()
+        .any(|ax| format!("{:?}", ax).contains("http://ex.org/A"));
+    assert!(
+        contains_a,
+        "Upper bound module should contain axioms mentioning A"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -76,12 +86,19 @@ fn test_module_extraction_lower_bound() {
     sig.insert(IRI::new("http://ex.org/A"));
     let module = extractor.extract_module(&onto, &sig);
 
-    assert!(!module.axioms().is_empty(), "Lower bound module should not be empty");
+    assert!(
+        !module.axioms().is_empty(),
+        "Lower bound module should not be empty"
+    );
 
-    let contains_a = module.axioms().iter().any(|ax| {
-        format!("{:?}", ax).contains("http://ex.org/A")
-    });
-    assert!(contains_a, "Lower bound module should contain axioms mentioning A");
+    let contains_a = module
+        .axioms()
+        .iter()
+        .any(|ax| format!("{:?}", ax).contains("http://ex.org/A"));
+    assert!(
+        contains_a,
+        "Lower bound module should contain axioms mentioning A"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -106,7 +123,10 @@ fn test_syntactic_locality_top() {
     let mut sig_other = HashSet::new();
     sig_other.insert(IRI::new("http://ex.org/Z"));
     let is_local_z = evaluator.is_local(&ax, &sig_other);
-    assert!(is_local_z, "A ⊑ B with unrelated Z in sig SHOULD be Top-local");
+    assert!(
+        is_local_z,
+        "A ⊑ B with unrelated Z in sig SHOULD be Top-local"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -131,7 +151,10 @@ fn test_syntactic_locality_bottom() {
     let mut sig_other = HashSet::new();
     sig_other.insert(IRI::new("http://ex.org/Z"));
     let is_local_z = evaluator.is_local(&ax, &sig_other);
-    assert!(is_local_z, "A ⊑ B with unrelated Z in sig SHOULD be Bottom-local");
+    assert!(
+        is_local_z,
+        "A ⊑ B with unrelated Z in sig SHOULD be Bottom-local"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -212,8 +235,12 @@ fn test_decomposition_atom_axioms() {
         let axioms = decomposition.get_atom_axioms(i);
         assert!(!axioms.is_empty(), "Atom {i} should contain axioms");
         for ax_ref in &axioms {
-            let ok = matches!(ax_ref, Axiom::SubClassOf(_)) || matches!(ax_ref, Axiom::Declaration(_));
-            assert!(ok, "Atom should contain SubClassOf or Declaration, got {ax_ref:?}");
+            let ok =
+                matches!(ax_ref, Axiom::SubClassOf(_)) || matches!(ax_ref, Axiom::Declaration(_));
+            assert!(
+                ok,
+                "Atom should contain SubClassOf or Declaration, got {ax_ref:?}"
+            );
         }
     }
 }
@@ -251,7 +278,10 @@ fn test_decomposition_dependencies() {
     for i in 0..decomposition.atom_count() {
         let _deps = decomposition.dependent_atoms(i);
         if let Some(atom) = decomposition.atoms.get(i) {
-            assert!(!atom.axiom_positions.is_empty(), "Atom {i} should own axioms");
+            assert!(
+                !atom.axiom_positions.is_empty(),
+                "Atom {i} should own axioms"
+            );
         }
     }
 }

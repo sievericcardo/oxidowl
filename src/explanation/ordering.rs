@@ -15,9 +15,7 @@ pub struct JustificationSizeOrderer;
 
 impl ExplanationOrderer for JustificationSizeOrderer {
     fn order(&self, mut explanations: Vec<Explanation>) -> Vec<Explanation> {
-        explanations.sort_by(|a, b| {
-            a.justification.len().cmp(&b.justification.len())
-        });
+        explanations.sort_by(|a, b| a.justification.len().cmp(&b.justification.len()));
         explanations
     }
 }
@@ -56,5 +54,7 @@ pub struct SilentExplanationProgressMonitor;
 impl ExplanationProgressMonitor for SilentExplanationProgressMonitor {
     fn found_explanation(&self, _index: usize, _explanation: &Explanation) {}
     fn progress_update(&self, _found: usize, _estimated_total: Option<usize>) {}
-    fn is_cancelled(&self) -> bool { false }
+    fn is_cancelled(&self) -> bool {
+        false
+    }
 }

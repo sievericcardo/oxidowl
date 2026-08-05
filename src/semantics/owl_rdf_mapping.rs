@@ -56,10 +56,7 @@ pub enum EntityTypeHint {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Convert a single axiom to its RDF triple representation.
-pub fn axiom_to_triples(
-    axiom: &Axiom,
-    counter: &mut BlankNodeCounter,
-) -> Vec<Triple> {
+pub fn axiom_to_triples(axiom: &Axiom, counter: &mut BlankNodeCounter) -> Vec<Triple> {
     match axiom {
         // ── Simple 1-triple: SubClassOf ─────────────────────────────────
         Axiom::SubClassOf(a) => {
@@ -98,13 +95,19 @@ pub fn axiom_to_triples(
             vec![characteristic_triple(&a.property, &OWL_FUNCTIONAL_PROPERTY)]
         }
         Axiom::InverseFunctionalObjectProperty(a) => {
-            vec![characteristic_triple(&a.property, &OWL_INVERSE_FUNCTIONAL_PROPERTY)]
+            vec![characteristic_triple(
+                &a.property,
+                &OWL_INVERSE_FUNCTIONAL_PROPERTY,
+            )]
         }
         Axiom::ReflexiveObjectProperty(a) => {
             vec![characteristic_triple(&a.property, &OWL_REFLEXIVE_PROPERTY)]
         }
         Axiom::IrreflexiveObjectProperty(a) => {
-            vec![characteristic_triple(&a.property, &OWL_IRREFLEXIVE_PROPERTY)]
+            vec![characteristic_triple(
+                &a.property,
+                &OWL_IRREFLEXIVE_PROPERTY,
+            )]
         }
         Axiom::SymmetricObjectProperty(a) => {
             vec![characteristic_triple(&a.property, &OWL_SYMMETRIC_PROPERTY)]
@@ -116,24 +119,19 @@ pub fn axiom_to_triples(
             vec![characteristic_triple(&a.property, &OWL_TRANSITIVE_PROPERTY)]
         }
         Axiom::FunctionalDataProperty(a) => {
-            vec![characteristic_triple_dpe(&a.property, &OWL_FUNCTIONAL_PROPERTY)]
+            vec![characteristic_triple_dpe(
+                &a.property,
+                &OWL_FUNCTIONAL_PROPERTY,
+            )]
         }
         // ── Pairwise: EquivalentClasses ──────────────────────────────────
-        Axiom::EquivalentClasses(a) => {
-            pairwise_triples(&a.classes, &OWL_EQUIVALENT_CLASS, counter)
-        }
+        Axiom::EquivalentClasses(a) => pairwise_triples(&a.classes, &OWL_EQUIVALENT_CLASS, counter),
         // ── Pairwise: DisjointClasses ───────────────────────────────────
-        Axiom::DisjointClasses(a) => {
-            pairwise_triples(&a.classes, &OWL_DISJOINT_WITH, counter)
-        }
+        Axiom::DisjointClasses(a) => pairwise_triples(&a.classes, &OWL_DISJOINT_WITH, counter),
         // ── Pairwise: SameIndividual ────────────────────────────────────
-        Axiom::SameIndividual(a) => {
-            pairwise_individuals(&a.individuals, &OWL_SAME_AS)
-        }
+        Axiom::SameIndividual(a) => pairwise_individuals(&a.individuals, &OWL_SAME_AS),
         // ── Pairwise: DifferentIndividuals ──────────────────────────────
-        Axiom::DifferentIndividuals(a) => {
-            pairwise_individuals(&a.individuals, &OWL_DIFFERENT_FROM)
-        }
+        Axiom::DifferentIndividuals(a) => pairwise_individuals(&a.individuals, &OWL_DIFFERENT_FROM),
         // ── Pairwise: EquivalentObjectProperties ────────────────────────
         Axiom::EquivalentObjectProperties(a) => {
             pairwise_opes(&a.properties, &OWL_EQUIVALENT_PROPERTY)
@@ -248,23 +246,19 @@ pub fn axiom_to_triples(
                 .map(|ce| class_expression_to_term(ce, counter))
                 .collect();
             let list_node = build_rdf_list(&members, counter, &mut triples);
-            triples.push(triple(cls_term, iri_term(&OWL_DISJOINT_UNION_OF), list_node));
+            triples.push(triple(
+                cls_term,
+                iri_term(&OWL_DISJOINT_UNION_OF),
+                list_node,
+            ));
             triples
         }
         // ── HasKey (RDF list) ───────────────────────────────────────────
         Axiom::HasKey(a) => {
             let mut triples = Vec::new();
             let cls_term = class_expression_to_term(&a.class, counter);
-            let mut key_items: Vec<RdfTerm> = a
-                .object_properties
-                .iter()
-                .map(ope_to_term)
-                .collect();
-            key_items.extend(
-                a.data_properties
-                    .iter()
-                    .map(dpe_to_term),
-            );
+            let mut key_items: Vec<RdfTerm> = a.object_properties.iter().map(ope_to_term).collect();
+            key_items.extend(a.data_properties.iter().map(dpe_to_term));
             let list_node = build_rdf_list(&key_items, counter, &mut triples);
             triples.push(triple(cls_term, iri_term(&OWL_HAS_KEY), list_node));
             triples
@@ -273,20 +267,52 @@ pub fn axiom_to_triples(
         Axiom::NegativeObjectPropertyAssertion(a) => {
             let mut triples = Vec::new();
             let bn = counter.fresh();
-            triples.push(triple(bn.clone(), iri_term(&RDF_TYPE), iri_term(&OWL_NEGATIVE_PROPERTY_ASSERTION)));
-            triples.push(triple(bn.clone(), iri_term(&OWL_SOURCE_INDIVIDUAL), individual_to_term(&a.source)));
-            triples.push(triple(bn.clone(), iri_term(&OWL_ASSERTION_PROPERTY), ope_to_term(&a.property)));
-            triples.push(triple(bn.clone(), iri_term(&OWL_TARGET_INDIVIDUAL), individual_to_term(&a.target)));
+            triples.push(triple(
+                bn.clone(),
+                iri_term(&RDF_TYPE),
+                iri_term(&OWL_NEGATIVE_PROPERTY_ASSERTION),
+            ));
+            triples.push(triple(
+                bn.clone(),
+                iri_term(&OWL_SOURCE_INDIVIDUAL),
+                individual_to_term(&a.source),
+            ));
+            triples.push(triple(
+                bn.clone(),
+                iri_term(&OWL_ASSERTION_PROPERTY),
+                ope_to_term(&a.property),
+            ));
+            triples.push(triple(
+                bn.clone(),
+                iri_term(&OWL_TARGET_INDIVIDUAL),
+                individual_to_term(&a.target),
+            ));
             triples
         }
         // ── NegativeDataPropertyAssertion (reification) ─────────────────
         Axiom::NegativeDataPropertyAssertion(a) => {
             let mut triples = Vec::new();
             let bn = counter.fresh();
-            triples.push(triple(bn.clone(), iri_term(&RDF_TYPE), iri_term(&OWL_NEGATIVE_PROPERTY_ASSERTION)));
-            triples.push(triple(bn.clone(), iri_term(&OWL_SOURCE_INDIVIDUAL), individual_to_term(&a.individual)));
-            triples.push(triple(bn.clone(), iri_term(&OWL_ASSERTION_PROPERTY), dpe_to_term(&a.property)));
-            triples.push(triple(bn.clone(), iri_term(&OWL_TARGET_VALUE), literal_to_term(&a.value)));
+            triples.push(triple(
+                bn.clone(),
+                iri_term(&RDF_TYPE),
+                iri_term(&OWL_NEGATIVE_PROPERTY_ASSERTION),
+            ));
+            triples.push(triple(
+                bn.clone(),
+                iri_term(&OWL_SOURCE_INDIVIDUAL),
+                individual_to_term(&a.individual),
+            ));
+            triples.push(triple(
+                bn.clone(),
+                iri_term(&OWL_ASSERTION_PROPERTY),
+                dpe_to_term(&a.property),
+            ));
+            triples.push(triple(
+                bn.clone(),
+                iri_term(&OWL_TARGET_VALUE),
+                literal_to_term(&a.value),
+            ));
             triples
         }
         // ── DatatypeDefinition ──────────────────────────────────────────
@@ -312,19 +338,45 @@ pub fn axiom_to_triples(
 /// return the appropriate axiom type string if recognized.
 pub fn classify_predicate(predicate: &url::Url) -> Option<&'static str> {
     let p = predicate.as_str();
-    if p == RDFS_SUBCLASS_OF.as_str() { return Some("SubClassOf"); }
-    if p == RDF_TYPE.as_str() { return Some("rdf:type"); }
-    if p == OWL_EQUIVALENT_CLASS.as_str() { return Some("EquivalentClasses"); }
-    if p == OWL_DISJOINT_WITH.as_str() { return Some("DisjointClasses"); }
-    if p == RDFS_SUBPROPERTY_OF.as_str() { return Some("subPropertyOf"); }
-    if p == RDFS_DOMAIN.as_str() { return Some("domain"); }
-    if p == RDFS_RANGE.as_str() { return Some("range"); }
-    if p == OWL_EQUIVALENT_PROPERTY.as_str() { return Some("equivalentProperty"); }
-    if p == OWL_SAME_AS.as_str() { return Some("SameIndividual"); }
-    if p == OWL_DIFFERENT_FROM.as_str() { return Some("DifferentIndividuals"); }
-    if p == OWL_INVERSE_OF.as_str() { return Some("InverseObjectProperties"); }
-    if p == OWL_DISJOINT_UNION_OF.as_str() { return Some("DisjointUnion"); }
-    if p == OWL_HAS_KEY.as_str() { return Some("HasKey"); }
+    if p == RDFS_SUBCLASS_OF.as_str() {
+        return Some("SubClassOf");
+    }
+    if p == RDF_TYPE.as_str() {
+        return Some("rdf:type");
+    }
+    if p == OWL_EQUIVALENT_CLASS.as_str() {
+        return Some("EquivalentClasses");
+    }
+    if p == OWL_DISJOINT_WITH.as_str() {
+        return Some("DisjointClasses");
+    }
+    if p == RDFS_SUBPROPERTY_OF.as_str() {
+        return Some("subPropertyOf");
+    }
+    if p == RDFS_DOMAIN.as_str() {
+        return Some("domain");
+    }
+    if p == RDFS_RANGE.as_str() {
+        return Some("range");
+    }
+    if p == OWL_EQUIVALENT_PROPERTY.as_str() {
+        return Some("equivalentProperty");
+    }
+    if p == OWL_SAME_AS.as_str() {
+        return Some("SameIndividual");
+    }
+    if p == OWL_DIFFERENT_FROM.as_str() {
+        return Some("DifferentIndividuals");
+    }
+    if p == OWL_INVERSE_OF.as_str() {
+        return Some("InverseObjectProperties");
+    }
+    if p == OWL_DISJOINT_UNION_OF.as_str() {
+        return Some("DisjointUnion");
+    }
+    if p == OWL_HAS_KEY.as_str() {
+        return Some("HasKey");
+    }
     None
 }
 
@@ -332,17 +384,39 @@ pub fn classify_predicate(predicate: &url::Url) -> Option<&'static str> {
 /// which axiom type to produce (declaration vs characteristic vs class assertion).
 pub fn classify_rdf_type_object(obj_url: &url::Url) -> Option<&'static str> {
     let o = obj_url.as_str();
-    if o == OWL_CLASS.as_str() { return Some("Declaration(Class)"); }
-    if o == OWL_OBJECT_PROPERTY.as_str() { return Some("Declaration(ObjectProperty)"); }
-    if o == OWL_DATA_PROPERTY.as_str() { return Some("Declaration(DataProperty)"); }
-    if o == RDFS_CLASS.as_str() { return Some("Declaration(Class)"); }
-    if o == OWL_FUNCTIONAL_PROPERTY.as_str() { return Some("FunctionalObjectProperty"); }
-    if o == OWL_INVERSE_FUNCTIONAL_PROPERTY.as_str() { return Some("InverseFunctionalObjectProperty"); }
-    if o == OWL_TRANSITIVE_PROPERTY.as_str() { return Some("TransitiveObjectProperty"); }
-    if o == OWL_SYMMETRIC_PROPERTY.as_str() { return Some("SymmetricObjectProperty"); }
-    if o == OWL_ASYMMETRIC_PROPERTY.as_str() { return Some("AsymmetricObjectProperty"); }
-    if o == OWL_REFLEXIVE_PROPERTY.as_str() { return Some("ReflexiveObjectProperty"); }
-    if o == OWL_IRREFLEXIVE_PROPERTY.as_str() { return Some("IrreflexiveObjectProperty"); }
+    if o == OWL_CLASS.as_str() {
+        return Some("Declaration(Class)");
+    }
+    if o == OWL_OBJECT_PROPERTY.as_str() {
+        return Some("Declaration(ObjectProperty)");
+    }
+    if o == OWL_DATA_PROPERTY.as_str() {
+        return Some("Declaration(DataProperty)");
+    }
+    if o == RDFS_CLASS.as_str() {
+        return Some("Declaration(Class)");
+    }
+    if o == OWL_FUNCTIONAL_PROPERTY.as_str() {
+        return Some("FunctionalObjectProperty");
+    }
+    if o == OWL_INVERSE_FUNCTIONAL_PROPERTY.as_str() {
+        return Some("InverseFunctionalObjectProperty");
+    }
+    if o == OWL_TRANSITIVE_PROPERTY.as_str() {
+        return Some("TransitiveObjectProperty");
+    }
+    if o == OWL_SYMMETRIC_PROPERTY.as_str() {
+        return Some("SymmetricObjectProperty");
+    }
+    if o == OWL_ASYMMETRIC_PROPERTY.as_str() {
+        return Some("AsymmetricObjectProperty");
+    }
+    if o == OWL_REFLEXIVE_PROPERTY.as_str() {
+        return Some("ReflexiveObjectProperty");
+    }
+    if o == OWL_IRREFLEXIVE_PROPERTY.as_str() {
+        return Some("IrreflexiveObjectProperty");
+    }
     None
 }
 
@@ -367,11 +441,7 @@ pub fn build_rdf_list(
         return iri_term(&RDF_NIL);
     }
     let head = counter.fresh();
-    triples.push(triple(
-        head.clone(),
-        iri_term(&RDF_FIRST),
-        items[0].clone(),
-    ));
+    triples.push(triple(head.clone(), iri_term(&RDF_FIRST), items[0].clone()));
     let tail = if items.len() > 1 {
         build_rdf_list(&items[1..], counter, triples)
     } else {
@@ -408,9 +478,7 @@ fn iri_term_from_str(s: &str) -> RdfTerm {
 }
 
 fn url_from_iri_str(s: &str) -> url::Url {
-    url::Url::parse(s).unwrap_or_else(|_| {
-        url::Url::parse("http://example.org/error").unwrap()
-    })
+    url::Url::parse(s).unwrap_or_else(|_| url::Url::parse("http://example.org/error").unwrap())
 }
 
 fn declaration_to_triple(entity: &Entity) -> Triple {
@@ -448,14 +516,12 @@ fn declaration_to_triple(entity: &Entity) -> Triple {
     }
 }
 
-fn class_expression_to_term(
-    ce: &ClassExpression,
-    counter: &mut BlankNodeCounter,
-) -> RdfTerm {
+fn class_expression_to_term(ce: &ClassExpression, counter: &mut BlankNodeCounter) -> RdfTerm {
     match ce {
-        ClassExpression::Class(c) => iri_term_from_url(url::Url::parse(c.iri.as_str()).unwrap_or(
-            url::Url::parse("http://example.org/error").unwrap(),
-        )),
+        ClassExpression::Class(c) => iri_term_from_url(
+            url::Url::parse(c.iri.as_str())
+                .unwrap_or(url::Url::parse("http://example.org/error").unwrap()),
+        ),
         ClassExpression::ObjectIntersectionOf(parts) => {
             let bn = counter.fresh();
             // Delegate complex class expressions to direct IRI for simple cases
@@ -480,35 +546,28 @@ fn class_expression_to_term(
 
 fn individual_to_term(ind: &Individual) -> RdfTerm {
     match ind {
-        Individual::Named(named) => {
-            iri_term_from_url(url::Url::parse(named.iri.as_str()).unwrap_or(
-                url::Url::parse("http://example.org/error").unwrap(),
-            ))
-        }
+        Individual::Named(named) => iri_term_from_url(
+            url::Url::parse(named.iri.as_str())
+                .unwrap_or(url::Url::parse("http://example.org/error").unwrap()),
+        ),
         Individual::Anonymous(anon) => RdfTerm::BlankNode(anon.id.clone()),
     }
 }
 
 fn ope_to_term(ope: &ObjectPropertyExpression) -> RdfTerm {
     match ope {
-        ObjectPropertyExpression::ObjectProperty(p) => {
-            iri_term_from_str(p.iri.as_str())
-        }
+        ObjectPropertyExpression::ObjectProperty(p) => iri_term_from_str(p.iri.as_str()),
         ObjectPropertyExpression::InverseObjectProperty(p) => {
             // Inverse properties can't be represented as direct terms in RDF
             iri_term_from_str(p.iri.as_str())
         }
-        ObjectPropertyExpression::PropertyChain(_) => {
-            iri_term(&OWL_PROPERTY_CHAIN_AXIOM)
-        }
+        ObjectPropertyExpression::PropertyChain(_) => iri_term(&OWL_PROPERTY_CHAIN_AXIOM),
     }
 }
 
 fn dpe_to_term(dpe: &DataPropertyExpression) -> RdfTerm {
     match dpe {
-        DataPropertyExpression::DataProperty(p) => {
-            iri_term_from_str(p.iri.as_str())
-        }
+        DataPropertyExpression::DataProperty(p) => iri_term_from_str(p.iri.as_str()),
     }
 }
 
@@ -543,26 +602,12 @@ fn annotation_value_to_term(val: &AnnotationValue) -> RdfTerm {
     }
 }
 
-fn characteristic_triple(
-    ope: &ObjectPropertyExpression,
-    owl_type: &url::Url,
-) -> Triple {
-    triple(
-        ope_to_term(ope),
-        iri_term(&RDF_TYPE),
-        iri_term(owl_type),
-    )
+fn characteristic_triple(ope: &ObjectPropertyExpression, owl_type: &url::Url) -> Triple {
+    triple(ope_to_term(ope), iri_term(&RDF_TYPE), iri_term(owl_type))
 }
 
-fn characteristic_triple_dpe(
-    dpe: &DataPropertyExpression,
-    owl_type: &url::Url,
-) -> Triple {
-    triple(
-        dpe_to_term(dpe),
-        iri_term(&RDF_TYPE),
-        iri_term(owl_type),
-    )
+fn characteristic_triple_dpe(dpe: &DataPropertyExpression, owl_type: &url::Url) -> Triple {
+    triple(dpe_to_term(dpe), iri_term(&RDF_TYPE), iri_term(owl_type))
 }
 
 fn pairwise_triples(
@@ -577,14 +622,17 @@ fn pairwise_triples(
     let pred = iri_term(predicate_url);
     items[1..]
         .iter()
-        .map(|ce| triple(first.clone(), pred.clone(), class_expression_to_term(ce, counter)))
+        .map(|ce| {
+            triple(
+                first.clone(),
+                pred.clone(),
+                class_expression_to_term(ce, counter),
+            )
+        })
         .collect()
 }
 
-fn pairwise_individuals(
-    individuals: &[Individual],
-    predicate_url: &url::Url,
-) -> Vec<Triple> {
+fn pairwise_individuals(individuals: &[Individual], predicate_url: &url::Url) -> Vec<Triple> {
     if individuals.len() < 2 {
         return vec![];
     }
@@ -596,10 +644,7 @@ fn pairwise_individuals(
         .collect()
 }
 
-fn pairwise_opes(
-    properties: &[ObjectPropertyExpression],
-    predicate_url: &url::Url,
-) -> Vec<Triple> {
+fn pairwise_opes(properties: &[ObjectPropertyExpression], predicate_url: &url::Url) -> Vec<Triple> {
     if properties.len() < 2 {
         return vec![];
     }
@@ -611,10 +656,7 @@ fn pairwise_opes(
         .collect()
 }
 
-fn pairwise_dpes(
-    properties: &[DataPropertyExpression],
-    predicate_url: &url::Url,
-) -> Vec<Triple> {
+fn pairwise_dpes(properties: &[DataPropertyExpression], predicate_url: &url::Url) -> Vec<Triple> {
     if properties.len() < 2 {
         return vec![];
     }
@@ -632,37 +674,28 @@ fn pairwise_dpes(
 
 use std::sync::LazyLock;
 
-static OWL_NAMED_INDIVIDUAL: LazyLock<url::Url> = LazyLock::new(|| {
-    url::Url::parse("http://www.w3.org/2002/07/owl#NamedIndividual").unwrap()
-});
-static OWL_ANNOTATION_PROPERTY: LazyLock<url::Url> = LazyLock::new(|| {
-    url::Url::parse("http://www.w3.org/2002/07/owl#AnnotationProperty").unwrap()
-});
+static OWL_NAMED_INDIVIDUAL: LazyLock<url::Url> =
+    LazyLock::new(|| url::Url::parse("http://www.w3.org/2002/07/owl#NamedIndividual").unwrap());
+static OWL_ANNOTATION_PROPERTY: LazyLock<url::Url> =
+    LazyLock::new(|| url::Url::parse("http://www.w3.org/2002/07/owl#AnnotationProperty").unwrap());
 static OWL_PROPERTY_DISJOINT_WITH: LazyLock<url::Url> = LazyLock::new(|| {
     url::Url::parse("http://www.w3.org/2002/07/owl#propertyDisjointWith").unwrap()
 });
-static OWL_DISJOINT_UNION_OF: LazyLock<url::Url> = LazyLock::new(|| {
-    url::Url::parse("http://www.w3.org/2002/07/owl#disjointUnionOf").unwrap()
-});
-static OWL_HAS_KEY: LazyLock<url::Url> = LazyLock::new(|| {
-    url::Url::parse("http://www.w3.org/2002/07/owl#hasKey").unwrap()
-});
+static OWL_DISJOINT_UNION_OF: LazyLock<url::Url> =
+    LazyLock::new(|| url::Url::parse("http://www.w3.org/2002/07/owl#disjointUnionOf").unwrap());
+static OWL_HAS_KEY: LazyLock<url::Url> =
+    LazyLock::new(|| url::Url::parse("http://www.w3.org/2002/07/owl#hasKey").unwrap());
 static OWL_NEGATIVE_PROPERTY_ASSERTION: LazyLock<url::Url> = LazyLock::new(|| {
     url::Url::parse("http://www.w3.org/2002/07/owl#NegativePropertyAssertion").unwrap()
 });
-static OWL_SOURCE_INDIVIDUAL: LazyLock<url::Url> = LazyLock::new(|| {
-    url::Url::parse("http://www.w3.org/2002/07/owl#sourceIndividual").unwrap()
-});
-static OWL_ASSERTION_PROPERTY: LazyLock<url::Url> = LazyLock::new(|| {
-    url::Url::parse("http://www.w3.org/2002/07/owl#assertionProperty").unwrap()
-});
-static OWL_TARGET_INDIVIDUAL: LazyLock<url::Url> = LazyLock::new(|| {
-    url::Url::parse("http://www.w3.org/2002/07/owl#targetIndividual").unwrap()
-});
-static OWL_TARGET_VALUE: LazyLock<url::Url> = LazyLock::new(|| {
-    url::Url::parse("http://www.w3.org/2002/07/owl#targetValue").unwrap()
-});
+static OWL_SOURCE_INDIVIDUAL: LazyLock<url::Url> =
+    LazyLock::new(|| url::Url::parse("http://www.w3.org/2002/07/owl#sourceIndividual").unwrap());
+static OWL_ASSERTION_PROPERTY: LazyLock<url::Url> =
+    LazyLock::new(|| url::Url::parse("http://www.w3.org/2002/07/owl#assertionProperty").unwrap());
+static OWL_TARGET_INDIVIDUAL: LazyLock<url::Url> =
+    LazyLock::new(|| url::Url::parse("http://www.w3.org/2002/07/owl#targetIndividual").unwrap());
+static OWL_TARGET_VALUE: LazyLock<url::Url> =
+    LazyLock::new(|| url::Url::parse("http://www.w3.org/2002/07/owl#targetValue").unwrap());
 #[allow(dead_code)]
-static OWL_PROPERTY_CHAIN_AXIOM: LazyLock<url::Url> = LazyLock::new(|| {
-    url::Url::parse("http://www.w3.org/2002/07/owl#propertyChainAxiom").unwrap()
-});
+static OWL_PROPERTY_CHAIN_AXIOM: LazyLock<url::Url> =
+    LazyLock::new(|| url::Url::parse("http://www.w3.org/2002/07/owl#propertyChainAxiom").unwrap());

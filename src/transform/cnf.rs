@@ -37,9 +37,7 @@ impl ClausalNormalFormConverter {
     #[must_use]
     pub fn is_dnf(expr: &ClassExpression) -> bool {
         match expr {
-            ClassExpression::ObjectUnionOf(disjuncts) => {
-                disjuncts.iter().all(Self::is_cube)
-            }
+            ClassExpression::ObjectUnionOf(disjuncts) => disjuncts.iter().all(Self::is_cube),
             _ => Self::is_cube(expr),
         }
     }

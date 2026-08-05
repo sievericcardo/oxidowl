@@ -4,15 +4,15 @@
 
 use std::path::Path;
 
-use crate::manager::{ManagerConfig, OntologyManager, OntologyManagerRef};
+use crate::Result;
 use crate::factory::DataFactory;
+use crate::manager::{ManagerConfig, OntologyManager, OntologyManagerRef};
+use crate::ontology::Ontology;
 use crate::ontology::OntologyFormat;
 use crate::parsers::{
-    parse_functional, parse_ntriples, parse_owl_xml, parse_rdf_xml, parse_turtle, save_file,
-    save_to_string, ManchesterParser, ManchesterParserConfig,
+    ManchesterParser, ManchesterParserConfig, parse_functional, parse_ntriples, parse_owl_xml,
+    parse_rdf_xml, parse_turtle, save_file, save_to_string,
 };
-use crate::ontology::Ontology;
-use crate::Result;
 
 /// Static convenience entry point for common OWL API operations.
 ///
@@ -64,9 +64,7 @@ impl OWLManager {
                 parser.parse_string(content)
             }
             _ => Err(crate::Error::Unsupported {
-                message: format!(
-                    "Loading from string for {format:?} not supported"
-                ),
+                message: format!("Loading from string for {format:?} not supported"),
             }),
         }
     }
@@ -81,10 +79,7 @@ impl OWLManager {
     }
 
     /// Save an ontology to a string in the given format.
-    pub fn save_ontology_to_string(
-        ontology: &Ontology,
-        format: OntologyFormat,
-    ) -> Result<String> {
+    pub fn save_ontology_to_string(ontology: &Ontology, format: OntologyFormat) -> Result<String> {
         save_to_string(ontology, format)
     }
 }

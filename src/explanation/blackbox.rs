@@ -80,7 +80,6 @@ impl BlackBoxExplanation {
         let mut essential = Vec::new();
 
         while let Some(ax) = candidate.pop() {
-            
             // Check: does ontology \ {ax} still entail?
             let test_onto = self.build_temp_ontology(
                 &axioms
@@ -151,8 +150,9 @@ impl ExplanationGenerator for BlackBoxExplanation {
             })
         } else {
             Err(crate::Error::Unsupported {
-                message: "BlackBoxExplanation requires an ontology reference — use new_with_ontology"
-                    .into(),
+                message:
+                    "BlackBoxExplanation requires an ontology reference — use new_with_ontology"
+                        .into(),
             })
         }
     }
@@ -171,8 +171,9 @@ impl ExplanationGenerator for BlackBoxExplanation {
             }])
         } else {
             Err(crate::Error::Unsupported {
-                message: "BlackBoxExplanation requires an ontology reference — use new_with_ontology"
-                    .into(),
+                message:
+                    "BlackBoxExplanation requires an ontology reference — use new_with_ontology"
+                        .into(),
             })
         }
     }

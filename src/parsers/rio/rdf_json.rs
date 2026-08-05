@@ -2,11 +2,11 @@
 
 use crate::Result;
 use crate::ontology::axioms::*;
-use crate::ontology::{IRI, Literal, NamedIndividual, Ontology};
 use crate::ontology::{
-    Class, DataProperty, Individual, ObjectProperty, ObjectPropertyExpression,
-    DataPropertyExpression,
+    Class, DataProperty, DataPropertyExpression, Individual, ObjectProperty,
+    ObjectPropertyExpression,
 };
+use crate::ontology::{IRI, Literal, NamedIndividual, Ontology};
 use serde_json::Value;
 use std::fmt::Write;
 
@@ -47,10 +47,8 @@ impl RdfJsonParser {
                     for (predicate, objects) in pred_obj {
                         if let Some(arr) = objects.as_array() {
                             for obj_val in arr {
-                                let value = obj_val
-                                    .get("value")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("");
+                                let value =
+                                    obj_val.get("value").and_then(|v| v.as_str()).unwrap_or("");
                                 let ty = obj_val
                                     .get("type")
                                     .and_then(|v| v.as_str())
@@ -99,10 +97,9 @@ impl RdfJsonParser {
                                                 ClassAssertionAxiom {
                                                     id: axiom_id(),
                                                     individual,
-                                                    class:
-                                                        crate::ontology::ClassExpression::Class(
-                                                            class,
-                                                        ),
+                                                    class: crate::ontology::ClassExpression::Class(
+                                                        class,
+                                                    ),
                                                     annotations: vec![],
                                                 },
                                             ));
@@ -141,8 +138,7 @@ impl RdfJsonParser {
                                             let target = Individual::Named(NamedIndividual {
                                                 iri: IRI::new(value),
                                             });
-                                            let prop =
-                                                ObjectProperty::new(IRI::new(predicate))?;
+                                            let prop = ObjectProperty::new(IRI::new(predicate))?;
                                             o.add_axiom(Axiom::ObjectPropertyAssertion(
                                                 ObjectPropertyAssertionAxiom {
                                                     id: axiom_id(),
@@ -159,9 +155,7 @@ impl RdfJsonParser {
                                         "bnode" => {
                                             o.add_axiom(Axiom::Declaration(DeclarationAxiom {
                                                 id: axiom_id(),
-                                                entity: Entity::NamedIndividual(IRI::new(
-                                                    subject,
-                                                )),
+                                                entity: Entity::NamedIndividual(IRI::new(subject)),
                                             }));
                                         }
                                         _ => {}
@@ -249,8 +243,7 @@ impl RdfJsonRenderer {
                 }
                 Axiom::ObjectPropertyAssertion(a) => {
                     if let ObjectPropertyExpression::ObjectProperty(prop) = &a.property
-                        && let (Some(source), Some(target)) =
-                            (a.source.iri(), a.target.iri())
+                        && let (Some(source), Some(target)) = (a.source.iri(), a.target.iri())
                     {
                         if !first {
                             buf.push_str(",\n");
@@ -271,7 +264,8 @@ impl RdfJsonRenderer {
                             buf.push_str(",\n");
                         }
                         first = false;
-                        let escaped_value = a.value.value.replace('\\', "\\\\").replace('"', "\\\"");
+                        let escaped_value =
+                            a.value.value.replace('\\', "\\\\").replace('"', "\\\"");
                         let _ = write!(
                             buf,
                             r#"  "{iri}": {{ "{}": [ {{ "type": "literal", "value": "{escaped_value}" }} ] }}"#,

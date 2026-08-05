@@ -1212,7 +1212,11 @@ impl OntologySerializer for OwlXmlSerializer {
 
 impl OwlXmlSerializer {
     /// Serialize with explicit configuration
-    pub fn serialize_with_config(&self, ontology: &Ontology, config: &SerializerConfig) -> Result<String> {
+    pub fn serialize_with_config(
+        &self,
+        ontology: &Ontology,
+        config: &SerializerConfig,
+    ) -> Result<String> {
         let indent = " ".repeat(config.indent_size);
         let mut output = String::new();
 
@@ -1259,7 +1263,10 @@ impl OwlXmlSerializer {
 
         // Write ontology annotations
         for annotation in &ontology.annotations {
-            output.push_str(&format!("{indent}{}\n", serialize_annotation_xml(annotation, 1)));
+            output.push_str(&format!(
+                "{indent}{}\n",
+                serialize_annotation_xml(annotation, 1)
+            ));
         }
 
         // Write axioms

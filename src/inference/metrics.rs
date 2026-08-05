@@ -20,9 +20,10 @@ impl OwlMetric for NumberOfClasses {
         let mut count = 0;
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && matches!(d.entity, Entity::Class(_)) {
-                    count += 1;
-                }
+                && matches!(d.entity, Entity::Class(_))
+            {
+                count += 1;
+            }
         }
         f64::from(count)
     }
@@ -37,9 +38,10 @@ impl OwlMetric for NumberOfObjectProperties {
         let mut count = 0;
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && matches!(d.entity, Entity::ObjectProperty(_)) {
-                    count += 1;
-                }
+                && matches!(d.entity, Entity::ObjectProperty(_))
+            {
+                count += 1;
+            }
         }
         f64::from(count)
     }
@@ -54,9 +56,10 @@ impl OwlMetric for NumberOfDataProperties {
         let mut count = 0;
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && matches!(d.entity, Entity::DataProperty(_)) {
-                    count += 1;
-                }
+                && matches!(d.entity, Entity::DataProperty(_))
+            {
+                count += 1;
+            }
         }
         f64::from(count)
     }
@@ -71,9 +74,10 @@ impl OwlMetric for NumberOfIndividuals {
         let mut count = 0;
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && matches!(d.entity, Entity::NamedIndividual(_)) {
-                    count += 1;
-                }
+                && matches!(d.entity, Entity::NamedIndividual(_))
+            {
+                count += 1;
+            }
         }
         f64::from(count)
     }
@@ -180,9 +184,10 @@ impl OwlMetric for NumberOfDatatypes {
         let mut count = 0;
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && matches!(d.entity, Entity::Datatype(_)) {
-                    count += 1;
-                }
+                && matches!(d.entity, Entity::Datatype(_))
+            {
+                count += 1;
+            }
         }
         f64::from(count)
     }
@@ -197,9 +202,10 @@ impl OwlMetric for NumberOfAnnotationProperties {
         let mut count = 0;
         for axiom in ontology.axioms() {
             if let Axiom::Declaration(d) = axiom
-                && matches!(d.entity, Entity::AnnotationProperty(_)) {
-                    count += 1;
-                }
+                && matches!(d.entity, Entity::AnnotationProperty(_))
+            {
+                count += 1;
+            }
         }
         f64::from(count)
     }
@@ -482,11 +488,12 @@ fn collect_named_classes(ontology: &Ontology) -> Vec<ClassExpression> {
     let mut classes = Vec::new();
     for axiom in ontology.axioms() {
         if let Axiom::Declaration(d) = axiom
-            && let Entity::Class(iri) = &d.entity {
-                classes.push(ClassExpression::Class(crate::ontology::Class {
-                    iri: iri.clone(),
-                }));
-            }
+            && let Entity::Class(iri) = &d.entity
+        {
+            classes.push(ClassExpression::Class(crate::ontology::Class {
+                iri: iri.clone(),
+            }));
+        }
     }
     classes
 }
@@ -592,9 +599,10 @@ impl Metric for NumberOfGCIAxioms {
         self.count = 0;
         for ax in ontology.axioms() {
             if let Axiom::SubClassOf(sc) = ax
-                && !matches!(&sc.subclass, ClassExpression::Class(_)) {
-                    self.count += 1;
-                }
+                && !matches!(&sc.subclass, ClassExpression::Class(_))
+            {
+                self.count += 1;
+            }
         }
     }
 
@@ -627,9 +635,10 @@ impl Metric for NumberOfHiddenGCI {
         self.count = 0;
         for ax in ontology.axioms() {
             if let Axiom::SubClassOf(sc) = ax
-                && matches!(&sc.subclass, ClassExpression::ObjectIntersectionOf(_)) {
-                    self.count += 1;
-                }
+                && matches!(&sc.subclass, ClassExpression::ObjectIntersectionOf(_))
+            {
+                self.count += 1;
+            }
         }
     }
 

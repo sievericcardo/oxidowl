@@ -902,16 +902,12 @@ impl CompletionState {
     pub fn add_inference(&mut self, inference: Inference) {
         match inference {
             Inference::Subsumption { sub, sup } => {
-                self.subsumptions
-                    .insert((sub.clone(), sup.clone()));
+                self.subsumptions.insert((sub.clone(), sup.clone()));
                 self.sup_by_sub
                     .entry(sub.clone())
                     .or_default()
                     .insert(sup.clone());
-                self.sub_by_sup
-                    .entry(sup)
-                    .or_default()
-                    .insert(sub);
+                self.sub_by_sup.entry(sup).or_default().insert(sub);
             }
         }
     }

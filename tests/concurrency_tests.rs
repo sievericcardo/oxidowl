@@ -244,7 +244,10 @@ fn test_ontology_ref_shared_access() {
             let guard = ont.read().unwrap();
             let all_axioms = guard.axioms();
             let logical_count = all_axioms.iter().filter(|a| a.is_logical()).count();
-            assert!(logical_count >= 10, "Thread {i}: expected >=10 logical axioms, got {logical_count}");
+            assert!(
+                logical_count >= 10,
+                "Thread {i}: expected >=10 logical axioms, got {logical_count}"
+            );
             drop(guard);
         }));
     }

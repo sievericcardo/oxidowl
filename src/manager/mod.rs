@@ -301,7 +301,9 @@ impl OntologyManager {
     /// Register an already-constructed ontology.
     pub fn register_ontology(&mut self, ont_ref: OntologyRef) {
         let iri = {
-            let guard = ont_ref.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let guard = ont_ref
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             guard.get_iri().cloned()
         };
         if let Some(iri) = iri {
@@ -331,7 +333,9 @@ impl OntologyManager {
     /// Remove an ontology from the manager.
     pub fn remove_ontology(&mut self, ont_ref: &OntologyRef) -> Result<()> {
         let iri = {
-            let guard = ont_ref.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let guard = ont_ref
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             guard.get_iri().cloned()
         };
         if let Some(iri) = iri {
@@ -381,7 +385,9 @@ impl OntologyManager {
     /// Performs BFS with cycle detection and depth limiting.
     pub fn get_imports_closure(&self, ont_ref: &OntologyRef) -> Result<Vec<OntologyRef>> {
         let start_iri = {
-            let guard = ont_ref.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let guard = ont_ref
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             guard.get_iri().cloned()
         };
 
@@ -421,7 +427,9 @@ impl OntologyManager {
     /// in the ontologies.
     pub fn refresh_imports_closure(&mut self) {
         for (iri, ont_ref) in &self.ontologies {
-            let guard = ont_ref.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let guard = ont_ref
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let entry = self.imports_graph.entry(iri.clone()).or_default();
             entry.clear();
             for import in &guard.imports {
@@ -554,7 +562,9 @@ impl OntologyManager {
     #[must_use]
     pub fn snapshot_ontology(&self, iri: &IRI) -> Option<Snapshot> {
         let ont_ref = self.ontologies.get(iri)?;
-        let guard = ont_ref.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let guard = ont_ref
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         Some(Snapshot {
             axioms: guard.axioms.clone(),
             annotations: guard.annotations.clone(),
@@ -570,13 +580,16 @@ impl OntologyManager {
     /// replaced with the snapshot contents.
     pub fn restore_snapshot(&mut self, snapshot: Snapshot) {
         if let Some(iri) = &snapshot.iri
-            && let Some(ont_ref) = self.ontologies.get(iri) {
-                let mut guard = ont_ref.write().unwrap_or_else(std::sync::PoisonError::into_inner);
-                guard.axioms = snapshot.axioms;
-                guard.annotations = snapshot.annotations;
-                guard.imports = snapshot.imports;
-                guard.id.version_iri = snapshot.version_iri;
-            }
+            && let Some(ont_ref) = self.ontologies.get(iri)
+        {
+            let mut guard = ont_ref
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            guard.axioms = snapshot.axioms;
+            guard.annotations = snapshot.annotations;
+            guard.imports = snapshot.imports;
+            guard.id.version_iri = snapshot.version_iri;
+        }
     }
 
     // ── Change Application ───────────────────────────────────────────────
@@ -636,9 +649,10 @@ impl OntologyManager {
         let mut seen = HashSet::new();
         for change in changes {
             if seen.insert(change.ontology_iri().clone())
-                && let Some(snapshot) = self.snapshot_ontology(change.ontology_iri()) {
-                    snapshots.push(snapshot);
-                }
+                && let Some(snapshot) = self.snapshot_ontology(change.ontology_iri())
+            {
+                snapshots.push(snapshot);
+            }
         }
 
         match self.apply_changes(changes) {
@@ -665,7 +679,9 @@ impl OntologyManager {
                     message: format!("Ontology not found: {}", change.ontology_iri()),
                 })?;
 
-        let mut guard = ont_ref.write().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut guard = ont_ref
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         match change {
             OntologyChange::AddAxiom { axiom, .. } => {
                 guard.add_axiom(axiom.clone());
@@ -752,7 +768,9 @@ impl OntologyManager {
                 .ok_or_else(|| crate::Error::InvalidInput {
                     message: format!("Ontology not found: {ontology_iri}"),
                 })?;
-        let guard = ont_ref.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let guard = ont_ref
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let path_str = path.to_string_lossy();
         if path_str.ends_with(".gz") {
@@ -775,7 +793,9 @@ impl OntologyManager {
                 .ok_or_else(|| crate::Error::InvalidInput {
                     message: format!("Ontology not found: {ontology_iri}"),
                 })?;
-        let guard = ont_ref.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let guard = ont_ref
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         parsers::save_to_string(&guard, format)
     }
 
@@ -799,7 +819,9 @@ impl OntologyManager {
                 message: format!("Source ontology not found: {ontology_iri}"),
             }
         })?;
-        let source_guard = source.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let source_guard = source
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let effective_iri = target_iri.unwrap_or_else(|| ontology_iri.clone());
         let mut new_ont = Ontology::new();

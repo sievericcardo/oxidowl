@@ -851,9 +851,10 @@ impl ReasoningActor {
             && let Ok(guard) = crate::core::lock_helpers::read_lock(
                 ont_ref,
                 "actor: reading ontology version for cache invalidation",
-            ) {
-                return guard.version();
-            }
+            )
+        {
+            return guard.version();
+        }
         0
     }
 

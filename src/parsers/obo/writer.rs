@@ -23,13 +23,11 @@ impl Default for OBOOutputConfig {
 }
 
 /// Writes ontologies in OBO format.
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct OBOWriter {
     #[allow(dead_code)]
     config: OBOOutputConfig,
 }
-
 
 impl OBOWriter {
     #[must_use]

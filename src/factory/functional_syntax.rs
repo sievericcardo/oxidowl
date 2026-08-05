@@ -26,44 +26,32 @@ impl FunctionalSyntaxFactory {
 
     #[must_use]
     pub fn class(iri: &str) -> Class {
-        Class {
-            iri: IRI::new(iri),
-        }
+        Class { iri: IRI::new(iri) }
     }
 
     #[must_use]
     pub fn object_property(iri: &str) -> ObjectProperty {
-        ObjectProperty {
-            iri: IRI::new(iri),
-        }
+        ObjectProperty { iri: IRI::new(iri) }
     }
 
     #[must_use]
     pub fn data_property(iri: &str) -> DataProperty {
-        DataProperty {
-            iri: IRI::new(iri),
-        }
+        DataProperty { iri: IRI::new(iri) }
     }
 
     #[must_use]
     pub fn named_individual(iri: &str) -> NamedIndividual {
-        NamedIndividual {
-            iri: IRI::new(iri),
-        }
+        NamedIndividual { iri: IRI::new(iri) }
     }
 
     #[must_use]
     pub fn annotation_property(iri: &str) -> AnnotationProperty {
-        AnnotationProperty {
-            iri: IRI::new(iri),
-        }
+        AnnotationProperty { iri: IRI::new(iri) }
     }
 
     #[must_use]
     pub fn datatype(iri: &str) -> Datatype {
-        Datatype {
-            iri: IRI::new(iri),
-        }
+        Datatype { iri: IRI::new(iri) }
     }
 
     // ── Class expression constructors ───────────────────────────────────────
@@ -129,9 +117,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn object_has_self(
-        property: ObjectPropertyExpression,
-    ) -> ClassExpression {
+    pub fn object_has_self(property: ObjectPropertyExpression) -> ClassExpression {
         ClassExpression::ObjectHasSelf { property }
     }
 
@@ -191,10 +177,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn data_has_value(
-        property: DataPropertyExpression,
-        value: Literal,
-    ) -> ClassExpression {
+    pub fn data_has_value(property: DataPropertyExpression, value: Literal) -> ClassExpression {
         ClassExpression::DataHasValue { property, value }
     }
 
@@ -245,9 +228,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn property_chain(
-        chain: Vec<ObjectPropertyExpression>,
-    ) -> ObjectPropertyExpression {
+    pub fn property_chain(chain: Vec<ObjectPropertyExpression>) -> ObjectPropertyExpression {
         ObjectPropertyExpression::PropertyChain(chain)
     }
 
@@ -290,10 +271,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn disjoint_union(
-        class: ClassExpression,
-        disjoint_classes: Vec<ClassExpression>,
-    ) -> Axiom {
+    pub fn disjoint_union(class: ClassExpression, disjoint_classes: Vec<ClassExpression>) -> Axiom {
         Axiom::DisjointUnion(DisjointUnionAxiom {
             id: Self::next_id(),
             class,
@@ -316,9 +294,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn equivalent_object_properties(
-        properties: Vec<ObjectPropertyExpression>,
-    ) -> Axiom {
+    pub fn equivalent_object_properties(properties: Vec<ObjectPropertyExpression>) -> Axiom {
         Axiom::EquivalentObjectProperties(EquivalentObjectPropertiesAxiom {
             id: Self::next_id(),
             properties,
@@ -327,9 +303,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn disjoint_object_properties(
-        properties: Vec<ObjectPropertyExpression>,
-    ) -> Axiom {
+    pub fn disjoint_object_properties(properties: Vec<ObjectPropertyExpression>) -> Axiom {
         Axiom::DisjointObjectProperties(DisjointObjectPropertiesAxiom {
             id: Self::next_id(),
             properties,
@@ -377,9 +351,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn functional_object_property(
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
+    pub fn functional_object_property(property: ObjectPropertyExpression) -> Axiom {
         Axiom::FunctionalObjectProperty(FunctionalObjectPropertyAxiom {
             id: Self::next_id(),
             property,
@@ -388,9 +360,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn inverse_functional_object_property(
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
+    pub fn inverse_functional_object_property(property: ObjectPropertyExpression) -> Axiom {
         Axiom::InverseFunctionalObjectProperty(InverseFunctionalObjectPropertyAxiom {
             id: Self::next_id(),
             property,
@@ -399,9 +369,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn reflexive_object_property(
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
+    pub fn reflexive_object_property(property: ObjectPropertyExpression) -> Axiom {
         Axiom::ReflexiveObjectProperty(ReflexiveObjectPropertyAxiom {
             id: Self::next_id(),
             property,
@@ -410,9 +378,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn irreflexive_object_property(
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
+    pub fn irreflexive_object_property(property: ObjectPropertyExpression) -> Axiom {
         Axiom::IrreflexiveObjectProperty(IrreflexiveObjectPropertyAxiom {
             id: Self::next_id(),
             property,
@@ -421,9 +387,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn symmetric_object_property(
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
+    pub fn symmetric_object_property(property: ObjectPropertyExpression) -> Axiom {
         Axiom::SymmetricObjectProperty(SymmetricObjectPropertyAxiom {
             id: Self::next_id(),
             property,
@@ -432,9 +396,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn asymmetric_object_property(
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
+    pub fn asymmetric_object_property(property: ObjectPropertyExpression) -> Axiom {
         Axiom::AsymmetricObjectProperty(AsymmetricObjectPropertyAxiom {
             id: Self::next_id(),
             property,
@@ -443,9 +405,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn transitive_object_property(
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
+    pub fn transitive_object_property(property: ObjectPropertyExpression) -> Axiom {
         Axiom::TransitiveObjectProperty(TransitiveObjectPropertyAxiom {
             id: Self::next_id(),
             property,
@@ -454,10 +414,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn sub_data_property_of(
-        sub: DataPropertyExpression,
-        sup: DataPropertyExpression,
-    ) -> Axiom {
+    pub fn sub_data_property_of(sub: DataPropertyExpression, sup: DataPropertyExpression) -> Axiom {
         Axiom::SubDataPropertyOf(SubDataPropertyOfAxiom {
             id: Self::next_id(),
             sub_property: sub,
@@ -467,9 +424,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn equivalent_data_properties(
-        properties: Vec<DataPropertyExpression>,
-    ) -> Axiom {
+    pub fn equivalent_data_properties(properties: Vec<DataPropertyExpression>) -> Axiom {
         Axiom::EquivalentDataProperties(EquivalentDataPropertiesAxiom {
             id: Self::next_id(),
             properties,
@@ -478,9 +433,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn disjoint_data_properties(
-        properties: Vec<DataPropertyExpression>,
-    ) -> Axiom {
+    pub fn disjoint_data_properties(properties: Vec<DataPropertyExpression>) -> Axiom {
         Axiom::DisjointDataProperties(DisjointDataPropertiesAxiom {
             id: Self::next_id(),
             properties,
@@ -502,10 +455,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn data_property_range(
-        property: DataPropertyExpression,
-        range: DataRange,
-    ) -> Axiom {
+    pub fn data_property_range(property: DataPropertyExpression, range: DataRange) -> Axiom {
         Axiom::DataPropertyRange(DataPropertyRangeAxiom {
             id: Self::next_id(),
             property,
@@ -515,9 +465,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn functional_data_property(
-        property: DataPropertyExpression,
-    ) -> Axiom {
+    pub fn functional_data_property(property: DataPropertyExpression) -> Axiom {
         Axiom::FunctionalDataProperty(FunctionalDataPropertyAxiom {
             id: Self::next_id(),
             property,
@@ -526,10 +474,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn class_assertion(
-        class: ClassExpression,
-        individual: Individual,
-    ) -> Axiom {
+    pub fn class_assertion(class: ClassExpression, individual: Individual) -> Axiom {
         Axiom::ClassAssertion(ClassAssertionAxiom {
             id: Self::next_id(),
             individual,

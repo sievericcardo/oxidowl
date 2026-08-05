@@ -5,8 +5,8 @@ use helpers::df::DF;
 use helpers::*;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
-use oxidowl::transform::nnf::NNFConverter;
 use oxidowl::transform::expressivity::DLExpressivityChecker;
+use oxidowl::transform::nnf::NNFConverter;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // NNF Converter Tests
@@ -15,7 +15,9 @@ use oxidowl::transform::expressivity::DLExpressivityChecker;
 #[test]
 fn nnf_positive_class() {
     let conv = NNFConverter;
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
     let result = conv.to_nnf(&a);
     assert_eq!(result, a);
 }
@@ -23,7 +25,9 @@ fn nnf_positive_class() {
 #[test]
 fn nnf_double_negation() {
     let conv = NNFConverter;
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
     let not_not_a = ClassExpression::ObjectComplementOf(Box::new(
         ClassExpression::ObjectComplementOf(Box::new(a.clone())),
     ));
@@ -34,12 +38,18 @@ fn nnf_double_negation() {
 #[test]
 fn nnf_de_morgan_intersection() {
     let conv = NNFConverter;
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-    let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/B"),
+    });
     // ¬(A ⊓ B) → ¬A ⊔ ¬B
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectIntersectionOf(vec![a.clone(), b.clone()])),
-    );
+    let original =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectIntersectionOf(vec![
+            a.clone(),
+            b.clone(),
+        ])));
     let result = conv.to_nnf(&original);
     assert!(matches!(result, ClassExpression::ObjectUnionOf(_)));
 }
@@ -47,12 +57,18 @@ fn nnf_de_morgan_intersection() {
 #[test]
 fn nnf_de_morgan_union() {
     let conv = NNFConverter;
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
-    let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/B"),
+    });
     // ¬(A ⊔ B) → ¬A ⊓ ¬B
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectUnionOf(vec![a.clone(), b.clone()])),
-    );
+    let original =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectUnionOf(vec![
+            a.clone(),
+            b.clone(),
+        ])));
     let result = conv.to_nnf(&original);
     assert!(matches!(result, ClassExpression::ObjectIntersectionOf(_)));
 }
@@ -60,57 +76,71 @@ fn nnf_de_morgan_union() {
 #[test]
 fn nnf_some_values_from_complement() {
     let conv = NNFConverter;
-    let p = ObjectPropertyExpression::ObjectProperty(
-        ObjectProperty { iri: IRI::new("http://ex.org/P") }
-    );
-    let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+    let p = ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+        iri: IRI::new("http://ex.org/P"),
+    });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/B"),
+    });
     // ¬(∃P.B) → ∀P.¬B
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectSomeValuesFrom {
+    let original =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectSomeValuesFrom {
             property: p,
             filler: Box::new(b),
-        },
-    ));
+        }));
     let result = conv.to_nnf(&original);
-    assert!(matches!(result, ClassExpression::ObjectAllValuesFrom { .. }));
+    assert!(matches!(
+        result,
+        ClassExpression::ObjectAllValuesFrom { .. }
+    ));
 }
 
 #[test]
 fn nnf_all_values_from_complement() {
     let conv = NNFConverter;
-    let p = ObjectPropertyExpression::ObjectProperty(
-        ObjectProperty { iri: IRI::new("http://ex.org/P") }
-    );
-    let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+    let p = ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+        iri: IRI::new("http://ex.org/P"),
+    });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/B"),
+    });
     // ¬(∀P.B) → ∃P.¬B
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectAllValuesFrom {
+    let original =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectAllValuesFrom {
             property: p,
             filler: Box::new(b),
-        },
-    ));
+        }));
     let result = conv.to_nnf(&original);
-    assert!(matches!(result, ClassExpression::ObjectSomeValuesFrom { .. }));
+    assert!(matches!(
+        result,
+        ClassExpression::ObjectSomeValuesFrom { .. }
+    ));
 }
 
 #[test]
 fn nnf_nested_quantifier() {
     let conv = NNFConverter;
-    let p = ObjectPropertyExpression::ObjectProperty(
-        ObjectProperty { iri: IRI::new("http://ex.org/P") }
-    );
-    let a = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/A") });
+    let p = ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+        iri: IRI::new("http://ex.org/P"),
+    });
+    let a = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/A"),
+    });
     // ¬(∃P.(A ⊓ B))
-    let b = ClassExpression::Class(Class { iri: IRI::new("http://ex.org/B") });
+    let b = ClassExpression::Class(Class {
+        iri: IRI::new("http://ex.org/B"),
+    });
     let inner = ClassExpression::ObjectIntersectionOf(vec![a, b]);
-    let original = ClassExpression::ObjectComplementOf(Box::new(
-        ClassExpression::ObjectSomeValuesFrom {
+    let original =
+        ClassExpression::ObjectComplementOf(Box::new(ClassExpression::ObjectSomeValuesFrom {
             property: p,
             filler: Box::new(inner),
-        },
-    ));
+        }));
     let result = conv.to_nnf(&original);
-    assert!(matches!(result, ClassExpression::ObjectAllValuesFrom { .. }));
+    assert!(matches!(
+        result,
+        ClassExpression::ObjectAllValuesFrom { .. }
+    ));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -143,8 +173,12 @@ fn builtin_reserved_vocabulary() {
 
 #[test]
 fn builtin_annotation_property_detection() {
-    assert!(IRI::new("http://www.w3.org/2000/01/rdf-schema#label").is_builtin_annotation_property());
-    assert!(IRI::new("http://www.w3.org/2000/01/rdf-schema#comment").is_builtin_annotation_property());
+    assert!(
+        IRI::new("http://www.w3.org/2000/01/rdf-schema#label").is_builtin_annotation_property()
+    );
+    assert!(
+        IRI::new("http://www.w3.org/2000/01/rdf-schema#comment").is_builtin_annotation_property()
+    );
     assert!(!IRI::new("http://example.org/myProp").is_builtin_annotation_property());
 }
 
@@ -187,9 +221,9 @@ fn class_expression_complement() {
 
 #[test]
 fn class_expression_some_values_from() {
-    let p = ObjectPropertyExpression::ObjectProperty(
-        ObjectProperty { iri: IRI::new("http://ex.org/P") }
-    );
+    let p = ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+        iri: IRI::new("http://ex.org/P"),
+    });
     let b = ClassExpression::class(IRI::new("http://ex.org/B"));
     let ce = ClassExpression::some_values_from(p, b);
     assert!(matches!(ce, ClassExpression::ObjectSomeValuesFrom { .. }));
@@ -205,26 +239,30 @@ fn class_expression_thing_and_nothing() {
 
 #[test]
 fn class_expression_has_self() {
-    let p = ObjectPropertyExpression::ObjectProperty(
-        ObjectProperty { iri: IRI::new("http://ex.org/P") }
-    );
+    let p = ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+        iri: IRI::new("http://ex.org/P"),
+    });
     let expr = ClassExpression::ObjectHasSelf { property: p };
     assert!(matches!(expr, ClassExpression::ObjectHasSelf { .. }));
 }
 
 #[test]
 fn class_expression_one_of() {
-    let i = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/i") });
-    let j = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/j") });
+    let i = Individual::Named(NamedIndividual {
+        iri: IRI::new("http://ex.org/i"),
+    });
+    let j = Individual::Named(NamedIndividual {
+        iri: IRI::new("http://ex.org/j"),
+    });
     let expr = ClassExpression::ObjectOneOf(vec![i, j]);
     assert!(matches!(expr, ClassExpression::ObjectOneOf(_)));
 }
 
 #[test]
 fn class_expression_cardinality_variants() {
-    let p = ObjectPropertyExpression::ObjectProperty(
-        ObjectProperty { iri: IRI::new("http://ex.org/P") }
-    );
+    let p = ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+        iri: IRI::new("http://ex.org/P"),
+    });
     let b = ClassExpression::class(IRI::new("http://ex.org/B"));
     let min = ClassExpression::ObjectMinCardinality {
         property: p.clone(),
@@ -243,7 +281,10 @@ fn class_expression_cardinality_variants() {
     };
     assert!(matches!(min, ClassExpression::ObjectMinCardinality { .. }));
     assert!(matches!(max, ClassExpression::ObjectMaxCardinality { .. }));
-    assert!(matches!(exact, ClassExpression::ObjectExactCardinality { .. }));
+    assert!(matches!(
+        exact,
+        ClassExpression::ObjectExactCardinality { .. }
+    ));
 }
 
 #[test]
@@ -275,9 +316,9 @@ fn expressivity_with_existential() {
     let df = DF::new();
     let a = df.class_ce("http://ex.org/A");
     let b = df.class_ce("http://ex.org/B");
-    let p = ObjectPropertyExpression::ObjectProperty(
-        ObjectProperty { iri: IRI::new("http://ex.org/P") }
-    );
+    let p = ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+        iri: IRI::new("http://ex.org/P"),
+    });
     let svf = ClassExpression::ObjectSomeValuesFrom {
         property: p,
         filler: Box::new(b),

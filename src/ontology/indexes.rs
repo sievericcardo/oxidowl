@@ -4,10 +4,7 @@
 //! to the axioms that mention it, eliminating the need to scan the full axiom
 //! list on every query.
 
-use crate::ontology::{
-    ClassExpression, Individual, ObjectPropertyExpression,
-    axioms::Axiom,
-};
+use crate::ontology::{ClassExpression, Individual, ObjectPropertyExpression, axioms::Axiom};
 use std::collections::HashMap;
 
 /// Pre-computed index over all axioms in an ontology snapshot.

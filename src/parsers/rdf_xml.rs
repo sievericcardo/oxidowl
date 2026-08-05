@@ -455,10 +455,14 @@ impl RdfXmlParser {
 
     /// Extract RDF triples from RDF/XML by walking XML elements.
     /// Child elements within a subject element are interpreted as predicate-object pairs.
-    fn extract_rdf_triples(&self, content: &str, ontology: &mut crate::ontology::Ontology) -> Result<()> {
-        use std::collections::HashMap;
+    fn extract_rdf_triples(
+        &self,
+        content: &str,
+        ontology: &mut crate::ontology::Ontology,
+    ) -> Result<()> {
         use quick_xml::Reader;
         use quick_xml::events::Event;
+        use std::collections::HashMap;
         let mut reader = Reader::from_str(content);
         reader.config_mut().trim_text(true);
         let mut buf = Vec::new();
@@ -477,7 +481,9 @@ impl RdfXmlParser {
                         attrs.insert(key, value);
                     }
                     depth += 1;
-                    let has_about = attrs.keys().any(|k| k.ends_with(":about") || *k == "about" || k.ends_with(":ID"));
+                    let has_about = attrs
+                        .keys()
+                        .any(|k| k.ends_with(":about") || *k == "about" || k.ends_with(":ID"));
                     if has_about {
                         if let Some(s) = self.extract_resource_iri(&attrs) {
                             subject = Some(s);
@@ -485,8 +491,12 @@ impl RdfXmlParser {
                         }
                     } else if subject.is_some() && depth == subj_depth + 1 {
                         let pred = self.resolve_element_iri(&name);
-                        let obj = attrs.get("rdf:resource")
-                            .or_else(|| attrs.iter().find(|(k,_)| k.ends_with(":resource")).map(|(_,v)| v));
+                        let obj = attrs.get("rdf:resource").or_else(|| {
+                            attrs
+                                .iter()
+                                .find(|(k, _)| k.ends_with(":resource"))
+                                .map(|(_, v)| v)
+                        });
                         if let (Some(s), Some(o)) = (subject.clone(), obj) {
                             process_owl_triple_inline(ontology, &s, &pred, o);
                         }
@@ -502,16 +512,29 @@ impl RdfXmlParser {
                     }
                     if subject.is_some() && depth == subj_depth {
                         let pred = self.resolve_element_iri(&name);
-                        let obj = attrs.get("rdf:resource")
-                            .or_else(|| attrs.iter().find(|(k,_)| k.ends_with(":resource")).map(|(_,v)| v))
-                            .or_else(|| attrs.iter().find(|(k,_)| k.ends_with(":about") || *k == "about").map(|(_,v)| v));
+                        let obj = attrs
+                            .get("rdf:resource")
+                            .or_else(|| {
+                                attrs
+                                    .iter()
+                                    .find(|(k, _)| k.ends_with(":resource"))
+                                    .map(|(_, v)| v)
+                            })
+                            .or_else(|| {
+                                attrs
+                                    .iter()
+                                    .find(|(k, _)| k.ends_with(":about") || *k == "about")
+                                    .map(|(_, v)| v)
+                            });
                         if let (Some(s), Some(o)) = (subject.clone(), obj) {
                             process_owl_triple_inline(ontology, &s, &pred, o);
                         }
                     }
                 }
                 Ok(Event::End(_)) => {
-                    if depth == subj_depth { subject = None; }
+                    if depth == subj_depth {
+                        subject = None;
+                    }
                     depth = depth.saturating_sub(1);
                 }
                 Ok(Event::Eof) => break,
@@ -1051,8 +1074,8 @@ impl OntologySerializer for RdfXmlSerializer {
         }
 
         // ── Axiom serialization via shared OWL-to-RDF mapping ──────────
-        use crate::semantics::owl_rdf_mapping::{axiom_to_triples, BlankNodeCounter};
         use crate::semantics::RdfTerm;
+        use crate::semantics::owl_rdf_mapping::{BlankNodeCounter, axiom_to_triples};
         let mut counter = BlankNodeCounter::new();
         for axiom in ontology.axioms() {
             let triples = axiom_to_triples(axiom, &mut counter);
@@ -1069,19 +1092,41 @@ impl OntologySerializer for RdfXmlSerializer {
                 result.push_str(&format!("  <rdf:Description rdf:about=\"{subj_str}\">\n"));
                 match &triple.object {
                     RdfTerm::Iri(url) => {
-                        result.push_str(&format!("    <{} rdf:resource=\"{}\"/>\n",
-                            pred_to_element_name(&pred_str), url));
+                        result.push_str(&format!(
+                            "    <{} rdf:resource=\"{}\"/>\n",
+                            pred_to_element_name(&pred_str),
+                            url
+                        ));
                     }
-                    RdfTerm::Literal { value, datatype, language, .. } => {
+                    RdfTerm::Literal {
+                        value,
+                        datatype,
+                        language,
+                        ..
+                    } => {
                         if let Some(dt) = datatype {
-                            result.push_str(&format!("    <{} rdf:datatype=\"{}\">{}</{}>\n",
-                                pred_to_element_name(&pred_str), dt, value, pred_to_element_name(&pred_str)));
+                            result.push_str(&format!(
+                                "    <{} rdf:datatype=\"{}\">{}</{}>\n",
+                                pred_to_element_name(&pred_str),
+                                dt,
+                                value,
+                                pred_to_element_name(&pred_str)
+                            ));
                         } else if let Some(lang) = language {
-                            result.push_str(&format!("    <{} xml:lang=\"{}\">{}</{}>\n",
-                                pred_to_element_name(&pred_str), lang, value, pred_to_element_name(&pred_str)));
+                            result.push_str(&format!(
+                                "    <{} xml:lang=\"{}\">{}</{}>\n",
+                                pred_to_element_name(&pred_str),
+                                lang,
+                                value,
+                                pred_to_element_name(&pred_str)
+                            ));
                         } else {
-                            result.push_str(&format!("    <{}>{}</{}>\n",
-                                pred_to_element_name(&pred_str), value, pred_to_element_name(&pred_str)));
+                            result.push_str(&format!(
+                                "    <{}>{}</{}>\n",
+                                pred_to_element_name(&pred_str),
+                                value,
+                                pred_to_element_name(&pred_str)
+                            ));
                         }
                     }
                     _ => {}
@@ -1199,97 +1244,166 @@ fn process_owl_triple_inline(
     predicate: &str,
     object: &str,
 ) {
-    
     use crate::ontology::*;
     let id = ontology.next_axiom_id();
     match predicate {
         "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" => match object {
-            "http://www.w3.org/2002/07/owl#Class" => ontology.add_axiom(Axiom::Declaration(
-                DeclarationAxiom { id, entity: Entity::Class(IRI::new(subject)) },
-            )),
-            "http://www.w3.org/2002/07/owl#ObjectProperty" => ontology.add_axiom(Axiom::Declaration(
-                DeclarationAxiom { id, entity: Entity::ObjectProperty(IRI::new(subject)) },
-            )),
-            "http://www.w3.org/2002/07/owl#DatatypeProperty" => ontology.add_axiom(Axiom::Declaration(
-                DeclarationAxiom { id, entity: Entity::DataProperty(IRI::new(subject)) },
-            )),
-            "http://www.w3.org/2002/07/owl#NamedIndividual" => ontology.add_axiom(Axiom::Declaration(
-                DeclarationAxiom { id, entity: Entity::NamedIndividual(IRI::new(subject)) },
-            )),
-            "http://www.w3.org/2002/07/owl#AnnotationProperty" => ontology.add_axiom(Axiom::Declaration(
-                DeclarationAxiom { id, entity: Entity::AnnotationProperty(IRI::new(subject)) },
-            )),
+            "http://www.w3.org/2002/07/owl#Class" => {
+                ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
+                    id,
+                    entity: Entity::Class(IRI::new(subject)),
+                }))
+            }
+            "http://www.w3.org/2002/07/owl#ObjectProperty" => {
+                ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
+                    id,
+                    entity: Entity::ObjectProperty(IRI::new(subject)),
+                }))
+            }
+            "http://www.w3.org/2002/07/owl#DatatypeProperty" => {
+                ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
+                    id,
+                    entity: Entity::DataProperty(IRI::new(subject)),
+                }))
+            }
+            "http://www.w3.org/2002/07/owl#NamedIndividual" => {
+                ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
+                    id,
+                    entity: Entity::NamedIndividual(IRI::new(subject)),
+                }))
+            }
+            "http://www.w3.org/2002/07/owl#AnnotationProperty" => {
+                ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
+                    id,
+                    entity: Entity::AnnotationProperty(IRI::new(subject)),
+                }))
+            }
             "http://www.w3.org/2002/07/owl#Ontology" => {
                 ontology.set_iri(IRI::new(subject));
             }
             "http://www.w3.org/2002/07/owl#FunctionalProperty" => {
                 ontology.add_axiom(Axiom::FunctionalObjectProperty(
-                    FunctionalObjectPropertyAxiom { id, property: ObjectPropertyExpression::ObjectProperty(
-                        ObjectProperty { iri: IRI::new(subject) }), annotations: vec![] },
+                    FunctionalObjectPropertyAxiom {
+                        id,
+                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                            iri: IRI::new(subject),
+                        }),
+                        annotations: vec![],
+                    },
                 ));
             }
             "http://www.w3.org/2002/07/owl#TransitiveProperty" => {
                 ontology.add_axiom(Axiom::TransitiveObjectProperty(
-                    TransitiveObjectPropertyAxiom { id, property: ObjectPropertyExpression::ObjectProperty(
-                        ObjectProperty { iri: IRI::new(subject) }), annotations: vec![] },
+                    TransitiveObjectPropertyAxiom {
+                        id,
+                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                            iri: IRI::new(subject),
+                        }),
+                        annotations: vec![],
+                    },
                 ));
             }
             _ => {
                 let cid = ontology.next_axiom_id();
-                ontology.add_axiom(Axiom::ClassAssertion(
-                    ClassAssertionAxiom { id: cid,
-                        individual: Individual::Named(NamedIndividual { iri: IRI::new(subject) }),
-                        class: ClassExpression::Class(Class::new(IRI::new(object))),
-                        annotations: vec![] },
-                ));
+                ontology.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
+                    id: cid,
+                    individual: Individual::Named(NamedIndividual {
+                        iri: IRI::new(subject),
+                    }),
+                    class: ClassExpression::Class(Class::new(IRI::new(object))),
+                    annotations: vec![],
+                }));
             }
         },
-        "http://www.w3.org/2000/01/rdf-schema#subClassOf" => ontology.add_axiom(Axiom::SubClassOf(
-            SubClassOfAxiom { id,
+        "http://www.w3.org/2000/01/rdf-schema#subClassOf" => {
+            ontology.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
+                id,
                 subclass: ClassExpression::Class(Class::new(IRI::new(subject))),
                 superclass: ClassExpression::Class(Class::new(IRI::new(object))),
-                annotations: vec![] },
-        )),
-        "http://www.w3.org/2002/07/owl#equivalentClass" => ontology.add_axiom(Axiom::EquivalentClasses(
-            EquivalentClassesAxiom { id, classes: vec![
-                ClassExpression::Class(Class::new(IRI::new(subject))),
-                ClassExpression::Class(Class::new(IRI::new(object))),
-            ], annotations: vec![] },
-        )),
-        "http://www.w3.org/2002/07/owl#disjointWith" => ontology.add_axiom(Axiom::DisjointClasses(
-            DisjointClassesAxiom { id, classes: vec![
-                ClassExpression::Class(Class::new(IRI::new(subject))),
-                ClassExpression::Class(Class::new(IRI::new(object))),
-            ], annotations: vec![] },
-        )),
+                annotations: vec![],
+            }))
+        }
+        "http://www.w3.org/2002/07/owl#equivalentClass" => {
+            ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
+                id,
+                classes: vec![
+                    ClassExpression::Class(Class::new(IRI::new(subject))),
+                    ClassExpression::Class(Class::new(IRI::new(object))),
+                ],
+                annotations: vec![],
+            }))
+        }
+        "http://www.w3.org/2002/07/owl#disjointWith" => {
+            ontology.add_axiom(Axiom::DisjointClasses(DisjointClassesAxiom {
+                id,
+                classes: vec![
+                    ClassExpression::Class(Class::new(IRI::new(subject))),
+                    ClassExpression::Class(Class::new(IRI::new(object))),
+                ],
+                annotations: vec![],
+            }))
+        }
         _ => ontology.add_axiom(Axiom::ObjectPropertyAssertion(
-            ObjectPropertyAssertionAxiom { id,
-                property: ObjectPropertyExpression::ObjectProperty(
-                    ObjectProperty { iri: IRI::new(predicate) }),
-                source: Individual::Named(NamedIndividual { iri: IRI::new(subject) }),
-                target: Individual::Named(NamedIndividual { iri: IRI::new(object) }),
-                annotations: vec![] },
+            ObjectPropertyAssertionAxiom {
+                id,
+                property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
+                    iri: IRI::new(predicate),
+                }),
+                source: Individual::Named(NamedIndividual {
+                    iri: IRI::new(subject),
+                }),
+                target: Individual::Named(NamedIndividual {
+                    iri: IRI::new(object),
+                }),
+                annotations: vec![],
+            },
         )),
     }
 }
 
 /// Convert an OWL/RDF predicate IRI to a safe XML element name.
 fn pred_to_element_name(pred_iri: &str) -> String {
-    if pred_iri.contains("#subClassOf") { return "rdfs:subClassOf".into(); }
-    if pred_iri.contains("#subPropertyOf") { return "rdfs:subPropertyOf".into(); }
-    if pred_iri.contains("#domain") { return "rdfs:domain".into(); }
-    if pred_iri.contains("#range") { return "rdfs:range".into(); }
-    if pred_iri.contains("#type") { return "rdf:type".into(); }
-    if pred_iri.contains("#equivalentClass") { return "owl:equivalentClass".into(); }
-    if pred_iri.contains("#disjointWith") { return "owl:disjointWith".into(); }
-    if pred_iri.contains("#sameAs") { return "owl:sameAs".into(); }
-    if pred_iri.contains("#differentFrom") { return "owl:differentFrom".into(); }
-    if pred_iri.contains("#inverseOf") { return "owl:inverseOf".into(); }
+    if pred_iri.contains("#subClassOf") {
+        return "rdfs:subClassOf".into();
+    }
+    if pred_iri.contains("#subPropertyOf") {
+        return "rdfs:subPropertyOf".into();
+    }
+    if pred_iri.contains("#domain") {
+        return "rdfs:domain".into();
+    }
+    if pred_iri.contains("#range") {
+        return "rdfs:range".into();
+    }
+    if pred_iri.contains("#type") {
+        return "rdf:type".into();
+    }
+    if pred_iri.contains("#equivalentClass") {
+        return "owl:equivalentClass".into();
+    }
+    if pred_iri.contains("#disjointWith") {
+        return "owl:disjointWith".into();
+    }
+    if pred_iri.contains("#sameAs") {
+        return "owl:sameAs".into();
+    }
+    if pred_iri.contains("#differentFrom") {
+        return "owl:differentFrom".into();
+    }
+    if pred_iri.contains("#inverseOf") {
+        return "owl:inverseOf".into();
+    }
     if let Some(hash) = pred_iri.rfind('#') {
         let local = &pred_iri[hash + 1..];
-        if pred_iri.contains("/rdf-schema") { return format!("rdfs:{local}"); }
-        if pred_iri.contains("/owl") { return format!("owl:{local}"); }
-        if pred_iri.contains("/rdf-syntax") { return format!("rdf:{local}"); }
+        if pred_iri.contains("/rdf-schema") {
+            return format!("rdfs:{local}");
+        }
+        if pred_iri.contains("/owl") {
+            return format!("owl:{local}");
+        }
+        if pred_iri.contains("/rdf-syntax") {
+            return format!("rdf:{local}");
+        }
         local.into()
     } else {
         pred_iri.into()

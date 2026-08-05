@@ -111,17 +111,15 @@ impl EntailmentChecker {
 
         let rdf_type_url = url::Url::parse("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
             .expect("Valid hardcoded rdf:type URL");
-        let rdfs_domain_url =
-            url::Url::parse("http://www.w3.org/2000/01/rdf-schema#domain")
-                .expect("Valid hardcoded rdfs:domain URL");
+        let rdfs_domain_url = url::Url::parse("http://www.w3.org/2000/01/rdf-schema#domain")
+            .expect("Valid hardcoded rdfs:domain URL");
         let rdfs_range_url = url::Url::parse("http://www.w3.org/2000/01/rdf-schema#range")
             .expect("Valid hardcoded rdfs:range URL");
         let rdfs_subproperty_url =
             url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subPropertyOf")
                 .expect("Valid hardcoded rdfs:subPropertyOf URL");
-        let rdfs_subclass_url =
-            url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf")
-                .expect("Valid hardcoded rdfs:subClassOf URL");
+        let rdfs_subclass_url = url::Url::parse("http://www.w3.org/2000/01/rdf-schema#subClassOf")
+            .expect("Valid hardcoded rdfs:subClassOf URL");
 
         let mut triples: HashSet<Triple> = premises.triples().iter().cloned().collect();
         let mut changed = true;
@@ -175,17 +173,17 @@ impl EntailmentChecker {
                         for t in &current {
                             if let RdfTerm::Iri(ref t_pred) = t.predicate
                                 && t_pred == &rdfs_subproperty_url
-                                    && t.subject == triple.object
-                                {
-                                    let new_triple = Triple::new(
-                                        triple.subject.clone(),
-                                        RdfTerm::Iri(rdfs_subproperty_url.clone()),
-                                        t.object.clone(),
-                                    );
-                                    if triples.insert(new_triple) {
-                                        changed = true;
-                                    }
+                                && t.subject == triple.object
+                            {
+                                let new_triple = Triple::new(
+                                    triple.subject.clone(),
+                                    RdfTerm::Iri(rdfs_subproperty_url.clone()),
+                                    t.object.clone(),
+                                );
+                                if triples.insert(new_triple) {
+                                    changed = true;
                                 }
+                            }
                         }
                         // rdfs7: sub-property propagation
                         for t in &current {
@@ -203,39 +201,40 @@ impl EntailmentChecker {
                     }
                     // rdfs9: ?s rdf:type ?c . ?c rdfs:subClassOf ?d => ?s rdf:type ?d
                     if pred == &rdf_type_url
-                        && let RdfTerm::Iri(ref _class_iri) = triple.object {
-                            for t in &current {
-                                if let RdfTerm::Iri(ref t_pred) = t.predicate
-                                    && t_pred == &rdfs_subclass_url
-                                        && t.subject == triple.object
-                                    {
-                                        let new_triple = Triple::new(
-                                            triple.subject.clone(),
-                                            RdfTerm::Iri(rdf_type_url.clone()),
-                                            t.object.clone(),
-                                        );
-                                        if triples.insert(new_triple) {
-                                            changed = true;
-                                        }
-                                    }
+                        && let RdfTerm::Iri(ref _class_iri) = triple.object
+                    {
+                        for t in &current {
+                            if let RdfTerm::Iri(ref t_pred) = t.predicate
+                                && t_pred == &rdfs_subclass_url
+                                && t.subject == triple.object
+                            {
+                                let new_triple = Triple::new(
+                                    triple.subject.clone(),
+                                    RdfTerm::Iri(rdf_type_url.clone()),
+                                    t.object.clone(),
+                                );
+                                if triples.insert(new_triple) {
+                                    changed = true;
+                                }
                             }
                         }
+                    }
                     // rdfs11: ?c rdfs:subClassOf ?d . ?d rdfs:subClassOf ?e => ?c rdfs:subClassOf ?e
                     if pred == &rdfs_subclass_url {
                         for t in &current {
                             if let RdfTerm::Iri(ref t_pred) = t.predicate
                                 && t_pred == &rdfs_subclass_url
-                                    && t.subject == triple.object
-                                {
-                                    let new_triple = Triple::new(
-                                        triple.subject.clone(),
-                                        RdfTerm::Iri(rdfs_subclass_url.clone()),
-                                        t.object.clone(),
-                                    );
-                                    if triples.insert(new_triple) {
-                                        changed = true;
-                                    }
+                                && t.subject == triple.object
+                            {
+                                let new_triple = Triple::new(
+                                    triple.subject.clone(),
+                                    RdfTerm::Iri(rdfs_subclass_url.clone()),
+                                    t.object.clone(),
+                                );
+                                if triples.insert(new_triple) {
+                                    changed = true;
                                 }
+                            }
                         }
                     }
                 }
@@ -247,10 +246,7 @@ impl EntailmentChecker {
             }
         }
 
-        Ok(conclusion
-            .triples()
-            .iter()
-            .all(|c| triples.contains(c)))
+        Ok(conclusion.triples().iter().all(|c| triples.contains(c)))
     }
 
     /// Check if a conclusion is trivially true under RDFS semantics
@@ -290,9 +286,7 @@ impl EntailmentChecker {
         conclusion: &RdfGraph,
     ) -> Result<bool> {
         use crate::ontology::Ontology;
-        use crate::reasoner_api::{
-            OWLReasoner, OWLReasonerConfiguration, TableauOWLReasoner,
-        };
+        use crate::reasoner_api::{OWLReasoner, OWLReasonerConfiguration, TableauOWLReasoner};
         use std::sync::{Arc, RwLock};
 
         // Build ontology from premise triples
@@ -346,9 +340,8 @@ impl EntailmentChecker {
                 if pred_str == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" {
                     let subject_iri = subject_iri?;
                     let object_iri = object_iri?;
-                    let individual = Individual::Named(
-                        crate::ontology::NamedIndividual { iri: subject_iri },
-                    );
+                    let individual =
+                        Individual::Named(crate::ontology::NamedIndividual { iri: subject_iri });
                     let class = ClassExpression::Class(Class::new(object_iri));
                     let axiom = Axiom::ClassAssertion(ClassAssertionAxiom {
                         id: 0,
@@ -374,18 +367,16 @@ impl EntailmentChecker {
                 if pred_str == "http://www.w3.org/2000/01/rdf-schema#subPropertyOf" {
                     let sub = subject_iri?;
                     let sup = object_iri?;
-                    let axiom = Axiom::SubObjectPropertyOf(
-                        SubObjectPropertyOfAxiom {
-                            id: 0,
-                            sub_property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                                crate::ontology::ObjectProperty { iri: sub },
-                            ),
-                            super_property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                                crate::ontology::ObjectProperty { iri: sup },
-                            ),
-                            annotations: Vec::new(),
-                        },
-                    );
+                    let axiom = Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
+                        id: 0,
+                        sub_property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                            crate::ontology::ObjectProperty { iri: sub },
+                        ),
+                        super_property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                            crate::ontology::ObjectProperty { iri: sup },
+                        ),
+                        annotations: Vec::new(),
+                    });
                     return Some(axiom);
                 }
 

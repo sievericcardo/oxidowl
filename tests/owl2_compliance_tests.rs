@@ -101,7 +101,11 @@ Individual: ex:john
 
     // Manchester parser now fully parses all frame types
     let axioms = ontology.axioms();
-    assert!(axioms.len() >= 10, "Expected at least 10 axioms, got {}", axioms.len());
+    assert!(
+        axioms.len() >= 10,
+        "Expected at least 10 axioms, got {}",
+        axioms.len()
+    );
 
     // Should have declarations
     let declarations: Vec<_> = axioms
@@ -122,14 +126,20 @@ Individual: ex:john
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::EquivalentClasses(_)))
         .collect();
-    assert!(equiv_axioms.len() >= 1, "Expected at least 1 EquivalentClasses");
+    assert!(
+        equiv_axioms.len() >= 1,
+        "Expected at least 1 EquivalentClasses"
+    );
 
     // Should have property characteristic axioms
     let functional_axioms: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::FunctionalObjectProperty(_)))
         .collect();
-    assert!(functional_axioms.len() >= 1, "Expected at least 1 FunctionalObjectProperty");
+    assert!(
+        functional_axioms.len() >= 1,
+        "Expected at least 1 FunctionalObjectProperty"
+    );
 
     let inv_functional_axioms: Vec<_> = axioms
         .iter()
@@ -140,14 +150,20 @@ Individual: ex:john
             )
         })
         .collect();
-    assert!(inv_functional_axioms.len() >= 1, "Expected at least 1 InverseFunctionalObjectProperty");
+    assert!(
+        inv_functional_axioms.len() >= 1,
+        "Expected at least 1 InverseFunctionalObjectProperty"
+    );
 
     // Should have ClassAssertion axiom for john
     let class_assertions: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::ClassAssertion(_)))
         .collect();
-    assert!(class_assertions.len() >= 1, "Expected at least 1 ClassAssertion");
+    assert!(
+        class_assertions.len() >= 1,
+        "Expected at least 1 ClassAssertion"
+    );
 }
 
 #[test]

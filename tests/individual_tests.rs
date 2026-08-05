@@ -41,7 +41,9 @@ fn anonymous_individual_unique() {
 
 #[test]
 fn individual_named_iri_accessor() {
-    let ind = Individual::Named(NamedIndividual { iri: IRI::new("http://ex.org/i") });
+    let ind = Individual::Named(NamedIndividual {
+        iri: IRI::new("http://ex.org/i"),
+    });
     let named = ind.named_iri().unwrap();
     assert_eq!(named.iri.as_str(), "http://ex.org/i");
     assert!(ind.anonymous_id().is_none());

@@ -658,16 +658,14 @@ fn cross_phase_load_and_reason() {
         ));
         (a, b, ind, ax1, ax2)
     };
-    manager
-        .apply_change(OntologyChange::AddAxiom {
-            ontology_iri: iri.clone(),
-            axiom: ax1,
-        });
-    manager
-        .apply_change(OntologyChange::AddAxiom {
-            ontology_iri: iri.clone(),
-            axiom: ax2,
-        });
+    manager.apply_change(OntologyChange::AddAxiom {
+        ontology_iri: iri.clone(),
+        axiom: ax1,
+    });
+    manager.apply_change(OntologyChange::AddAxiom {
+        ontology_iri: iri.clone(),
+        axiom: ax2,
+    });
 
     // Phase 3: Create reasoner (clone onto ref for later reuse)
     let onto_clone = onto.clone();

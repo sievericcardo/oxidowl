@@ -116,7 +116,10 @@ impl AutoIRIMapper {
 
     /// Ensure the directory has been scanned (lazy init).
     fn ensure_scanned(&self) {
-        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if inner.scanned {
             return;
         }
@@ -150,15 +153,16 @@ impl AutoIRIMapper {
         let content = std::fs::read_to_string(path).ok()?;
         for line in content.lines() {
             let trimmed = line.trim();
-            if trimmed.contains("rdf:type") && trimmed.contains("owl:Ontology")
+            if trimmed.contains("rdf:type")
+                && trimmed.contains("owl:Ontology")
                 && let Some(start) = trimmed.find('<')
-                    && let Some(end) = trimmed[start..].find('>')
-                {
-                    let iri_str = &trimmed[start + 1..start + end];
-                    if iri_str.starts_with("http") || iri_str.starts_with("https") {
-                        return Some(IRI::new(iri_str));
-                    }
+                && let Some(end) = trimmed[start..].find('>')
+            {
+                let iri_str = &trimmed[start + 1..start + end];
+                if iri_str.starts_with("http") || iri_str.starts_with("https") {
+                    return Some(IRI::new(iri_str));
                 }
+            }
         }
         None
     }
@@ -167,7 +171,10 @@ impl AutoIRIMapper {
 impl OntologyIRIMapper for AutoIRIMapper {
     fn get_document_iri(&self, ontology_iri: &IRI) -> Option<IRI> {
         self.ensure_scanned();
-        let inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let inner = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.mapping.get(ontology_iri).cloned()
     }
 
@@ -287,7 +294,9 @@ impl ZipIRIMapper {
     /// Returns the entry name if found.
     #[must_use]
     pub fn resolve(&self, ontology_iri: &IRI) -> Option<&str> {
-        self.mappings.get(ontology_iri).map(std::string::String::as_str)
+        self.mappings
+            .get(ontology_iri)
+            .map(std::string::String::as_str)
     }
 
     /// Get the underlying ZIP file path.

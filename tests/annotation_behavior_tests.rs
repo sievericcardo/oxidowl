@@ -3,7 +3,9 @@ mod helpers;
 
 use helpers::df::DF;
 use oxidowl::ontology::axioms::*;
-use oxidowl::ontology::shortform::{AnnotationValueShortFormProvider, ShortFormProvider, SimpleShortFormProvider};
+use oxidowl::ontology::shortform::{
+    AnnotationValueShortFormProvider, ShortFormProvider, SimpleShortFormProvider,
+};
 use oxidowl::ontology::*;
 use oxidowl::parsers::*;
 use oxidowl::searcher::{EntityIndex, EntitySearcher};
@@ -44,10 +46,18 @@ fn test_annotation_accessors() {
     let searcher = EntitySearcher::new(&ontology, &index);
 
     let a_annotations = searcher.get_annotation_assertion_axioms(&a_iri);
-    assert_eq!(a_annotations.len(), 1, "Class A should have exactly 1 annotation assertion");
+    assert_eq!(
+        a_annotations.len(),
+        1,
+        "Class A should have exactly 1 annotation assertion"
+    );
 
     let b_annotations = searcher.get_annotation_assertion_axioms(&b_iri);
-    assert_eq!(b_annotations.len(), 2, "Class B should have exactly 2 annotation assertions");
+    assert_eq!(
+        b_annotations.len(),
+        2,
+        "Class B should have exactly 2 annotation assertions"
+    );
 
     for ax in &a_annotations {
         assert!(
@@ -82,7 +92,8 @@ fn test_annotation_on_axiom_roundtrip() {
     let b = df.class_ce(&b_iri);
 
     let ann_prop = df.annotation_property("http://www.w3.org/2000/01/rdf-schema#comment");
-    let ann_val = AnnotationValue::Literal(df.literal("This is a documented subclass relationship"));
+    let ann_val =
+        AnnotationValue::Literal(df.literal("This is a documented subclass relationship"));
     let annotation = Annotation::new(ann_prop.clone(), ann_val, vec![]);
 
     let sub_ax = SubClassOfAxiom {
@@ -134,10 +145,13 @@ fn test_annotation_on_axiom_roundtrip() {
 
     let serialized = save_to_string(&ontology, OntologyFormat::Functional)
         .expect("Serialization to functional syntax should succeed");
-    assert!(!serialized.is_empty(), "Serialized content should not be empty");
+    assert!(
+        !serialized.is_empty(),
+        "Serialized content should not be empty"
+    );
 
-    let reparsed = parse_functional(&serialized)
-        .expect("Re-parsing functional syntax should succeed");
+    let reparsed =
+        parse_functional(&serialized).expect("Re-parsing functional syntax should succeed");
     assert!(
         !reparsed.axioms().is_empty(),
         "Re-parsed ontology should contain axioms"
@@ -219,17 +233,19 @@ fn test_nested_annotations() {
         subject: AnnotationSubject::IRI(a_iri.clone()),
         property: label_prop.clone(),
         value: AnnotationValue::Literal(df.literal("Primary Label")),
-        annotations: vec![
-            Annotation::new(
-                df.annotation_property("http://purl.org/dc/terms/creator"),
-                AnnotationValue::Literal(df.literal("Test Author")),
-                vec![],
-            ),
-        ],
+        annotations: vec![Annotation::new(
+            df.annotation_property("http://purl.org/dc/terms/creator"),
+            AnnotationValue::Literal(df.literal("Test Author")),
+            vec![],
+        )],
     });
 
     if let Axiom::AnnotationAssertion(a) = &ax {
-        assert_eq!(a.annotations.len(), 1, "Axiom should have an annotation on the annotation");
+        assert_eq!(
+            a.annotations.len(),
+            1,
+            "Axiom should have an annotation on the annotation"
+        );
         assert_eq!(
             a.annotations[0].property.iri.as_str(),
             "http://purl.org/dc/terms/creator",
@@ -251,26 +267,28 @@ fn test_annotation_convenience_methods() {
     let org_iri = IRI::new(&format!("{}Organization", ns()));
 
     let person_label_ax = df.annotation_assertion(
-        AnnotationProperty { iri: IRI::new("http://www.w3.org/2000/01/rdf-schema#label") },
+        AnnotationProperty {
+            iri: IRI::new("http://www.w3.org/2000/01/rdf-schema#label"),
+        },
         person_iri.clone(),
         "Person",
     );
     let person_comment_ax = df.annotation_assertion(
-        AnnotationProperty { iri: IRI::new("http://www.w3.org/2000/01/rdf-schema#comment") },
+        AnnotationProperty {
+            iri: IRI::new("http://www.w3.org/2000/01/rdf-schema#comment"),
+        },
         person_iri.clone(),
         "A human being",
     );
     let org_label_ax = df.annotation_assertion(
-        AnnotationProperty { iri: IRI::new("http://www.w3.org/2000/01/rdf-schema#label") },
+        AnnotationProperty {
+            iri: IRI::new("http://www.w3.org/2000/01/rdf-schema#label"),
+        },
         org_iri.clone(),
         "Organization",
     );
 
-    let mut ontology = df.build_ontology(vec![
-        person_label_ax,
-        person_comment_ax,
-        org_label_ax,
-    ]);
+    let mut ontology = df.build_ontology(vec![person_label_ax, person_comment_ax, org_label_ax]);
 
     df.auto_declare(&mut ontology);
 
@@ -291,14 +309,20 @@ fn test_annotation_convenience_methods() {
         "Organization should have 1 annotation assertion (label)"
     );
 
-    let label_axiom_count = person_annotations.iter().filter(|ax| {
-        if let Axiom::AnnotationAssertion(a) = ax.as_ref() {
-            a.property.iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#label"
-        } else {
-            false
-        }
-    }).count();
-    assert_eq!(label_axiom_count, 1, "Person should have exactly 1 rdfs:label");
+    let label_axiom_count = person_annotations
+        .iter()
+        .filter(|ax| {
+            if let Axiom::AnnotationAssertion(a) = ax.as_ref() {
+                a.property.iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#label"
+            } else {
+                false
+            }
+        })
+        .count();
+    assert_eq!(
+        label_axiom_count, 1,
+        "Person should have exactly 1 rdfs:label"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -365,12 +389,16 @@ fn test_annotation_shortform_provider() {
     let city_iri = IRI::new(&format!("{}City", ns()));
 
     let person_label = df.annotation_assertion(
-        AnnotationProperty { iri: IRI::new("http://www.w3.org/2000/01/rdf-schema#label") },
+        AnnotationProperty {
+            iri: IRI::new("http://www.w3.org/2000/01/rdf-schema#label"),
+        },
         person_iri.clone(),
         "Person Label",
     );
     let city_label = df.annotation_assertion(
-        AnnotationProperty { iri: IRI::new("http://www.w3.org/2000/01/rdf-schema#label") },
+        AnnotationProperty {
+            iri: IRI::new("http://www.w3.org/2000/01/rdf-schema#label"),
+        },
         city_iri.clone(),
         "City Label",
     );
@@ -384,11 +412,17 @@ fn test_annotation_shortform_provider() {
 
     let person_entity = Entity::Class(person_iri);
     let short = provider.get_short_form(&person_entity);
-    assert_eq!(short, "Person Label", "Short form should be the rdfs:label value");
+    assert_eq!(
+        short, "Person Label",
+        "Short form should be the rdfs:label value"
+    );
 
     let city_entity = Entity::Class(city_iri);
     let short_city = provider.get_short_form(&city_entity);
-    assert_eq!(short_city, "City Label", "Short form should be the rdfs:label value");
+    assert_eq!(
+        short_city, "City Label",
+        "Short form should be the rdfs:label value"
+    );
 
     let unknown_iri = IRI::new(&format!("{}NoSuchEntity", ns()));
     let unknown_entity = Entity::Class(unknown_iri);
@@ -422,17 +456,16 @@ fn test_punning_annotation() {
         "This is a punned entity",
     );
 
-    let punned_ce = ClassExpression::Class(Class { iri: punned_iri.clone() });
+    let punned_ce = ClassExpression::Class(Class {
+        iri: punned_iri.clone(),
+    });
     let super_class_iri = IRI::new(&format!("{}SomeSuper", ns()));
-    let super_class = ClassExpression::Class(Class { iri: super_class_iri.clone() });
+    let super_class = ClassExpression::Class(Class {
+        iri: super_class_iri.clone(),
+    });
     let sub_ax = df.sub_class_of(punned_ce.clone(), super_class);
 
-    let mut ontology = df.build_ontology(vec![
-        class_decl,
-        ann_prop_decl,
-        label_ax,
-        sub_ax,
-    ]);
+    let mut ontology = df.build_ontology(vec![class_decl, ann_prop_decl, label_ax, sub_ax]);
     df.auto_declare(&mut ontology);
 
     let class_decls: Vec<_> = ontology.axioms().iter().filter(|a| {
@@ -453,14 +486,18 @@ fn test_punning_annotation() {
         ann_prop_decls.len()
     );
 
-    let label_axioms: Vec<_> = ontology.axioms().iter().filter(|a| {
-        matches!(a, Axiom::AnnotationAssertion(ann) if {
-            match &ann.subject {
-                AnnotationSubject::IRI(iri) => iri == &punned_iri,
-                _ => false,
-            }
+    let label_axioms: Vec<_> = ontology
+        .axioms()
+        .iter()
+        .filter(|a| {
+            matches!(a, Axiom::AnnotationAssertion(ann) if {
+                match &ann.subject {
+                    AnnotationSubject::IRI(iri) => iri == &punned_iri,
+                    _ => false,
+                }
+            })
         })
-    }).collect();
+        .collect();
     assert!(
         !label_axioms.is_empty(),
         "Should have annotation assertion with punned IRI as subject"
@@ -518,15 +555,34 @@ fn test_ignore_annotations_semantics() {
         "Axioms with different annotations should not be equal via derived PartialEq"
     );
 
-    if let (Axiom::SubClassOf(a1), Axiom::SubClassOf(a2)) = (&ax_no_annotations, &ax_with_annotations) {
+    if let (Axiom::SubClassOf(a1), Axiom::SubClassOf(a2)) =
+        (&ax_no_annotations, &ax_with_annotations)
+    {
         assert_eq!(a1.subclass, a2.subclass, "Subclass should be the same");
-        assert_eq!(a1.superclass, a2.superclass, "Superclass should be the same");
-        assert_eq!(a1.annotations.len(), 0, "First axiom should have no annotations");
-        assert_eq!(a2.annotations.len(), 1, "Second axiom should have 1 annotation");
+        assert_eq!(
+            a1.superclass, a2.superclass,
+            "Superclass should be the same"
+        );
+        assert_eq!(
+            a1.annotations.len(),
+            0,
+            "First axiom should have no annotations"
+        );
+        assert_eq!(
+            a2.annotations.len(),
+            1,
+            "Second axiom should have 1 annotation"
+        );
     }
 
-    assert!(ax_no_annotations.is_logical(), "SubClassOf should be a logical axiom");
-    assert!(ax_with_annotations.is_logical(), "SubClassOf with annotations should still be logical");
+    assert!(
+        ax_no_annotations.is_logical(),
+        "SubClassOf should be a logical axiom"
+    );
+    assert!(
+        ax_with_annotations.is_logical(),
+        "SubClassOf with annotations should still be logical"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -561,16 +617,25 @@ fn test_declared_annotated_entities() {
             }
         })
     });
-    assert!(has_annotation, "Entity A should have an annotation assertion");
+    assert!(
+        has_annotation,
+        "Entity A should have an annotation assertion"
+    );
 
     let index = EntityIndex::from_ontology(&ontology);
     let searcher = EntitySearcher::new(&ontology, &index);
 
     let decls = searcher.get_declaration_axioms(&Entity::Class(a_iri.clone()));
-    assert!(!decls.is_empty(), "EntitySearcher should find declaration for A");
+    assert!(
+        !decls.is_empty(),
+        "EntitySearcher should find declaration for A"
+    );
 
     let annotations = searcher.get_annotation_assertion_axioms(&a_iri);
-    assert!(!annotations.is_empty(), "EntitySearcher should find annotation assertion for A");
+    assert!(
+        !annotations.is_empty(),
+        "EntitySearcher should find annotation assertion for A"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -604,8 +669,7 @@ fn test_load_annotation_axioms() {
 
     let serialized = save_to_string(&original, OntologyFormat::Functional)
         .expect("Should serialize to functional syntax");
-    let reparsed = parse_functional(&serialized)
-        .expect("Should re-parse functional syntax");
+    let reparsed = parse_functional(&serialized).expect("Should re-parse functional syntax");
 
     let ann_count = reparsed.get_axiom_count_by_type(&AxiomType::AnnotationAssertion);
     assert!(
@@ -613,19 +677,33 @@ fn test_load_annotation_axioms() {
         "Re-parsed ontology should contain at least 1 annotation assertion axiom, got {ann_count}"
     );
 
-    let labels = reparsed.axioms().iter().filter(|ax| {
-        matches!(ax, Axiom::AnnotationAssertion(a) if {
-            a.property.iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#label"
+    let labels = reparsed
+        .axioms()
+        .iter()
+        .filter(|ax| {
+            matches!(ax, Axiom::AnnotationAssertion(a) if {
+                a.property.iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#label"
+            })
         })
-    }).count();
-    assert!(labels >= 1, "Re-parsed ontology should have at least 1 rdfs:label assertion");
+        .count();
+    assert!(
+        labels >= 1,
+        "Re-parsed ontology should have at least 1 rdfs:label assertion"
+    );
 
-    let see_alsos = reparsed.axioms().iter().filter(|ax| {
-        matches!(ax, Axiom::AnnotationAssertion(a) if {
-            a.property.iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#seeAlso"
+    let see_alsos = reparsed
+        .axioms()
+        .iter()
+        .filter(|ax| {
+            matches!(ax, Axiom::AnnotationAssertion(a) if {
+                a.property.iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#seeAlso"
+            })
         })
-    }).count();
-    assert!(see_alsos >= 1, "Re-parsed ontology should have at least 1 rdfs:seeAlso assertion");
+        .count();
+    assert!(
+        see_alsos >= 1,
+        "Re-parsed ontology should have at least 1 rdfs:seeAlso assertion"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -643,7 +721,8 @@ fn test_ontology_annotations() {
         AnnotationValue::Literal(df.literal("1.0.0")),
         vec![],
     );
-    let ontology_comment = df.rdfs_comment("This is a test ontology with ontology-level annotations");
+    let ontology_comment =
+        df.rdfs_comment("This is a test ontology with ontology-level annotations");
     let ontology_label = df.rdfs_label("Test Ontology");
 
     ontology.annotations.push(version_info);
@@ -672,15 +751,23 @@ fn test_ontology_annotations() {
         "Ontology should have no axioms — only annotations"
     );
 
-    let label_ann = ontology.annotations.iter().find(|a| {
-        a.property.iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#label"
-    });
-    assert!(label_ann.is_some(), "Should find rdfs:label among ontology annotations");
+    let label_ann = ontology
+        .annotations
+        .iter()
+        .find(|a| a.property.iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#label");
+    assert!(
+        label_ann.is_some(),
+        "Should find rdfs:label among ontology annotations"
+    );
 
-    let comment_ann = ontology.annotations.iter().find(|a| {
-        a.property.iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#comment"
-    });
-    assert!(comment_ann.is_some(), "Should find rdfs:comment among ontology annotations");
+    let comment_ann = ontology
+        .annotations
+        .iter()
+        .find(|a| a.property.iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#comment");
+    assert!(
+        comment_ann.is_some(),
+        "Should find rdfs:comment among ontology annotations"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -733,11 +820,7 @@ fn test_sub_annotation_property() {
         "Value using super-property",
     );
 
-    let mut ontology = df.build_ontology(vec![
-        axiom,
-        annotation_using_sub,
-        annotation_using_super,
-    ]);
+    let mut ontology = df.build_ontology(vec![axiom, annotation_using_sub, annotation_using_super]);
     df.auto_declare(&mut ontology);
 
     let index = EntityIndex::from_ontology(&ontology);
@@ -759,15 +842,13 @@ fn test_sub_annotation_property() {
 
     let axiom_type_count = ontology.get_axiom_count_by_type(&AxiomType::SubAnnotationPropertyOf);
     assert_eq!(
-        axiom_type_count,
-        1,
+        axiom_type_count, 1,
         "Ontology should have exactly 1 SubAnnotationPropertyOf axiom"
     );
 
     let ann_assertion_count = ontology.get_axiom_count_by_type(&AxiomType::AnnotationAssertion);
     assert_eq!(
-        ann_assertion_count,
-        2,
+        ann_assertion_count, 2,
         "Ontology should have exactly 2 AnnotationAssertion axioms"
     );
 }

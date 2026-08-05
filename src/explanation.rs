@@ -151,37 +151,38 @@ impl ExplanationService {
         // Build intermediate nodes for transitive chains
         for axiom in justification {
             if let Axiom::SubClassOf(sc) = axiom
-                && &sc.subclass == subclass {
-                    // Track this as an intermediate step: sub ⊑ intermediate
-                    let chain_node = ProofNode {
+                && &sc.subclass == subclass
+            {
+                // Track this as an intermediate step: sub ⊑ intermediate
+                let chain_node = ProofNode {
+                    id: id_counter,
+                    inference: Inference::Subsumption {
+                        subclass: subclass.clone(),
+                        superclass: sc.superclass.clone(),
+                    },
+                    premises: vec![axiom.clone()],
+                    children: vec![id_counter - child_ids.len()],
+                    rule_applied: InferenceRule::Subsumption,
+                };
+                nodes.push(chain_node);
+                id_counter += 1;
+
+                if &sc.superclass == superclass {
+                    // Build final conclusion node
+                    let child_refs: Vec<usize> = (0..id_counter).collect();
+                    let root = ProofNode {
                         id: id_counter,
                         inference: Inference::Subsumption {
                             subclass: subclass.clone(),
-                            superclass: sc.superclass.clone(),
+                            superclass: superclass.clone(),
                         },
-                        premises: vec![axiom.clone()],
-                        children: vec![id_counter - child_ids.len()],
+                        premises: justification.to_vec(),
+                        children: child_refs,
                         rule_applied: InferenceRule::Subsumption,
                     };
-                    nodes.push(chain_node);
-                    id_counter += 1;
-
-                    if &sc.superclass == superclass {
-                        // Build final conclusion node
-                        let child_refs: Vec<usize> = (0..id_counter).collect();
-                        let root = ProofNode {
-                            id: id_counter,
-                            inference: Inference::Subsumption {
-                                subclass: subclass.clone(),
-                                superclass: superclass.clone(),
-                            },
-                            premises: justification.to_vec(),
-                            children: child_refs,
-                            rule_applied: InferenceRule::Subsumption,
-                        };
-                        return Ok(ProofTree { root, nodes });
-                    }
+                    return Ok(ProofTree { root, nodes });
                 }
+            }
         }
 
         // Fallback: simple root with all justification axioms as children
@@ -220,8 +221,12 @@ impl ExplanationService {
         let mut derivation_children: Vec<usize> = Vec::new();
 
         // Pattern 1: Disjoint ∩ Equivalent classes
-        let has_disjoint = justification.iter().any(|ax| matches!(ax, Axiom::DisjointClasses(_)));
-        let has_equiv = justification.iter().any(|ax| matches!(ax, Axiom::EquivalentClasses(_)));
+        let has_disjoint = justification
+            .iter()
+            .any(|ax| matches!(ax, Axiom::DisjointClasses(_)));
+        let has_equiv = justification
+            .iter()
+            .any(|ax| matches!(ax, Axiom::EquivalentClasses(_)));
         if has_disjoint && has_equiv {
             let clash_node = ProofNode {
                 id: nodes.len(),
@@ -445,7 +450,10 @@ impl std::fmt::Debug for JustificationComputer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("JustificationComputer")
             .field("cache", &self.cache)
-            .field("reasoner_factory", &self.reasoner_factory.as_ref().map(|_| "ReasonerFactory"))
+            .field(
+                "reasoner_factory",
+                &self.reasoner_factory.as_ref().map(|_| "ReasonerFactory"),
+            )
             .finish()
     }
 }
@@ -482,9 +490,9 @@ impl JustificationComputer {
         ontology_axioms: &[Axiom],
     ) -> Result<Vec<Axiom>> {
         // Attempt reasoner-backed justification via BlackBoxExplanation
-        if let Some(just) = self.compute_justification_with_reasoner(
-            subclass, superclass, ontology_axioms,
-        )? {
+        if let Some(just) =
+            self.compute_justification_with_reasoner(subclass, superclass, ontology_axioms)?
+        {
             return Ok(just);
         }
 
@@ -551,20 +559,14 @@ impl JustificationComputer {
     }
 
     /// Check entailment using reasoner if available, returning None if not available
-    fn check_entailment_via_reasoner(
-        &self,
-        axioms: &[Axiom],
-        entailment: &Axiom,
-    ) -> Option<bool> {
+    fn check_entailment_via_reasoner(&self, axioms: &[Axiom], entailment: &Axiom) -> Option<bool> {
         let factory = self.reasoner_factory.as_ref()?;
         let mut o = crate::ontology::Ontology::new();
         for ax in axioms {
             o.add_axiom(ax.clone());
         }
         let onto = OntologyRef::new(std::sync::RwLock::new(o));
-        let reasoner = factory
-            .create_reasoner(&onto, &Default::default())
-            .ok()?;
+        let reasoner = factory.create_reasoner(&onto, &Default::default()).ok()?;
         reasoner.is_entailed(entailment).ok()
     }
 
@@ -591,57 +593,69 @@ impl JustificationComputer {
         // 2. Direct subclass check
         for ax in axioms {
             if let Axiom::SubClassOf(sc) = ax
-                && &sc.subclass == subclass && &sc.superclass == superclass {
-                    return true;
-                }
+                && &sc.subclass == subclass
+                && &sc.superclass == superclass
+            {
+                return true;
+            }
         }
 
         // 3. Transitive subclass closure through remaining axioms
         for ax in axioms {
             if let Axiom::SubClassOf(sc) = ax
                 && &sc.subclass == subclass
-                    && self.check_transitive_chain(&sc.superclass, superclass, axioms) {
-                        return true;
-                    }
+                && self.check_transitive_chain(&sc.superclass, superclass, axioms)
+            {
+                return true;
+            }
         }
 
         // 4. Equivalent classes check
         for ax in axioms {
             if let Axiom::EquivalentClasses(ec) = ax
-                && ec.classes.contains(subclass) && ec.classes.contains(superclass) {
-                    return true;
-                }
+                && ec.classes.contains(subclass)
+                && ec.classes.contains(superclass)
+            {
+                return true;
+            }
         }
 
         // 5. Property domain: A ⊑ ∃R.C implies A ⊑ domain(R) if domain(R)=C
         for ax in axioms {
             if let Axiom::ObjectPropertyDomain(dom) = ax
-                && &dom.domain == superclass {
-                    for sc in axioms {
-                        if let Axiom::SubClassOf(sub) = sc
-                            && &sub.subclass == subclass
-                                && let ClassExpression::ObjectSomeValuesFrom { property, .. } = &sub.superclass
-                                    && *property == dom.property {
-                                        return true;
-                                    }
+                && &dom.domain == superclass
+            {
+                for sc in axioms {
+                    if let Axiom::SubClassOf(sub) = sc
+                        && &sub.subclass == subclass
+                        && let ClassExpression::ObjectSomeValuesFrom { property, .. } =
+                            &sub.superclass
+                        && *property == dom.property
+                    {
+                        return true;
                     }
                 }
+            }
         }
 
         // 6. Property range and subclass chains: A ⊑ ∀R.C and range(R)=D with C ⊑ D → A ⊑ D
         for ax in axioms {
             if let Axiom::ObjectPropertyRange(range) = ax
-                && &range.range == superclass {
-                    for sc in axioms {
-                        if let Axiom::SubClassOf(sub) = sc
-                            && &sub.subclass == subclass
-                                && let ClassExpression::ObjectAllValuesFrom { property, filler } = &sub.superclass
-                                    && *property == range.property
-                                        && (filler.as_ref() == superclass || self.check_transitive_chain(filler, superclass, axioms)) {
-                                            return true;
-                                        }
+                && &range.range == superclass
+            {
+                for sc in axioms {
+                    if let Axiom::SubClassOf(sub) = sc
+                        && &sub.subclass == subclass
+                        && let ClassExpression::ObjectAllValuesFrom { property, filler } =
+                            &sub.superclass
+                        && *property == range.property
+                        && (filler.as_ref() == superclass
+                            || self.check_transitive_chain(filler, superclass, axioms))
+                    {
+                        return true;
                     }
                 }
+            }
         }
 
         false
@@ -675,17 +689,19 @@ impl JustificationComputer {
         for ax in axioms {
             if let Axiom::SubClassOf(sc) = ax
                 && &sc.subclass == from
-                    && self.check_transitive_chain_impl(&sc.superclass, to, axioms, visited) {
+                && self.check_transitive_chain_impl(&sc.superclass, to, axioms, visited)
+            {
+                return true;
+            }
+            if let Axiom::EquivalentClasses(ec) = ax
+                && ec.classes.contains(from)
+            {
+                for c in &ec.classes {
+                    if c != from && self.check_transitive_chain_impl(c, to, axioms, visited) {
                         return true;
                     }
-            if let Axiom::EquivalentClasses(ec) = ax
-                && ec.classes.contains(from) {
-                    for c in &ec.classes {
-                        if c != from && self.check_transitive_chain_impl(c, to, axioms, visited) {
-                            return true;
-                        }
-                    }
                 }
+            }
         }
         false
     }

@@ -120,12 +120,18 @@ impl DataFactory {
 
     /// Get or create a named class for the given IRI.
     pub fn get_class(&self, iri: &IRI) -> Class {
-        let cache = self.class_cache.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let cache = self
+            .class_cache
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(cls) = cache.get(iri) {
             return cls.clone();
         }
         drop(cache);
-        let mut cache = self.class_cache.write().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut cache = self
+            .class_cache
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         cache
             .entry(iri.clone())
             .or_insert_with(|| Class { iri: iri.clone() })
@@ -716,7 +722,10 @@ impl DataFactory {
 
     /// Create a declaration axiom.
     #[must_use]
-    pub fn get_declaration_axiom(&self, entity: Entity) -> crate::ontology::axioms::DeclarationAxiom {
+    pub fn get_declaration_axiom(
+        &self,
+        entity: Entity,
+    ) -> crate::ontology::axioms::DeclarationAxiom {
         crate::ontology::axioms::DeclarationAxiom {
             id: self.next_id(),
             entity,

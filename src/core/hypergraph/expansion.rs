@@ -520,14 +520,10 @@ impl HypertableauExpansion {
             // of complex class expressions
             for i in 0..node.complex_labels.len() {
                 for j in (i + 1)..node.complex_labels.len() {
-                    if Self::are_complements(
-                        &node.complex_labels[i],
-                        &node.complex_labels[j],
-                    ) {
+                    if Self::are_complements(&node.complex_labels[i], &node.complex_labels[j]) {
                         trace!(
                             "Clash detected via complement: {:?} vs {:?} in node {node_id}",
-                            node.complex_labels[i],
-                            node.complex_labels[j]
+                            node.complex_labels[i], node.complex_labels[j]
                         );
                         return true;
                     }
@@ -540,13 +536,15 @@ impl HypertableauExpansion {
     /// Check if two class expressions are complements of each other
     fn are_complements(a: &ClassExpression, b: &ClassExpression) -> bool {
         if let ClassExpression::ObjectComplementOf(inner) = a
-            && inner.as_ref() == b {
-                return true;
-            }
+            && inner.as_ref() == b
+        {
+            return true;
+        }
         if let ClassExpression::ObjectComplementOf(inner) = b
-            && inner.as_ref() == a {
-                return true;
-            }
+            && inner.as_ref() == a
+        {
+            return true;
+        }
         false
     }
 

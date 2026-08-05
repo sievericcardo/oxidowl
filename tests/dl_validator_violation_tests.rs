@@ -3,8 +3,8 @@ use helpers::*;
 
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
-use oxidowl::profiles::*;
 use oxidowl::profiles::validator::OWL2ProfileValidator;
+use oxidowl::profiles::*;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Non-Simple Property in Cardinality Restriction
@@ -25,9 +25,7 @@ fn test_dl_non_simple_property_in_cardinality() {
     df.auto_declare(&mut ont);
 
     let validator = OWL2ProfileValidator::new();
-    let report = validator
-        .validate_profile(&ont, OWL2Profile::DL)
-        .unwrap();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
     assert!(
         !report.is_valid(),
@@ -55,9 +53,7 @@ fn test_dl_non_simple_property_in_self() {
     df.auto_declare(&mut ont);
 
     let validator = OWL2ProfileValidator::new();
-    let report = validator
-        .validate_profile(&ont, OWL2Profile::DL)
-        .unwrap();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
     // NOTE: HasSelf on non-simple property check is a known gap in the current
     // DL validator. This test documents the expected violation.
@@ -84,9 +80,7 @@ fn test_dl_non_simple_property_in_disjoint() {
     df.auto_declare(&mut ont);
 
     let validator = OWL2ProfileValidator::new();
-    let report = validator
-        .validate_profile(&ont, OWL2Profile::DL)
-        .unwrap();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
     // NOTE: DisjointObjectProperties with non-simple property check is a known
     // gap in the current DL validator. This test documents the expected violation.
@@ -123,9 +117,7 @@ fn test_dl_illegal_punning_class_datatype() {
     ont.add_axiom(decl_datatype);
 
     let validator = OWL2ProfileValidator::new();
-    let report = validator
-        .validate_profile(&ont, OWL2Profile::DL)
-        .unwrap();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
     // NOTE: Illegal punning (class + datatype same IRI) check is a known gap
     // in the current DL validator. This test documents the expected violation.
@@ -154,9 +146,7 @@ fn test_dl_non_simple_property_in_chain() {
     df.auto_declare(&mut ont);
 
     let validator = OWL2ProfileValidator::new();
-    let report = validator
-        .validate_profile(&ont, OWL2Profile::DL)
-        .unwrap();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
     // NOTE: Property chain with non-simple super-property check is a known gap
     // in the current DL validator. This test documents the expected violation.
@@ -182,9 +172,7 @@ fn test_dl_asymmetric_on_non_simple() {
     df.auto_declare(&mut ont);
 
     let validator = OWL2ProfileValidator::new();
-    let report = validator
-        .validate_profile(&ont, OWL2Profile::DL)
-        .unwrap();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
     // NOTE: Asymmetric on non-simple property check is a known gap in the
     // current DL validator. This test documents the expected violation.
@@ -219,9 +207,7 @@ fn test_dl_property_simplicity_rules() {
     df.auto_declare(&mut ont);
 
     let validator = OWL2ProfileValidator::new();
-    let report = validator
-        .validate_profile(&ont, OWL2Profile::DL)
-        .unwrap();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
     // NOTE: Transitively-derived non-simple property (S sub-of transitive R)
     // check is a known gap. This test documents the expected violation.
@@ -250,9 +236,7 @@ fn test_dl_valid_simple_property_cardinality() {
     df.auto_declare(&mut ont);
 
     let validator = OWL2ProfileValidator::new();
-    let report = validator
-        .validate_profile(&ont, OWL2Profile::DL)
-        .unwrap();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
     assert!(
         report.is_valid(),
@@ -276,9 +260,7 @@ fn test_dl_valid_ontology_passes() {
     df.auto_declare(&mut ont);
 
     let validator = OWL2ProfileValidator::new();
-    let report = validator
-        .validate_profile(&ont, OWL2Profile::DL)
-        .unwrap();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
     assert!(
         report.is_valid(),
@@ -311,9 +293,7 @@ fn test_dl_non_simple_property_from_chain() {
     df.auto_declare(&mut ont);
 
     let validator = OWL2ProfileValidator::new();
-    let report = validator
-        .validate_profile(&ont, OWL2Profile::DL)
-        .unwrap();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
     // NOTE: Property in a chain becoming non-simple is a known gap in the
     // current DL validator. This test documents the expected violation.
@@ -342,11 +322,12 @@ fn test_dl_validator_report_structure() {
     df.auto_declare(&mut ont);
 
     let validator = OWL2ProfileValidator::new();
-    let report = validator
-        .validate_profile(&ont, OWL2Profile::DL)
-        .unwrap();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
-    assert!(!report.violations.is_empty(), "Report should have violations");
+    assert!(
+        !report.violations.is_empty(),
+        "Report should have violations"
+    );
     assert!(!report.is_valid(), "is_valid should be false");
     assert_eq!(report.profile, OWL2Profile::DL, "Profile should be DL");
 

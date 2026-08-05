@@ -1,8 +1,8 @@
 #[path = "helpers/mod.rs"]
 mod helpers;
-use helpers::*;
-use helpers::df::DF;
 use helpers::assertions::*;
+use helpers::df::DF;
+use helpers::*;
 
 use oxidowl::ontology::*;
 use oxidowl::parsers::*;
@@ -87,44 +87,201 @@ DifferentIndividuals(:i :j :k)
 "#;
 
     let result = parse_functional(functional_text);
-    assert!(result.is_ok(), "Should parse all axiom types: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse all axiom types: {:?}",
+        result.err()
+    );
     let ont = result.unwrap();
     let axioms = ont.axioms();
     assert!(!axioms.is_empty(), "Ontology should contain axioms");
 
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::Declaration(_))), "Missing Declaration");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::SubClassOf(_))), "Missing SubClassOf");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::EquivalentClasses(_))), "Missing EquivalentClasses");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::DisjointClasses(_))), "Missing DisjointClasses");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::DisjointUnion(_))), "Missing DisjointUnion");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::SubObjectPropertyOf(_))), "Missing SubObjectPropertyOf");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::EquivalentObjectProperties(_))), "Missing EquivalentObjectProperties");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::DisjointObjectProperties(_))), "Missing DisjointObjectProperties");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::InverseObjectProperties(_))), "Missing InverseObjectProperties");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::ObjectPropertyDomain(_))), "Missing ObjectPropertyDomain");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::ObjectPropertyRange(_))), "Missing ObjectPropertyRange");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::FunctionalObjectProperty(_))), "Missing FunctionalObjectProperty");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::InverseFunctionalObjectProperty(_))), "Missing InverseFunctionalObjectProperty");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::ReflexiveObjectProperty(_))), "Missing ReflexiveObjectProperty");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::IrreflexiveObjectProperty(_))), "Missing IrreflexiveObjectProperty");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::SymmetricObjectProperty(_))), "Missing SymmetricObjectProperty");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::AsymmetricObjectProperty(_))), "Missing AsymmetricObjectProperty");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::TransitiveObjectProperty(_))), "Missing TransitiveObjectProperty");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::SubDataPropertyOf(_))), "Missing SubDataPropertyOf");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::EquivalentDataProperties(_))), "Missing EquivalentDataProperties");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::DisjointDataProperties(_))), "Missing DisjointDataProperties");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::DataPropertyDomain(_))), "Missing DataPropertyDomain");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::DataPropertyRange(_))), "Missing DataPropertyRange");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::FunctionalDataProperty(_))), "Missing FunctionalDataProperty");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::SameIndividual(_))), "Missing SameIndividual");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::DifferentIndividuals(_))), "Missing DifferentIndividuals");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::ClassAssertion(_))), "Missing ClassAssertion");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::ObjectPropertyAssertion(_))), "Missing ObjectPropertyAssertion");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::DataPropertyAssertion(_))), "Missing DataPropertyAssertion");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::NegativeObjectPropertyAssertion(_))), "Missing NegativeObjectPropertyAssertion");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::NegativeDataPropertyAssertion(_))), "Missing NegativeDataPropertyAssertion");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::AnnotationAssertion(_))), "Missing AnnotationAssertion");
-    assert!(axioms.iter().any(|a| matches!(a, Axiom::HasKey(_))), "Missing HasKey");
+    assert!(
+        axioms.iter().any(|a| matches!(a, Axiom::Declaration(_))),
+        "Missing Declaration"
+    );
+    assert!(
+        axioms.iter().any(|a| matches!(a, Axiom::SubClassOf(_))),
+        "Missing SubClassOf"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::EquivalentClasses(_))),
+        "Missing EquivalentClasses"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::DisjointClasses(_))),
+        "Missing DisjointClasses"
+    );
+    assert!(
+        axioms.iter().any(|a| matches!(a, Axiom::DisjointUnion(_))),
+        "Missing DisjointUnion"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::SubObjectPropertyOf(_))),
+        "Missing SubObjectPropertyOf"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::EquivalentObjectProperties(_))),
+        "Missing EquivalentObjectProperties"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::DisjointObjectProperties(_))),
+        "Missing DisjointObjectProperties"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::InverseObjectProperties(_))),
+        "Missing InverseObjectProperties"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::ObjectPropertyDomain(_))),
+        "Missing ObjectPropertyDomain"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::ObjectPropertyRange(_))),
+        "Missing ObjectPropertyRange"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::FunctionalObjectProperty(_))),
+        "Missing FunctionalObjectProperty"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::InverseFunctionalObjectProperty(_))),
+        "Missing InverseFunctionalObjectProperty"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::ReflexiveObjectProperty(_))),
+        "Missing ReflexiveObjectProperty"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::IrreflexiveObjectProperty(_))),
+        "Missing IrreflexiveObjectProperty"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::SymmetricObjectProperty(_))),
+        "Missing SymmetricObjectProperty"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::AsymmetricObjectProperty(_))),
+        "Missing AsymmetricObjectProperty"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::TransitiveObjectProperty(_))),
+        "Missing TransitiveObjectProperty"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::SubDataPropertyOf(_))),
+        "Missing SubDataPropertyOf"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::EquivalentDataProperties(_))),
+        "Missing EquivalentDataProperties"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::DisjointDataProperties(_))),
+        "Missing DisjointDataProperties"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::DataPropertyDomain(_))),
+        "Missing DataPropertyDomain"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::DataPropertyRange(_))),
+        "Missing DataPropertyRange"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::FunctionalDataProperty(_))),
+        "Missing FunctionalDataProperty"
+    );
+    assert!(
+        axioms.iter().any(|a| matches!(a, Axiom::SameIndividual(_))),
+        "Missing SameIndividual"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::DifferentIndividuals(_))),
+        "Missing DifferentIndividuals"
+    );
+    assert!(
+        axioms.iter().any(|a| matches!(a, Axiom::ClassAssertion(_))),
+        "Missing ClassAssertion"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::ObjectPropertyAssertion(_))),
+        "Missing ObjectPropertyAssertion"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::DataPropertyAssertion(_))),
+        "Missing DataPropertyAssertion"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::NegativeObjectPropertyAssertion(_))),
+        "Missing NegativeObjectPropertyAssertion"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::NegativeDataPropertyAssertion(_))),
+        "Missing NegativeDataPropertyAssertion"
+    );
+    assert!(
+        axioms
+            .iter()
+            .any(|a| matches!(a, Axiom::AnnotationAssertion(_))),
+        "Missing AnnotationAssertion"
+    );
+    assert!(
+        axioms.iter().any(|a| matches!(a, Axiom::HasKey(_))),
+        "Missing HasKey"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -148,29 +305,47 @@ fn test_owl_xml_roundtrip_all_axioms() {
     ont.add_axiom(df.sub_class_of(cls_a.clone(), cls_b.clone()));
     ont.add_axiom(df.class_assertion(cls_a.clone(), ind_i.clone()));
     ont.add_axiom(df.object_property_assertion(prop_p.clone(), ind_i.clone(), ind_j.clone()));
-    ont.add_axiom(df.declaration_axiom(df.make_entity("http://ex.org/p", EntityType::ObjectProperty)));
-    ont.add_axiom(df.declaration_axiom(df.make_entity("http://ex.org/i", EntityType::NamedIndividual)));
-    ont.add_axiom(df.declaration_axiom(df.make_entity("http://ex.org/j", EntityType::NamedIndividual)));
+    ont.add_axiom(
+        df.declaration_axiom(df.make_entity("http://ex.org/p", EntityType::ObjectProperty)),
+    );
+    ont.add_axiom(
+        df.declaration_axiom(df.make_entity("http://ex.org/i", EntityType::NamedIndividual)),
+    );
+    ont.add_axiom(
+        df.declaration_axiom(df.make_entity("http://ex.org/j", EntityType::NamedIndividual)),
+    );
 
     let _original_count = ont.axioms().len();
 
-    let serialized = save_to_string(&ont, OntologyFormat::OwlXml)
-        .expect("Should serialize to OWL/XML");
+    let serialized =
+        save_to_string(&ont, OntologyFormat::OwlXml).expect("Should serialize to OWL/XML");
 
-    assert!(!serialized.is_empty(), "Serialized OWL/XML should not be empty");
-    assert!(serialized.contains("http://ex.org/"), "Should contain ontology IRIs");
+    assert!(
+        !serialized.is_empty(),
+        "Serialized OWL/XML should not be empty"
+    );
+    assert!(
+        serialized.contains("http://ex.org/"),
+        "Should contain ontology IRIs"
+    );
 
-    let reparsed = parse_owl_xml(&serialized)
-        .expect("Should re-parse OWL/XML");
+    let reparsed = parse_owl_xml(&serialized).expect("Should re-parse OWL/XML");
 
-    assert!(!reparsed.axioms().is_empty(), "Re-parsed ontology should have axioms");
+    assert!(
+        !reparsed.axioms().is_empty(),
+        "Re-parsed ontology should have axioms"
+    );
 
     let reparsed_count = reparsed.axioms().len();
-    assert!(reparsed_count > 0, "Re-parsed OWL/XML should contain axioms");
+    assert!(
+        reparsed_count > 0,
+        "Re-parsed OWL/XML should contain axioms"
+    );
 
-    let has_class_a = reparsed.axioms().iter().any(|a| {
-        format!("{:?}", a).contains(ex("A").as_str())
-    });
+    let has_class_a = reparsed
+        .axioms()
+        .iter()
+        .any(|a| format!("{:?}", a).contains(ex("A").as_str()));
     assert!(has_class_a, "Re-parsed ontology should reference class A");
 }
 
@@ -201,16 +376,31 @@ ex:j ex:p _:genid1 .
 "#;
 
     let result = parse_turtle(turtle_text);
-    assert!(result.is_ok(), "Should parse Turtle with blank nodes: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse Turtle with blank nodes: {:?}",
+        result.err()
+    );
     let ont = result.unwrap();
     assert!(!ont.axioms().is_empty(), "Ontology should have axioms");
 
     let serialized = save_to_string(&ont, OntologyFormat::Turtle);
-    assert!(serialized.is_ok(), "Should serialize back to Turtle: {:?}", serialized.err());
+    assert!(
+        serialized.is_ok(),
+        "Should serialize back to Turtle: {:?}",
+        serialized.err()
+    );
 
     let reparsed = parse_turtle(&serialized.unwrap());
-    assert!(reparsed.is_ok(), "Should re-parse serialized Turtle: {:?}", reparsed.err());
-    assert!(!reparsed.unwrap().axioms().is_empty(), "Re-parsed ontology should have axioms");
+    assert!(
+        reparsed.is_ok(),
+        "Should re-parse serialized Turtle: {:?}",
+        reparsed.err()
+    );
+    assert!(
+        !reparsed.unwrap().axioms().is_empty(),
+        "Re-parsed ontology should have axioms"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -231,9 +421,16 @@ fn test_turtle_bom_handling() {
 
     let cleaned = turtle_content.trim_start_matches(bom);
     let result = parse_turtle(cleaned);
-    assert!(result.is_ok(), "Should parse Turtle after stripping UTF-8 BOM: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse Turtle after stripping UTF-8 BOM: {:?}",
+        result.err()
+    );
     let ont = result.unwrap();
-    assert!(!ont.axioms().is_empty(), "Should parse axioms from BOM-prefixed Turtle");
+    assert!(
+        !ont.axioms().is_empty(),
+        "Should parse axioms from BOM-prefixed Turtle"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -270,16 +467,25 @@ fn test_rdf_xml_strict_mode() {
             o
         }
         Err(e) => {
-            eprintln!("RDF/XML parse error (may be expected with untyped classes): {:?}", e);
+            eprintln!(
+                "RDF/XML parse error (may be expected with untyped classes): {:?}",
+                e
+            );
             return;
         }
     };
 
     assert!(!ont.axioms().is_empty(), "Ontology should contain axioms");
-    let class_iris: Vec<String> = ont.axioms().iter()
+    let class_iris: Vec<String> = ont
+        .axioms()
+        .iter()
         .filter_map(|a| {
             let s = format!("{:?}", a);
-            if s.contains("http://ex.org/A") { Some("A".to_string()) } else { None }
+            if s.contains("http://ex.org/A") {
+                Some("A".to_string())
+            } else {
+                None
+            }
         })
         .collect();
     assert!(!class_iris.is_empty(), "Should reference class A");
@@ -295,11 +501,16 @@ fn test_manchester_class_expression_parsing() {
     let parser = ManchesterParser::new(config);
 
     let result = parser.parse_class_expression("ex:A and ex:B");
-    assert!(result.is_ok(), "Should parse intersection: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse intersection: {:?}",
+        result.err()
+    );
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectIntersectionOf(_)),
-        "Expected ObjectIntersectionOf, got {:?}", ce
+        "Expected ObjectIntersectionOf, got {:?}",
+        ce
     );
 
     let result = parser.parse_class_expression("ex:A or ex:B");
@@ -307,55 +518,86 @@ fn test_manchester_class_expression_parsing() {
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectUnionOf(_)),
-        "Expected ObjectUnionOf, got {:?}", ce
+        "Expected ObjectUnionOf, got {:?}",
+        ce
     );
 
     let result = parser.parse_class_expression("not ex:A");
-    assert!(result.is_ok(), "Should parse complement: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse complement: {:?}",
+        result.err()
+    );
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectComplementOf(_)),
-        "Expected ObjectComplementOf, got {:?}", ce
+        "Expected ObjectComplementOf, got {:?}",
+        ce
     );
 
     let result = parser.parse_class_expression("ex:p some ex:A");
-    assert!(result.is_ok(), "Should parse someValuesFrom: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse someValuesFrom: {:?}",
+        result.err()
+    );
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectSomeValuesFrom { .. }),
-        "Expected ObjectSomeValuesFrom, got {:?}", ce
+        "Expected ObjectSomeValuesFrom, got {:?}",
+        ce
     );
 
     let result = parser.parse_class_expression("ex:p only ex:A");
-    assert!(result.is_ok(), "Should parse allValuesFrom: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse allValuesFrom: {:?}",
+        result.err()
+    );
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectAllValuesFrom { .. }),
-        "Expected ObjectAllValuesFrom, got {:?}", ce
+        "Expected ObjectAllValuesFrom, got {:?}",
+        ce
     );
 
     let result = parser.parse_class_expression("ex:p min 2 ex:A");
-    assert!(result.is_ok(), "Should parse minCardinality: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse minCardinality: {:?}",
+        result.err()
+    );
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectMinCardinality { .. }),
-        "Expected ObjectMinCardinality, got {:?}", ce
+        "Expected ObjectMinCardinality, got {:?}",
+        ce
     );
 
     let result = parser.parse_class_expression("ex:p max 5 ex:A");
-    assert!(result.is_ok(), "Should parse maxCardinality: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse maxCardinality: {:?}",
+        result.err()
+    );
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectMaxCardinality { .. }),
-        "Expected ObjectMaxCardinality, got {:?}", ce
+        "Expected ObjectMaxCardinality, got {:?}",
+        ce
     );
 
     let result = parser.parse_class_expression("ex:p exactly 3 ex:A");
-    assert!(result.is_ok(), "Should parse exactCardinality: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Should parse exactCardinality: {:?}",
+        result.err()
+    );
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectExactCardinality { .. }),
-        "Expected ObjectExactCardinality, got {:?}", ce
+        "Expected ObjectExactCardinality, got {:?}",
+        ce
     );
 }
 
@@ -374,7 +616,10 @@ fn test_dl_syntax_parsing() {
             let axioms = ont.axioms();
             if !axioms.is_empty() {
                 let has_subclass = axioms.iter().any(|a| matches!(a, Axiom::SubClassOf(_)));
-                assert!(has_subclass, "Should contain SubClassOf axiom from DL syntax");
+                assert!(
+                    has_subclass,
+                    "Should contain SubClassOf axiom from DL syntax"
+                );
             }
         }
         Err(e) => {
@@ -399,7 +644,10 @@ fn test_krss_parsing() {
     let result = oxidowl::parsers::krss::parse(krss_text);
     match result {
         Ok(ont) => {
-            assert!(!ont.axioms().is_empty(), "KRSS parsing should produce axioms");
+            assert!(
+                !ont.axioms().is_empty(),
+                "KRSS parsing should produce axioms"
+            );
         }
         Err(e) => {
             eprintln!("KRSS parse error: {:?}", e);
@@ -415,11 +663,18 @@ fn test_krss_parsing() {
 fn test_parser_error_handling() {
     let empty = "";
     let result = parse_functional(empty);
-    assert!(result.is_ok() || result.is_err(), "Empty string should produce a result");
+    assert!(
+        result.is_ok() || result.is_err(),
+        "Empty string should produce a result"
+    );
 
     let garbage = "not valid owl content @#$%^&*";
     let result = parse_functional(garbage);
-    assert!(result.is_err(), "Garbage should produce an error: {:?}", result.ok());
+    assert!(
+        result.is_err(),
+        "Garbage should produce an error: {:?}",
+        result.ok()
+    );
 
     let bad_xml = "<notowl></notowl>";
     let result = parse_owl_xml(bad_xml);
@@ -435,7 +690,11 @@ fn test_parser_error_handling() {
 
     let truncated_func = "Prefix(:=<http://ex.org/>) Ontology(<http://ex.org>";
     let result = parse_functional(truncated_func);
-    assert!(result.is_err(), "Truncated Functional syntax should produce an error: {:?}", result.ok());
+    assert!(
+        result.is_err(),
+        "Truncated Functional syntax should produce an error: {:?}",
+        result.ok()
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -512,10 +771,18 @@ fn test_cross_format_equivalence() {
     ont.add_axiom(df.sub_class_of(cls_b.clone(), cls_c.clone()));
     ont.add_axiom(df.class_assertion(cls_a.clone(), ind_i.clone()));
     ont.add_axiom(df.object_property_assertion(prop_p.clone(), ind_i.clone(), ind_j.clone()));
-    ont.add_axiom(df.declaration_axiom(df.make_entity("http://ex.org/p", EntityType::ObjectProperty)));
-    ont.add_axiom(df.declaration_axiom(df.make_entity("http://ex.org/i", EntityType::NamedIndividual)));
-    ont.add_axiom(df.declaration_axiom(df.make_entity("http://ex.org/j", EntityType::NamedIndividual)));
-    ont.add_axiom(df.declaration_axiom(df.make_entity("http://ex.org/d", EntityType::DataProperty)));
+    ont.add_axiom(
+        df.declaration_axiom(df.make_entity("http://ex.org/p", EntityType::ObjectProperty)),
+    );
+    ont.add_axiom(
+        df.declaration_axiom(df.make_entity("http://ex.org/i", EntityType::NamedIndividual)),
+    );
+    ont.add_axiom(
+        df.declaration_axiom(df.make_entity("http://ex.org/j", EntityType::NamedIndividual)),
+    );
+    ont.add_axiom(
+        df.declaration_axiom(df.make_entity("http://ex.org/d", EntityType::DataProperty)),
+    );
 
     let original_count = ont.axioms().len();
 
@@ -532,7 +799,11 @@ fn test_cross_format_equivalence() {
         let serialized = save_to_string(&ont, *format);
         match serialized {
             Ok(s) => {
-                assert!(!s.is_empty(), "Serialized output for {:?} should not be empty", format);
+                assert!(
+                    !s.is_empty(),
+                    "Serialized output for {:?} should not be empty",
+                    format
+                );
                 let reparsed = match format {
                     OntologyFormat::RdfXml => parse_rdf_xml(&s),
                     OntologyFormat::Functional => parse_functional(&s),
@@ -553,7 +824,8 @@ fn test_cross_format_equivalence() {
             Ok(reparsed) => {
                 assert!(
                     !reparsed.axioms().is_empty(),
-                    "{:?} re-parse should produce axioms", fmt
+                    "{:?} re-parse should produce axioms",
+                    fmt
                 );
             }
             Err(e) => {
@@ -562,10 +834,12 @@ fn test_cross_format_equivalence() {
         }
     }
 
-    let success_count = reparse_results.iter()
-        .filter(|(_, r)| r.is_ok())
-        .count();
-    assert!(success_count > 0, "At least one format should succeed roundtrip. Original had {} axioms", original_count);
+    let success_count = reparse_results.iter().filter(|(_, r)| r.is_ok()).count();
+    assert!(
+        success_count > 0,
+        "At least one format should succeed roundtrip. Original had {} axioms",
+        original_count
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -585,7 +859,10 @@ fn test_ntriples_parsing() {
     let result = parse_ntriples(nt_text);
     assert!(result.is_ok(), "Should parse N-Triples: {:?}", result.err());
     let ont = result.unwrap();
-    assert!(!ont.axioms().is_empty(), "Should parse N-Triples content into axioms");
+    assert!(
+        !ont.axioms().is_empty(),
+        "Should parse N-Triples content into axioms"
+    );
 
     let serialized = save_to_string(&ont, OntologyFormat::NTriples);
     assert!(serialized.is_ok(), "Should serialize back to N-Triples");

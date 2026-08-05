@@ -498,14 +498,16 @@ mod tests {
     #[test]
     fn test_fingerprint_with_roles() {
         let mut node1 = create_test_node(0, vec!["Person"]);
-        node1
-            .role_successors
-            .insert(std::sync::Arc::from("knows"), vec![1, 2].into_iter().collect());
+        node1.role_successors.insert(
+            std::sync::Arc::from("knows"),
+            vec![1, 2].into_iter().collect(),
+        );
 
         let mut node2 = create_test_node(0, vec!["Person"]);
-        node2
-            .role_successors
-            .insert(std::sync::Arc::from("knows"), vec![2, 1].into_iter().collect()); // Different order
+        node2.role_successors.insert(
+            std::sync::Arc::from("knows"),
+            vec![2, 1].into_iter().collect(),
+        ); // Different order
 
         let fp1 = NodeFingerprint::from_node(&node1);
         let fp2 = NodeFingerprint::from_node(&node2);

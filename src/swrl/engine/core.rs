@@ -420,8 +420,7 @@ impl SWRLRuleEngine {
             // Body matching is read-only, so we clone the ontology once per group
             // rather than holding the lock across the parallel section.
             let snapshot: Arc<Ontology> = {
-                let guard =
-                    read_lock(&ontology_arc, "SWRL parallel: snapshot for group")?;
+                let guard = read_lock(&ontology_arc, "SWRL parallel: snapshot for group")?;
                 Arc::new((*guard).clone())
             };
 
@@ -441,8 +440,7 @@ impl SWRLRuleEngine {
             // De-duplicate inferences through `inference_cache` and write to the
             // live ontology under a single write lock.
             if !candidate_axioms.is_empty() {
-                let mut onto =
-                    write_lock(&ontology_arc, "SWRL parallel: applying inferences")?;
+                let mut onto = write_lock(&ontology_arc, "SWRL parallel: applying inferences")?;
                 for axiom in candidate_axioms {
                     // `HashSet::insert` returns `true` if the item was not present.
                     if self.inference_cache.insert(axiom.clone()) {

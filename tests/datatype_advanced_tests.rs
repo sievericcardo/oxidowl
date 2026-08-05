@@ -3,8 +3,8 @@ mod helpers;
 
 use helpers::*;
 use oxidowl::ontology::axioms::*;
-use oxidowl::ontology::*;
 use oxidowl::ontology::datatypes::DatatypeDefinitionAxiom;
+use oxidowl::ontology::*;
 
 const XSD: &str = "http://www.w3.org/2001/XMLSchema#";
 
@@ -22,14 +22,12 @@ fn test_datatype_complement() {
     let dt = xsd_iri("integer");
     let complement = DataRange::DataComplementOf(Box::new(DataRange::Datatype(dt)));
     match &complement {
-        DataRange::DataComplementOf(inner) => {
-            match inner.as_ref() {
-                DataRange::Datatype(dt_iri) => {
-                    assert!(dt_iri.as_str().contains("integer"));
-                }
-                _ => panic!("Expected Datatype variant"),
+        DataRange::DataComplementOf(inner) => match inner.as_ref() {
+            DataRange::Datatype(dt_iri) => {
+                assert!(dt_iri.as_str().contains("integer"));
             }
-        }
+            _ => panic!("Expected Datatype variant"),
+        },
         _ => panic!("Expected DataComplementOf"),
     }
 }
@@ -72,17 +70,11 @@ fn test_datatype_restriction() {
     let integer = xsd_iri("integer");
     let facet_min = FacetRestriction {
         facet: xsd_iri("minInclusive"),
-        value: Literal::with_datatype(
-            "0".to_string(),
-            xsd_iri("integer"),
-        ),
+        value: Literal::with_datatype("0".to_string(), xsd_iri("integer")),
     };
     let facet_max = FacetRestriction {
         facet: xsd_iri("maxInclusive"),
-        value: Literal::with_datatype(
-            "100".to_string(),
-            xsd_iri("integer"),
-        ),
+        value: Literal::with_datatype("100".to_string(), xsd_iri("integer")),
     };
 
     let restriction = DataRange::DatatypeRestriction {
@@ -91,7 +83,10 @@ fn test_datatype_restriction() {
     };
 
     match &restriction {
-        DataRange::DatatypeRestriction { datatype, restrictions } => {
+        DataRange::DatatypeRestriction {
+            datatype,
+            restrictions,
+        } => {
             assert!(datatype.as_str().contains("integer"));
             assert_eq!(restrictions.len(), 2);
             assert!(restrictions[0].facet.as_str().contains("minInclusive"));
@@ -104,18 +99,9 @@ fn test_datatype_restriction() {
 /// Create DataOneOf with literal values.
 #[test]
 fn test_datatype_one_of() {
-    let lit1 = Literal::with_datatype(
-        "1".to_string(),
-        xsd_iri("integer"),
-    );
-    let lit2 = Literal::with_datatype(
-        "2".to_string(),
-        xsd_iri("integer"),
-    );
-    let lit3 = Literal::with_datatype(
-        "3".to_string(),
-        xsd_iri("integer"),
-    );
+    let lit1 = Literal::with_datatype("1".to_string(), xsd_iri("integer"));
+    let lit2 = Literal::with_datatype("2".to_string(), xsd_iri("integer"));
+    let lit3 = Literal::with_datatype("3".to_string(), xsd_iri("integer"));
 
     let one_of = DataRange::DataOneOf(vec![lit1, lit2, lit3]);
 
@@ -355,8 +341,10 @@ fn test_all_owl2_datatype_iris() {
 fn test_datatype_subtype_transitive() {
     assert!(OWL2Datatype::Integer.is_subtype_of(&OWL2Datatype::Decimal));
     assert!(OWL2Datatype::Decimal.is_subtype_of(&OWL2Datatype::Real));
-    assert!(OWL2Datatype::Integer.is_subtype_of(&OWL2Datatype::Real),
-        "Integer should be transitive subtype of Real");
+    assert!(
+        OWL2Datatype::Integer.is_subtype_of(&OWL2Datatype::Real),
+        "Integer should be transitive subtype of Real"
+    );
 
     assert!(OWL2Datatype::Int.is_subtype_of(&OWL2Datatype::Long));
     assert!(OWL2Datatype::Long.is_subtype_of(&OWL2Datatype::Integer));
@@ -378,20 +366,23 @@ fn test_datatype_subtype_transitive() {
 fn test_facet_restriction_length() {
     let string_dt = xsd_iri("string");
     let length_iri = xsd_iri("length");
-    let length_value = Literal::with_datatype(
-        "10".to_string(),
-        xsd_iri("integer"),
-    );
+    let length_value = Literal::with_datatype("10".to_string(), xsd_iri("integer"));
 
     let fr = FacetRestriction {
         facet: length_iri.clone(),
         value: length_value.clone(),
     };
 
-    assert!(fr.facet.as_str().contains("length"),
-        "Facet IRI should contain 'length': {}", fr.facet.as_str());
+    assert!(
+        fr.facet.as_str().contains("length"),
+        "Facet IRI should contain 'length': {}",
+        fr.facet.as_str()
+    );
     assert_eq!(fr.value.value, "10");
-    assert!(fr.value.datatype.is_some(), "Length value should have integer datatype");
+    assert!(
+        fr.value.datatype.is_some(),
+        "Length value should have integer datatype"
+    );
 
     let restriction = DataRange::DatatypeRestriction {
         datatype: string_dt,
@@ -399,7 +390,10 @@ fn test_facet_restriction_length() {
     };
 
     match &restriction {
-        DataRange::DatatypeRestriction { datatype, restrictions } => {
+        DataRange::DatatypeRestriction {
+            datatype,
+            restrictions,
+        } => {
             assert!(datatype.as_str().contains("string"));
             assert_eq!(restrictions.len(), 1);
             assert!(restrictions[0].facet.as_str().contains("length"));
@@ -454,7 +448,10 @@ fn test_facet_restriction_pattern() {
     };
 
     match &restriction {
-        DataRange::DatatypeRestriction { datatype, restrictions } => {
+        DataRange::DatatypeRestriction {
+            datatype,
+            restrictions,
+        } => {
             assert!(datatype.as_str().contains("string"));
             assert_eq!(restrictions.len(), 1);
             assert!(restrictions[0].facet.as_str().contains("pattern"));
@@ -471,31 +468,19 @@ fn test_facet_restriction_pattern() {
 /// Scientific notation literal creation.
 #[test]
 fn test_literal_scientific_notation() {
-    let lit1 = Literal::with_datatype(
-        "1.5e10".to_string(),
-        xsd_iri("double"),
-    );
+    let lit1 = Literal::with_datatype("1.5e10".to_string(), xsd_iri("double"));
     assert_eq!(lit1.value, "1.5e10");
     assert!(lit1.datatype.is_some());
     assert!(lit1.language.is_none());
 
-    let lit2 = Literal::with_datatype(
-        "2.3E-4".to_string(),
-        xsd_iri("double"),
-    );
+    let lit2 = Literal::with_datatype("2.3E-4".to_string(), xsd_iri("double"));
     assert_eq!(lit2.value, "2.3E-4");
     assert!(lit2.datatype.is_some());
 
-    let lit3 = Literal::with_datatype(
-        "3.14".to_string(),
-        xsd_iri("decimal"),
-    );
+    let lit3 = Literal::with_datatype("3.14".to_string(), xsd_iri("decimal"));
     assert_eq!(lit3.value, "3.14");
 
-    let lit4 = Literal::with_datatype(
-        "-9.81".to_string(),
-        xsd_iri("float"),
-    );
+    let lit4 = Literal::with_datatype("-9.81".to_string(), xsd_iri("float"));
     assert_eq!(lit4.value, "-9.81");
 }
 
@@ -525,31 +510,21 @@ fn test_literal_escaping() {
 /// Language tag normalization (case handling).
 #[test]
 fn test_language_tag_normalization() {
-    let lit_en = Literal::with_language(
-        "hello".to_string(),
-        "en".to_string(),
-    );
+    let lit_en = Literal::with_language("hello".to_string(), "en".to_string());
     assert_eq!(lit_en.language.as_deref(), Some("en"));
     assert_eq!(lit_en.value, "hello");
 
-    let lit_en_upper = Literal::with_language(
-        "hello".to_string(),
-        "EN".to_string(),
-    );
+    let lit_en_upper = Literal::with_language("hello".to_string(), "EN".to_string());
     assert_eq!(lit_en_upper.language.as_deref(), Some("EN"));
-    assert_ne!(lit_en.language, lit_en_upper.language,
-        "Language tags 'en' and 'EN' are case-sensitive in structural form");
-
-    let lit_en_gb = Literal::with_language(
-        "colour".to_string(),
-        "en-GB".to_string(),
+    assert_ne!(
+        lit_en.language, lit_en_upper.language,
+        "Language tags 'en' and 'EN' are case-sensitive in structural form"
     );
+
+    let lit_en_gb = Literal::with_language("colour".to_string(), "en-GB".to_string());
     assert_eq!(lit_en_gb.language.as_deref(), Some("en-GB"));
 
-    let lit_fr = Literal::with_language(
-        "bonjour".to_string(),
-        "fr".to_string(),
-    );
+    let lit_fr = Literal::with_language("bonjour".to_string(), "fr".to_string());
     assert_eq!(lit_fr.language.as_deref(), Some("fr"));
 }
 
@@ -562,24 +537,29 @@ fn test_plain_literal_type_folding() {
     assert_eq!(plain.value, "abc");
 
     let _xsd_string_url = xsd_iri("string").to_url().ok();
-    let typed = Literal::with_datatype(
-        "abc".to_string(),
-        xsd_iri("string"),
-    );
+    let typed = Literal::with_datatype("abc".to_string(), xsd_iri("string"));
     assert!(typed.language.is_none());
     assert!(typed.datatype.is_some());
     assert_eq!(typed.value, "abc");
 
-    assert_eq!(plain.value, typed.value,
-        "Plain and xsd:string-typed literals should have same lexical value");
-    assert_ne!(plain.datatype, typed.datatype,
-        "Plain literal has no datatype; xsd:string-typed has a datatype URL");
-    assert_eq!(plain.language, typed.language,
-        "Neither should have a language tag");
+    assert_eq!(
+        plain.value, typed.value,
+        "Plain and xsd:string-typed literals should have same lexical value"
+    );
+    assert_ne!(
+        plain.datatype, typed.datatype,
+        "Plain literal has no datatype; xsd:string-typed has a datatype URL"
+    );
+    assert_eq!(
+        plain.language, typed.language,
+        "Neither should have a language tag"
+    );
 
     let plain2 = Literal::new("xyz".to_string());
-    assert_ne!(plain2.value, typed.value,
-        "Different lexical values should not match");
+    assert_ne!(
+        plain2.value, typed.value,
+        "Different lexical values should not match"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -599,12 +579,7 @@ fn test_datatype_definition_in_ontology() {
         b.datatype("http://www.w3.org/2001/XMLSchema#integer"),
     );
 
-    let axiom = DatatypeDefinitionAxiom::new(
-        id,
-        custom_dt.into(),
-        integer_range,
-        vec![],
-    );
+    let axiom = DatatypeDefinitionAxiom::new(id, custom_dt.into(), integer_range, vec![]);
 
     assert_eq!(axiom.id, 42);
     assert!(axiom.datatype.as_ref().contains("myInteger"));

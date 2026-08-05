@@ -95,9 +95,7 @@ fn test_swrl_all_atom_types_roundtrip() {
             second_argument: SWRLDArgument::Variable(var_z.clone()),
         },
         SWRLAtom::DataRangeAtom {
-            predicate: DataRange::Datatype(IRI::new(
-                "http://www.w3.org/2001/XMLSchema#integer",
-            )),
+            predicate: DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#integer")),
             argument: SWRLDArgument::Variable(var_z),
         },
         SWRLAtom::SameIndividualAtom {
@@ -117,10 +115,7 @@ fn test_swrl_all_atom_types_roundtrip() {
         },
     ];
 
-    let rule = SWRLRule {
-        head: vec![],
-        body,
-    };
+    let rule = SWRLRule { head: vec![], body };
     let ax = SWRLRuleAxiom {
         id: 1,
         rule,
@@ -132,8 +127,8 @@ fn test_swrl_all_atom_types_roundtrip() {
     ont.set_iri(IRI::new("http://ex.org/roundtrip"));
     ont.add_axiom(axiom);
 
-    let serialized = save_to_string(&ont, OntologyFormat::Functional)
-        .expect("serialize to functional");
+    let serialized =
+        save_to_string(&ont, OntologyFormat::Functional).expect("serialize to functional");
 
     let reparsed = parse_functional(&serialized).expect("reparse from functional");
 
@@ -187,8 +182,7 @@ fn test_swrl_alternate_namespace() {
     ont.set_iri(IRI::new("http://ex.org/altns"));
     ont.add_axiom(axiom);
 
-    let serialized =
-        save_to_string(&ont, OntologyFormat::Functional).expect("serialize");
+    let serialized = save_to_string(&ont, OntologyFormat::Functional).expect("serialize");
     let reparsed = parse_functional(&serialized).expect("reparse");
 
     let rule_count = reparsed
@@ -220,10 +214,7 @@ fn test_swrl_class_atom_with_named_individual() {
         argument: SWRLIArgument::Individual(ind),
     }];
 
-    let rule = SWRLRule {
-        head: vec![],
-        body,
-    };
+    let rule = SWRLRule { head: vec![], body };
     let ax = SWRLRuleAxiom {
         id: 1,
         rule,
@@ -261,10 +252,7 @@ fn test_swrl_object_property_atom() {
         second_argument: SWRLIArgument::Individual(obj),
     }];
 
-    let rule = SWRLRule {
-        head: vec![],
-        body,
-    };
+    let rule = SWRLRule { head: vec![], body };
     let ax = SWRLRuleAxiom {
         id: 1,
         rule,
@@ -308,10 +296,7 @@ fn test_swrl_data_property_atom() {
         second_argument: SWRLDArgument::Literal(lit),
     }];
 
-    let rule = SWRLRule {
-        head: vec![],
-        body,
-    };
+    let rule = SWRLRule { head: vec![], body };
     let ax = SWRLRuleAxiom {
         id: 1,
         rule,
@@ -355,10 +340,7 @@ fn test_swrl_builtin_atom() {
         ],
     }];
 
-    let rule = SWRLRule {
-        head: vec![],
-        body,
-    };
+    let rule = SWRLRule { head: vec![], body };
     let ax = SWRLRuleAxiom {
         id: 1,
         rule,
@@ -371,11 +353,12 @@ fn test_swrl_builtin_atom() {
     ont.add_axiom(axiom);
 
     if let Axiom::Rule(ra) = &ont.axioms()[0] {
-        if let SWRLAtom::BuiltInAtom { predicate, arguments } = &ra.rule.body[0] {
-            assert_eq!(
-                predicate.to_string(),
-                "http://www.w3.org/2003/11/swrlb#add"
-            );
+        if let SWRLAtom::BuiltInAtom {
+            predicate,
+            arguments,
+        } = &ra.rule.body[0]
+        {
+            assert_eq!(predicate.to_string(), "http://www.w3.org/2003/11/swrlb#add");
             assert_eq!(arguments.len(), 3);
             assert!(matches!(arguments[0], SWRLDArgument::Variable(_)));
             assert!(matches!(arguments[1], SWRLDArgument::Literal(_)));
@@ -411,10 +394,7 @@ fn test_swrl_same_different_atoms() {
         },
     ];
 
-    let rule = SWRLRule {
-        head: vec![],
-        body,
-    };
+    let rule = SWRLRule { head: vec![], body };
     let ax = SWRLRuleAxiom {
         id: 1,
         rule,
@@ -448,19 +428,14 @@ fn test_swrl_data_range_atom() {
     let var_z = SWRLVariable {
         iri: IRI::new("urn:swrl#z"),
     };
-    let int_range = DataRange::Datatype(IRI::new(
-        "http://www.w3.org/2001/XMLSchema#integer",
-    ));
+    let int_range = DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#integer"));
 
     let body = vec![SWRLAtom::DataRangeAtom {
         predicate: int_range,
         argument: SWRLDArgument::Variable(var_z),
     }];
 
-    let rule = SWRLRule {
-        head: vec![],
-        body,
-    };
+    let rule = SWRLRule { head: vec![], body };
     let ax = SWRLRuleAxiom {
         id: 1,
         rule,
@@ -633,6 +608,10 @@ fn test_swrl_multiple_rules_in_ontology() {
         .collect();
     assert_eq!(rule_axioms.len(), 2, "Ontology should have 2 SWRL rules");
 
-    let rule_count = ont.axioms().iter().filter(|a| matches!(a, Axiom::Rule(_))).count();
+    let rule_count = ont
+        .axioms()
+        .iter()
+        .filter(|a| matches!(a, Axiom::Rule(_)))
+        .count();
     assert_eq!(rule_count, 2);
 }

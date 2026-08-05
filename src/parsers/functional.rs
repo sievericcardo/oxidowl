@@ -498,27 +498,30 @@ impl FunctionalParser {
             }
             "AsymmetricObjectProperty" => {
                 position =
-                    self.parse_property_char_axiom(tokens, position, ontology, prefixes,
-                        |prop| crate::ontology::Axiom::AsymmetricObjectProperty(
+                    self.parse_property_char_axiom(tokens, position, ontology, prefixes, |prop| {
+                        crate::ontology::Axiom::AsymmetricObjectProperty(
                             crate::ontology::AsymmetricObjectPropertyAxiom {
                                 id: generate_axiom_id(),
                                 property: prop,
                                 annotations: vec![],
-                            }))?;
+                            },
+                        )
+                    })?;
             }
             "IrreflexiveObjectProperty" => {
                 position =
-                    self.parse_property_char_axiom(tokens, position, ontology, prefixes,
-                        |prop| crate::ontology::Axiom::IrreflexiveObjectProperty(
+                    self.parse_property_char_axiom(tokens, position, ontology, prefixes, |prop| {
+                        crate::ontology::Axiom::IrreflexiveObjectProperty(
                             crate::ontology::IrreflexiveObjectPropertyAxiom {
                                 id: generate_axiom_id(),
                                 property: prop,
                                 annotations: vec![],
-                            }))?;
+                            },
+                        )
+                    })?;
             }
             "DisjointUnion" => {
-                position =
-                    self.parse_disjoint_union(tokens, position, ontology, prefixes)?;
+                position = self.parse_disjoint_union(tokens, position, ontology, prefixes)?;
             }
             "ObjectPropertyDomain" => {
                 position =
@@ -533,8 +536,7 @@ impl FunctionalParser {
                     self.parse_inverse_object_properties(tokens, position, ontology, prefixes)?;
             }
             "SubDataPropertyOf" => {
-                position =
-                    self.parse_sub_data_property_of(tokens, position, ontology, prefixes)?;
+                position = self.parse_sub_data_property_of(tokens, position, ontology, prefixes)?;
             }
             "DataPropertyDomain" => {
                 position =
@@ -545,12 +547,12 @@ impl FunctionalParser {
                     self.parse_data_prop_domain_range(tokens, position, ontology, prefixes, false)?;
             }
             "SameIndividual" => {
-                position =
-                    self.parse_same_or_diff_individuals(tokens, position, ontology, prefixes, true)?;
+                position = self
+                    .parse_same_or_diff_individuals(tokens, position, ontology, prefixes, true)?;
             }
             "DifferentIndividuals" => {
-                position =
-                    self.parse_same_or_diff_individuals(tokens, position, ontology, prefixes, false)?;
+                position = self
+                    .parse_same_or_diff_individuals(tokens, position, ontology, prefixes, false)?;
             }
             "DataPropertyAssertion" => {
                 position =
@@ -565,8 +567,8 @@ impl FunctionalParser {
                     self.parse_negative_data_prop_assertion(tokens, position, ontology, prefixes)?;
             }
             "AnnotationAssertion" => {
-                position =
-                    self.parse_functional_annotation_assertion(tokens, position, ontology, prefixes)?;
+                position = self
+                    .parse_functional_annotation_assertion(tokens, position, ontology, prefixes)?;
             }
             "EquivalentObjectProperties" => {
                 position = self.parse_obj_prop_list(tokens, position, ontology, prefixes, true)?;
@@ -578,10 +580,12 @@ impl FunctionalParser {
                 position = self.parse_data_prop_list(tokens, position, ontology, prefixes, true)?;
             }
             "DisjointDataProperties" => {
-                position = self.parse_data_prop_list(tokens, position, ontology, prefixes, false)?;
+                position =
+                    self.parse_data_prop_list(tokens, position, ontology, prefixes, false)?;
             }
             "FunctionalDataProperty" => {
-                position = self.parse_functional_data_property(tokens, position, ontology, prefixes)?;
+                position =
+                    self.parse_functional_data_property(tokens, position, ontology, prefixes)?;
             }
             _ => {
                 // Skip unknown constructs
@@ -1076,9 +1080,9 @@ impl FunctionalParser {
                         .map_err(|e| Error::ontology_parsing(format!("Invalid property IRI: {e}")))?
                         .into(),
                 };
-                let axiom = make_axiom(
-                    crate::ontology::ObjectPropertyExpression::ObjectProperty(property),
-                );
+                let axiom = make_axiom(crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                    property,
+                ));
                 ontology.add_axiom(axiom);
             }
             if position < tokens.len() && tokens[position] == ")" {
@@ -1388,7 +1392,9 @@ impl FunctionalParser {
                 target,
                 annotations: vec![],
             };
-            ontology.add_axiom(crate::ontology::Axiom::NegativeObjectPropertyAssertion(axiom));
+            ontology.add_axiom(crate::ontology::Axiom::NegativeObjectPropertyAssertion(
+                axiom,
+            ));
             if position < tokens.len() && tokens[position] == ")" {
                 position += 1;
             }
@@ -1450,19 +1456,21 @@ impl FunctionalParser {
                 position += 1;
                 let subj = if position < tokens.len() {
                     let subj_token = &tokens[position];
-                    crate::ontology::AnnotationSubject::IRI(
-                        crate::ontology::IRI::new(&self.expand_iri(subj_token, prefixes)?),
-                    )
+                    crate::ontology::AnnotationSubject::IRI(crate::ontology::IRI::new(
+                        &self.expand_iri(subj_token, prefixes)?,
+                    ))
                 } else {
-                    return Err(Error::ontology_parsing("Expected annotation subject".to_string()));
+                    return Err(Error::ontology_parsing(
+                        "Expected annotation subject".to_string(),
+                    ));
                 };
                 position += 1;
                 let value = if position < tokens.len() {
                     let val_token = &tokens[position];
                     if val_token.starts_with('"') {
-                        crate::ontology::AnnotationValue::Literal(
-                            crate::ontology::Literal::new(val_token.trim_matches('"').to_string()),
-                        )
+                        crate::ontology::AnnotationValue::Literal(crate::ontology::Literal::new(
+                            val_token.trim_matches('"').to_string(),
+                        ))
                     } else if val_token.starts_with('<') {
                         let iri = self.expand_iri(val_token, prefixes)?;
                         crate::ontology::AnnotationValue::IRI(crate::ontology::IRI::new(&iri))
@@ -1473,12 +1481,14 @@ impl FunctionalParser {
                             ),
                         )
                     } else {
-                        crate::ontology::AnnotationValue::Literal(
-                            crate::ontology::Literal::new(val_token.clone()),
-                        )
+                        crate::ontology::AnnotationValue::Literal(crate::ontology::Literal::new(
+                            val_token.clone(),
+                        ))
                     }
                 } else {
-                    return Err(Error::ontology_parsing("Expected annotation value".to_string()));
+                    return Err(Error::ontology_parsing(
+                        "Expected annotation value".to_string(),
+                    ));
                 };
                 position += 1;
                 let axiom = crate::ontology::AnnotationAssertionAxiom {
@@ -2142,7 +2152,8 @@ impl FunctionalParser {
 
                     let mut individuals = Vec::new();
                     while position < tokens.len() && tokens[position] != ")" {
-                        let individual = self.parse_individual_from_token(&tokens[position], prefixes)?;
+                        let individual =
+                            self.parse_individual_from_token(&tokens[position], prefixes)?;
                         individuals.push(individual);
                         position += 1;
                     }
@@ -2521,7 +2532,8 @@ impl FunctionalParser {
                             "Expected individual in ObjectHasValue".to_string(),
                         ));
                     }
-                    let individual = self.parse_individual_from_token(&tokens[position], prefixes)?;
+                    let individual =
+                        self.parse_individual_from_token(&tokens[position], prefixes)?;
                     position += 1;
 
                     // Skip closing ")"
@@ -3424,9 +3436,7 @@ pub fn save_file<P: AsRef<Path>>(ontology: &Ontology, path: P) -> Result<()> {
     serializer.serialize_to_file(ontology, path)
 }
 
-fn serialize_object_property_expression(
-    ope: &crate::ontology::ObjectPropertyExpression,
-) -> String {
+fn serialize_object_property_expression(ope: &crate::ontology::ObjectPropertyExpression) -> String {
     match ope {
         crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
             format!("<{}>", prop.iri)
@@ -3468,9 +3478,7 @@ fn serialize_object_property_expression_full(
     }
 }
 
-fn serialize_data_property_expression(
-    dpe: &crate::ontology::DataPropertyExpression,
-) -> String {
+fn serialize_data_property_expression(dpe: &crate::ontology::DataPropertyExpression) -> String {
     match dpe {
         crate::ontology::DataPropertyExpression::DataProperty(prop) => {
             format!("<{}>", prop.iri)
@@ -3502,7 +3510,13 @@ fn serialize_data_range(dr: &crate::ontology::DataRange) -> String {
         } => {
             let facet_strs: Vec<String> = restrictions
                 .iter()
-                .map(|fr| format!("{} {}", serialize_facet(&fr.facet), serialize_literal(&fr.value)))
+                .map(|fr| {
+                    format!(
+                        "{} {}",
+                        serialize_facet(&fr.facet),
+                        serialize_literal(&fr.value)
+                    )
+                })
                 .collect();
             format!("DatatypeRestriction(<{datatype}> {})", facet_strs.join(" "))
         }
@@ -3527,7 +3541,8 @@ fn serialize_facet(facet: &crate::ontology::IRI) -> String {
 fn serialize_facet_restriction(fr: &crate::ontology::FacetRestriction) -> String {
     format!(
         "FacetRestriction(<{}> {})",
-        fr.facet, serialize_literal(&fr.value)
+        fr.facet,
+        serialize_literal(&fr.value)
     )
 }
 
@@ -3543,9 +3558,7 @@ fn serialize_annotation(ann: &crate::ontology::Annotation) -> String {
     }
 }
 
-fn serialize_annotation_subject(
-    subj: &crate::ontology::AnnotationSubject,
-) -> String {
+fn serialize_annotation_subject(subj: &crate::ontology::AnnotationSubject) -> String {
     match subj {
         crate::ontology::AnnotationSubject::IRI(iri) => format!("<{iri}>"),
         crate::ontology::AnnotationSubject::AnonymousIndividual(anon) => {
@@ -3564,13 +3577,11 @@ fn serialize_axiom(axiom: &crate::ontology::Axiom) -> String {
             )
         }
         crate::ontology::Axiom::EquivalentClasses(eq) => {
-            let parts: Vec<String> =
-                eq.classes.iter().map(serialize_class_expression).collect();
+            let parts: Vec<String> = eq.classes.iter().map(serialize_class_expression).collect();
             format!("EquivalentClasses({})", parts.join(" "))
         }
         crate::ontology::Axiom::DisjointClasses(dj) => {
-            let parts: Vec<String> =
-                dj.classes.iter().map(serialize_class_expression).collect();
+            let parts: Vec<String> = dj.classes.iter().map(serialize_class_expression).collect();
             format!("DisjointClasses({})", parts.join(" "))
         }
         crate::ontology::Axiom::DisjointUnion(du) => {
@@ -3712,19 +3723,11 @@ fn serialize_axiom(axiom: &crate::ontology::Axiom) -> String {
             )
         }
         crate::ontology::Axiom::SameIndividual(same) => {
-            let parts: Vec<String> = same
-                .individuals
-                .iter()
-                .map(serialize_individual)
-                .collect();
+            let parts: Vec<String> = same.individuals.iter().map(serialize_individual).collect();
             format!("SameIndividual({})", parts.join(" "))
         }
         crate::ontology::Axiom::DifferentIndividuals(diff) => {
-            let parts: Vec<String> = diff
-                .individuals
-                .iter()
-                .map(serialize_individual)
-                .collect();
+            let parts: Vec<String> = diff.individuals.iter().map(serialize_individual).collect();
             format!("DifferentIndividuals({})", parts.join(" "))
         }
         crate::ontology::Axiom::ClassAssertion(ca) => {
@@ -3814,11 +3817,7 @@ fn serialize_axiom(axiom: &crate::ontology::Axiom) -> String {
             )
         }
         crate::ontology::Axiom::DatatypeDefinition(dd) => {
-            format!(
-                "DatatypeDefinition(<{}> {:?})",
-                dd.datatype,
-                dd.data_range
-            )
+            format!("DatatypeDefinition(<{}> {:?})", dd.datatype, dd.data_range)
         }
         crate::ontology::Axiom::Declaration(decl) => {
             format!("Declaration({})", serialize_entity(&decl.entity))
@@ -3841,7 +3840,10 @@ fn serialize_class_expression(ce: &crate::ontology::ClassExpression) -> String {
             format!("ObjectUnionOf({})", parts.join(" "))
         }
         crate::ontology::ClassExpression::ObjectComplementOf(operand) => {
-            format!("ObjectComplementOf({})", serialize_class_expression(operand))
+            format!(
+                "ObjectComplementOf({})",
+                serialize_class_expression(operand)
+            )
         }
         crate::ontology::ClassExpression::ObjectOneOf(individuals) => {
             let parts: Vec<String> = individuals.iter().map(serialize_individual).collect();

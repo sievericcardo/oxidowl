@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use oxidowl::DataFactory;
 use oxidowl::factory::providers::AxiomCreationProvider;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
-use oxidowl::DataFactory;
 
 /// DSL-style data factory helper for concise test ontology construction.
 ///
@@ -241,10 +241,7 @@ impl DF {
     }
 
     pub fn typed_literal<S: AsRef<str>>(&self, value: S, datatype: &str) -> Literal {
-        Literal::with_datatype(
-            value.as_ref().to_string(),
-            IRI::new(datatype),
-        )
+        Literal::with_datatype(value.as_ref().to_string(), IRI::new(datatype))
     }
 
     // ── DataRange helpers ───────────────────────────────────────────────────
@@ -267,11 +264,7 @@ impl DF {
 
     // ── Annotation helpers ──────────────────────────────────────────────────
 
-    pub fn ann<S: AsRef<str>>(
-        &self,
-        property_iri: S,
-        value_text: S,
-    ) -> Annotation {
+    pub fn ann<S: AsRef<str>>(&self, property_iri: S, value_text: S) -> Annotation {
         let prop = self.annotation_property(property_iri);
         let val = AnnotationValue::Literal(self.literal(value_text));
         Annotation::new(prop, val, vec![])
@@ -325,11 +318,7 @@ impl DF {
         Axiom::Declaration(ax)
     }
 
-    pub fn sub_class_of(
-        &self,
-        subclass: ClassExpression,
-        superclass: ClassExpression,
-    ) -> Axiom {
+    pub fn sub_class_of(&self, subclass: ClassExpression, superclass: ClassExpression) -> Axiom {
         let ax = self.df.get_sub_class_of_axiom(subclass, superclass);
         Axiom::SubClassOf(ax)
     }
@@ -349,20 +338,12 @@ impl DF {
         class: ClassExpression,
         disjoint_classes: Vec<ClassExpression>,
     ) -> Axiom {
-        let ax = self
-            .df
-            .get_disjoint_union_axiom(class, disjoint_classes);
+        let ax = self.df.get_disjoint_union_axiom(class, disjoint_classes);
         Axiom::DisjointUnion(ax)
     }
 
-    pub fn class_assertion(
-        &self,
-        class: ClassExpression,
-        individual: Individual,
-    ) -> Axiom {
-        let ax = self
-            .df
-            .get_class_assertion_axiom(class, individual);
+    pub fn class_assertion(&self, class: ClassExpression, individual: Individual) -> Axiom {
+        let ax = self.df.get_class_assertion_axiom(class, individual);
         Axiom::ClassAssertion(ax)
     }
 
@@ -443,10 +424,7 @@ impl DF {
         Axiom::SubObjectPropertyOf(ax)
     }
 
-    pub fn equivalent_object_properties(
-        &self,
-        properties: Vec<ObjectPropertyExpression>,
-    ) -> Axiom {
+    pub fn equivalent_object_properties(&self, properties: Vec<ObjectPropertyExpression>) -> Axiom {
         let ax = AxiomCreationProvider::make_equivalent_object_properties_axiom(
             &self.df,
             properties,
@@ -455,70 +433,37 @@ impl DF {
         Axiom::EquivalentObjectProperties(ax)
     }
 
-    pub fn functional_object_property(
-        &self,
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
-        let ax = self
-            .df
-            .get_functional_object_property_axiom(property);
+    pub fn functional_object_property(&self, property: ObjectPropertyExpression) -> Axiom {
+        let ax = self.df.get_functional_object_property_axiom(property);
         Axiom::FunctionalObjectProperty(ax)
     }
 
-    pub fn transitive_object_property(
-        &self,
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
-        let ax = self
-            .df
-            .get_transitive_object_property_axiom(property);
+    pub fn transitive_object_property(&self, property: ObjectPropertyExpression) -> Axiom {
+        let ax = self.df.get_transitive_object_property_axiom(property);
         Axiom::TransitiveObjectProperty(ax)
     }
 
-    pub fn symmetric_object_property(
-        &self,
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
-        let ax = self
-            .df
-            .get_symmetric_object_property_axiom(property);
+    pub fn symmetric_object_property(&self, property: ObjectPropertyExpression) -> Axiom {
+        let ax = self.df.get_symmetric_object_property_axiom(property);
         Axiom::SymmetricObjectProperty(ax)
     }
 
-    pub fn asymmetric_object_property(
-        &self,
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
-        let ax = self
-            .df
-            .get_asymmetric_object_property_axiom(property);
+    pub fn asymmetric_object_property(&self, property: ObjectPropertyExpression) -> Axiom {
+        let ax = self.df.get_asymmetric_object_property_axiom(property);
         Axiom::AsymmetricObjectProperty(ax)
     }
 
-    pub fn reflexive_object_property(
-        &self,
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
-        let ax = self
-            .df
-            .get_reflexive_object_property_axiom(property);
+    pub fn reflexive_object_property(&self, property: ObjectPropertyExpression) -> Axiom {
+        let ax = self.df.get_reflexive_object_property_axiom(property);
         Axiom::ReflexiveObjectProperty(ax)
     }
 
-    pub fn irreflexive_object_property(
-        &self,
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
-        let ax = self
-            .df
-            .get_irreflexive_object_property_axiom(property);
+    pub fn irreflexive_object_property(&self, property: ObjectPropertyExpression) -> Axiom {
+        let ax = self.df.get_irreflexive_object_property_axiom(property);
         Axiom::IrreflexiveObjectProperty(ax)
     }
 
-    pub fn inverse_functional_object_property(
-        &self,
-        property: ObjectPropertyExpression,
-    ) -> Axiom {
+    pub fn inverse_functional_object_property(&self, property: ObjectPropertyExpression) -> Axiom {
         let ax = self
             .df
             .get_inverse_functional_object_property_axiom(property);
@@ -530,9 +475,7 @@ impl DF {
         p1: ObjectPropertyExpression,
         p2: ObjectPropertyExpression,
     ) -> Axiom {
-        let ax = self
-            .df
-            .get_inverse_object_properties_axiom(p1, p2);
+        let ax = self.df.get_inverse_object_properties_axiom(p1, p2);
         Axiom::InverseObjectProperties(ax)
     }
 
@@ -541,9 +484,7 @@ impl DF {
         property: ObjectPropertyExpression,
         domain: ClassExpression,
     ) -> Axiom {
-        let ax = self
-            .df
-            .get_object_property_domain_axiom(property, domain);
+        let ax = self.df.get_object_property_domain_axiom(property, domain);
         Axiom::ObjectPropertyDomain(ax)
     }
 
@@ -552,16 +493,11 @@ impl DF {
         property: ObjectPropertyExpression,
         range: ClassExpression,
     ) -> Axiom {
-        let ax = self
-            .df
-            .get_object_property_range_axiom(property, range);
+        let ax = self.df.get_object_property_range_axiom(property, range);
         Axiom::ObjectPropertyRange(ax)
     }
 
-    pub fn disjoint_object_properties(
-        &self,
-        properties: Vec<ObjectPropertyExpression>,
-    ) -> Axiom {
+    pub fn disjoint_object_properties(&self, properties: Vec<ObjectPropertyExpression>) -> Axiom {
         let ax = AxiomCreationProvider::make_disjoint_object_properties_axiom(
             &self.df,
             properties,
@@ -581,10 +517,7 @@ impl DF {
         Axiom::SubDataPropertyOf(ax)
     }
 
-    pub fn equivalent_data_properties(
-        &self,
-        properties: Vec<DataPropertyExpression>,
-    ) -> Axiom {
+    pub fn equivalent_data_properties(&self, properties: Vec<DataPropertyExpression>) -> Axiom {
         let ax = AxiomCreationProvider::make_equivalent_data_properties_axiom(
             &self.df,
             properties,
@@ -593,13 +526,8 @@ impl DF {
         Axiom::EquivalentDataProperties(ax)
     }
 
-    pub fn functional_data_property(
-        &self,
-        property: DataPropertyExpression,
-    ) -> Axiom {
-        let ax = self
-            .df
-            .get_functional_data_property_axiom(property);
+    pub fn functional_data_property(&self, property: DataPropertyExpression) -> Axiom {
+        let ax = self.df.get_functional_data_property_axiom(property);
         Axiom::FunctionalDataProperty(ax)
     }
 
@@ -608,27 +536,16 @@ impl DF {
         property: DataPropertyExpression,
         domain: ClassExpression,
     ) -> Axiom {
-        let ax = self
-            .df
-            .get_data_property_domain_axiom(property, domain);
+        let ax = self.df.get_data_property_domain_axiom(property, domain);
         Axiom::DataPropertyDomain(ax)
     }
 
-    pub fn data_property_range(
-        &self,
-        property: DataPropertyExpression,
-        range: DataRange,
-    ) -> Axiom {
-        let ax = self
-            .df
-            .get_data_property_range_axiom(property, range);
+    pub fn data_property_range(&self, property: DataPropertyExpression, range: DataRange) -> Axiom {
+        let ax = self.df.get_data_property_range_axiom(property, range);
         Axiom::DataPropertyRange(ax)
     }
 
-    pub fn disjoint_data_properties(
-        &self,
-        properties: Vec<DataPropertyExpression>,
-    ) -> Axiom {
+    pub fn disjoint_data_properties(&self, properties: Vec<DataPropertyExpression>) -> Axiom {
         let ax = AxiomCreationProvider::make_disjoint_data_properties_axiom(
             &self.df,
             properties,
@@ -677,7 +594,10 @@ impl DF {
         sup: AnnotationProperty,
     ) -> Axiom {
         let ax = AxiomCreationProvider::make_sub_annotation_property_of_axiom(
-            &self.df, sub, sup, vec![],
+            &self.df,
+            sub,
+            sup,
+            vec![],
         );
         Axiom::SubAnnotationPropertyOf(ax)
     }
@@ -722,11 +642,7 @@ impl DF {
     }
 
     /// Build an ontology from axioms and set its IRI
-    pub fn build_ontology_with_iri<S: AsRef<str>>(
-        &self,
-        iri: S,
-        axioms: Vec<Axiom>,
-    ) -> Ontology {
+    pub fn build_ontology_with_iri<S: AsRef<str>>(&self, iri: S, axioms: Vec<Axiom>) -> Ontology {
         let mut o = Ontology::new();
         o.set_iri(IRI::new(iri.as_ref()));
         for ax in axioms {
@@ -749,11 +665,21 @@ impl DF {
         for ax in ontology.axioms() {
             match ax {
                 Axiom::Declaration(d) => match &d.entity {
-                    Entity::Class(iri) => { declared_classes.insert(iri.clone()); }
-                    Entity::ObjectProperty(iri) => { declared_obj_props.insert(iri.clone()); }
-                    Entity::DataProperty(iri) => { declared_data_props.insert(iri.clone()); }
-                    Entity::NamedIndividual(iri) => { declared_inds.insert(iri.clone()); }
-                    Entity::AnnotationProperty(iri) => { declared_ann_props.insert(iri.clone()); }
+                    Entity::Class(iri) => {
+                        declared_classes.insert(iri.clone());
+                    }
+                    Entity::ObjectProperty(iri) => {
+                        declared_obj_props.insert(iri.clone());
+                    }
+                    Entity::DataProperty(iri) => {
+                        declared_data_props.insert(iri.clone());
+                    }
+                    Entity::NamedIndividual(iri) => {
+                        declared_inds.insert(iri.clone());
+                    }
+                    Entity::AnnotationProperty(iri) => {
+                        declared_ann_props.insert(iri.clone());
+                    }
                     _ => {}
                 },
                 _ => {}
@@ -761,8 +687,14 @@ impl DF {
         }
 
         for ax in ontology.axioms().to_vec() {
-            self.collect_entity_iris(&ax, &mut declared_classes, &mut declared_obj_props,
-                &mut declared_data_props, &mut declared_inds, &mut declared_ann_props);
+            self.collect_entity_iris(
+                &ax,
+                &mut declared_classes,
+                &mut declared_obj_props,
+                &mut declared_data_props,
+                &mut declared_inds,
+                &mut declared_ann_props,
+            );
         }
 
         for iri in &declared_classes {
@@ -810,27 +742,76 @@ impl DF {
     ) {
         match axiom {
             Axiom::SubClassOf(a) => {
-                self.collect_ce_iris(&a.subclass, classes, obj_props, data_props, individuals, ann_props);
-                self.collect_ce_iris(&a.superclass, classes, obj_props, data_props, individuals, ann_props);
+                self.collect_ce_iris(
+                    &a.subclass,
+                    classes,
+                    obj_props,
+                    data_props,
+                    individuals,
+                    ann_props,
+                );
+                self.collect_ce_iris(
+                    &a.superclass,
+                    classes,
+                    obj_props,
+                    data_props,
+                    individuals,
+                    ann_props,
+                );
             }
             Axiom::EquivalentClasses(a) => {
                 for ce in &a.classes {
-                    self.collect_ce_iris(ce, classes, obj_props, data_props, individuals, ann_props);
+                    self.collect_ce_iris(
+                        ce,
+                        classes,
+                        obj_props,
+                        data_props,
+                        individuals,
+                        ann_props,
+                    );
                 }
             }
             Axiom::DisjointClasses(a) => {
                 for ce in &a.classes {
-                    self.collect_ce_iris(ce, classes, obj_props, data_props, individuals, ann_props);
+                    self.collect_ce_iris(
+                        ce,
+                        classes,
+                        obj_props,
+                        data_props,
+                        individuals,
+                        ann_props,
+                    );
                 }
             }
             Axiom::DisjointUnion(a) => {
-                self.collect_ce_iris(&a.class, classes, obj_props, data_props, individuals, ann_props);
+                self.collect_ce_iris(
+                    &a.class,
+                    classes,
+                    obj_props,
+                    data_props,
+                    individuals,
+                    ann_props,
+                );
                 for ce in &a.disjoint_classes {
-                    self.collect_ce_iris(ce, classes, obj_props, data_props, individuals, ann_props);
+                    self.collect_ce_iris(
+                        ce,
+                        classes,
+                        obj_props,
+                        data_props,
+                        individuals,
+                        ann_props,
+                    );
                 }
             }
             Axiom::ClassAssertion(a) => {
-                self.collect_ce_iris(&a.class, classes, obj_props, data_props, individuals, ann_props);
+                self.collect_ce_iris(
+                    &a.class,
+                    classes,
+                    obj_props,
+                    data_props,
+                    individuals,
+                    ann_props,
+                );
                 self.collect_ind_iris(&a.individual, individuals);
             }
             Axiom::ObjectPropertyAssertion(a) => {
@@ -856,10 +837,14 @@ impl DF {
                 self.collect_ope_iris(&a.super_property, obj_props);
             }
             Axiom::EquivalentObjectProperties(a) => {
-                for p in &a.properties { self.collect_ope_iris(p, obj_props); }
+                for p in &a.properties {
+                    self.collect_ope_iris(p, obj_props);
+                }
             }
             Axiom::DisjointObjectProperties(a) => {
-                for p in &a.properties { self.collect_ope_iris(p, obj_props); }
+                for p in &a.properties {
+                    self.collect_ope_iris(p, obj_props);
+                }
             }
             Axiom::InverseObjectProperties(a) => {
                 self.collect_ope_iris(&a.property1, obj_props);
@@ -867,42 +852,87 @@ impl DF {
             }
             Axiom::ObjectPropertyDomain(a) => {
                 self.collect_ope_iris(&a.property, obj_props);
-                self.collect_ce_iris(&a.domain, classes, obj_props, data_props, individuals, ann_props);
+                self.collect_ce_iris(
+                    &a.domain,
+                    classes,
+                    obj_props,
+                    data_props,
+                    individuals,
+                    ann_props,
+                );
             }
             Axiom::ObjectPropertyRange(a) => {
                 self.collect_ope_iris(&a.property, obj_props);
-                self.collect_ce_iris(&a.range, classes, obj_props, data_props, individuals, ann_props);
+                self.collect_ce_iris(
+                    &a.range,
+                    classes,
+                    obj_props,
+                    data_props,
+                    individuals,
+                    ann_props,
+                );
             }
-            Axiom::FunctionalObjectProperty(a) => { self.collect_ope_iris(&a.property, obj_props); }
-            Axiom::InverseFunctionalObjectProperty(a) => { self.collect_ope_iris(&a.property, obj_props); }
-            Axiom::ReflexiveObjectProperty(a) => { self.collect_ope_iris(&a.property, obj_props); }
-            Axiom::IrreflexiveObjectProperty(a) => { self.collect_ope_iris(&a.property, obj_props); }
-            Axiom::SymmetricObjectProperty(a) => { self.collect_ope_iris(&a.property, obj_props); }
-            Axiom::AsymmetricObjectProperty(a) => { self.collect_ope_iris(&a.property, obj_props); }
-            Axiom::TransitiveObjectProperty(a) => { self.collect_ope_iris(&a.property, obj_props); }
+            Axiom::FunctionalObjectProperty(a) => {
+                self.collect_ope_iris(&a.property, obj_props);
+            }
+            Axiom::InverseFunctionalObjectProperty(a) => {
+                self.collect_ope_iris(&a.property, obj_props);
+            }
+            Axiom::ReflexiveObjectProperty(a) => {
+                self.collect_ope_iris(&a.property, obj_props);
+            }
+            Axiom::IrreflexiveObjectProperty(a) => {
+                self.collect_ope_iris(&a.property, obj_props);
+            }
+            Axiom::SymmetricObjectProperty(a) => {
+                self.collect_ope_iris(&a.property, obj_props);
+            }
+            Axiom::AsymmetricObjectProperty(a) => {
+                self.collect_ope_iris(&a.property, obj_props);
+            }
+            Axiom::TransitiveObjectProperty(a) => {
+                self.collect_ope_iris(&a.property, obj_props);
+            }
             Axiom::SubDataPropertyOf(a) => {
                 self.collect_dpe_iris(&a.sub_property, data_props);
                 self.collect_dpe_iris(&a.super_property, data_props);
             }
             Axiom::EquivalentDataProperties(a) => {
-                for p in &a.properties { self.collect_dpe_iris(p, data_props); }
+                for p in &a.properties {
+                    self.collect_dpe_iris(p, data_props);
+                }
             }
             Axiom::DisjointDataProperties(a) => {
-                for p in &a.properties { self.collect_dpe_iris(p, data_props); }
+                for p in &a.properties {
+                    self.collect_dpe_iris(p, data_props);
+                }
             }
             Axiom::DataPropertyDomain(a) => {
                 self.collect_dpe_iris(&a.property, data_props);
-                self.collect_ce_iris(&a.domain, classes, obj_props, data_props, individuals, ann_props);
+                self.collect_ce_iris(
+                    &a.domain,
+                    classes,
+                    obj_props,
+                    data_props,
+                    individuals,
+                    ann_props,
+                );
             }
             Axiom::DataPropertyRange(a) => {
                 self.collect_dpe_iris(&a.property, data_props);
             }
-            Axiom::FunctionalDataProperty(a) => { self.collect_dpe_iris(&a.property, data_props); }
+            Axiom::FunctionalDataProperty(a) => {
+                self.collect_dpe_iris(&a.property, data_props);
+            }
             Axiom::SameIndividual(a) => {
-                for ind in &a.individuals { self.collect_ind_iris(ind, individuals); }
+                for ind in &a.individuals {
+                    self.collect_ind_iris(ind, individuals);
+                }
             }
             Axiom::DifferentIndividuals(a) => {
-                for ind in &a.individuals { self.collect_ind_iris(ind, individuals); }
+                for ind in &a.individuals {
+                    self.collect_ind_iris(ind, individuals);
+                }
             }
             Axiom::AnnotationAssertion(a) => {
                 ann_props.insert(a.property.iri.clone());
@@ -918,9 +948,20 @@ impl DF {
                 ann_props.insert(a.property.iri.clone());
             }
             Axiom::HasKey(a) => {
-                self.collect_ce_iris(&a.class, classes, obj_props, data_props, individuals, ann_props);
-                for p in &a.object_properties { self.collect_ope_iris(p, obj_props); }
-                for p in &a.data_properties { self.collect_dpe_iris(p, data_props); }
+                self.collect_ce_iris(
+                    &a.class,
+                    classes,
+                    obj_props,
+                    data_props,
+                    individuals,
+                    ann_props,
+                );
+                for p in &a.object_properties {
+                    self.collect_ope_iris(p, obj_props);
+                }
+                for p in &a.data_properties {
+                    self.collect_dpe_iris(p, data_props);
+                }
             }
             _ => {}
         }
@@ -939,8 +980,7 @@ impl DF {
             ClassExpression::Class(c) => {
                 classes.insert(c.iri.clone());
             }
-            ClassExpression::ObjectIntersectionOf(ces)
-            | ClassExpression::ObjectUnionOf(ces) => {
+            ClassExpression::ObjectIntersectionOf(ces) | ClassExpression::ObjectUnionOf(ces) => {
                 for c in ces {
                     self.collect_ce_iris(c, classes, obj_props, data_props, individuals, ann_props);
                 }
@@ -949,12 +989,21 @@ impl DF {
                 self.collect_ce_iris(c, classes, obj_props, data_props, individuals, ann_props);
             }
             ClassExpression::ObjectOneOf(inds) => {
-                for ind in inds { self.collect_ind_iris(ind, individuals); }
+                for ind in inds {
+                    self.collect_ind_iris(ind, individuals);
+                }
             }
             ClassExpression::ObjectSomeValuesFrom { property, filler }
             | ClassExpression::ObjectAllValuesFrom { property, filler } => {
                 self.collect_ope_iris(property, obj_props);
-                self.collect_ce_iris(filler, classes, obj_props, data_props, individuals, ann_props);
+                self.collect_ce_iris(
+                    filler,
+                    classes,
+                    obj_props,
+                    data_props,
+                    individuals,
+                    ann_props,
+                );
             }
             ClassExpression::ObjectHasValue { property, value } => {
                 self.collect_ope_iris(property, obj_props);
@@ -963,11 +1012,24 @@ impl DF {
             ClassExpression::ObjectHasSelf { property } => {
                 self.collect_ope_iris(property, obj_props);
             }
-            ClassExpression::ObjectMinCardinality { property, filler, .. }
-            | ClassExpression::ObjectMaxCardinality { property, filler, .. }
-            | ClassExpression::ObjectExactCardinality { property, filler, .. } => {
+            ClassExpression::ObjectMinCardinality {
+                property, filler, ..
+            }
+            | ClassExpression::ObjectMaxCardinality {
+                property, filler, ..
+            }
+            | ClassExpression::ObjectExactCardinality {
+                property, filler, ..
+            } => {
                 self.collect_ope_iris(property, obj_props);
-                self.collect_ce_iris(filler, classes, obj_props, data_props, individuals, ann_props);
+                self.collect_ce_iris(
+                    filler,
+                    classes,
+                    obj_props,
+                    data_props,
+                    individuals,
+                    ann_props,
+                );
             }
             ClassExpression::DataSomeValuesFrom { property, .. }
             | ClassExpression::DataAllValuesFrom { property, .. } => {
@@ -990,10 +1052,16 @@ impl DF {
         obj_props: &mut std::collections::HashSet<IRI>,
     ) {
         match ope {
-            ObjectPropertyExpression::ObjectProperty(p) => { obj_props.insert(p.iri.clone()); }
-            ObjectPropertyExpression::InverseObjectProperty(p) => { obj_props.insert(p.iri.clone()); }
+            ObjectPropertyExpression::ObjectProperty(p) => {
+                obj_props.insert(p.iri.clone());
+            }
+            ObjectPropertyExpression::InverseObjectProperty(p) => {
+                obj_props.insert(p.iri.clone());
+            }
             ObjectPropertyExpression::PropertyChain(props) => {
-                for p in props { self.collect_ope_iris(p, obj_props); }
+                for p in props {
+                    self.collect_ope_iris(p, obj_props);
+                }
             }
         }
     }
@@ -1004,15 +1072,13 @@ impl DF {
         data_props: &mut std::collections::HashSet<IRI>,
     ) {
         match dpe {
-            DataPropertyExpression::DataProperty(p) => { data_props.insert(p.iri.clone()); }
+            DataPropertyExpression::DataProperty(p) => {
+                data_props.insert(p.iri.clone());
+            }
         }
     }
 
-    fn collect_ind_iris(
-        &self,
-        ind: &Individual,
-        individuals: &mut std::collections::HashSet<IRI>,
-    ) {
+    fn collect_ind_iris(&self, ind: &Individual, individuals: &mut std::collections::HashSet<IRI>) {
         if let Individual::Named(ni) = ind {
             individuals.insert(ni.iri.clone());
         }
@@ -1050,11 +1116,7 @@ impl DF {
 
     // ── Creates Entity from IRI and type ────────────────────────────────────
 
-    pub fn make_entity<S: AsRef<str>>(
-        &self,
-        iri: S,
-        entity_type: EntityType,
-    ) -> Entity {
+    pub fn make_entity<S: AsRef<str>>(&self, iri: S, entity_type: EntityType) -> Entity {
         let iri = IRI::new(iri.as_ref());
         match entity_type {
             EntityType::Class => Entity::Class(iri),

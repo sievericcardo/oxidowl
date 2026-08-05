@@ -3,6 +3,7 @@ mod helpers;
 
 use helpers::df::DF;
 use helpers::*;
+use oxidowl::debug::{BlackBoxOWLDebugger, DebuggerConfig, OWLDebugger};
 use oxidowl::explanation::blackbox::{BlackBoxConfig, BlackBoxExplanation};
 use oxidowl::explanation::converter::SatisfiabilityConverter;
 use oxidowl::explanation::generator::{Explanation as Justification, ExplanationGenerator};
@@ -12,16 +13,14 @@ use oxidowl::explanation::ordering::{
     JustificationSizeOrderer, SilentExplanationProgressMonitor,
 };
 use oxidowl::explanation::renderer::{ConciseExplanationRenderer, ExplanationRenderer};
-use oxidowl::debug::{BlackBoxOWLDebugger, DebuggerConfig, OWLDebugger};
 #[allow(unused_imports)]
 use oxidowl::inference::InferredAxiomGenerator;
-use oxidowl::inference::{
-    InferredClassAssertionAxiomGenerator,
-    InferredDisjointClassesAxiomGenerator, InferredEquivalentClassAxiomGenerator,
-    InferredSubClassOfAxiomGenerator,
-};
 use oxidowl::inference::metrics::{
     NumberOfAxioms, NumberOfClasses, NumberOfSubClassAxioms, OntologyMetrics, OwlMetric,
+};
+use oxidowl::inference::{
+    InferredClassAssertionAxiomGenerator, InferredDisjointClassesAxiomGenerator,
+    InferredEquivalentClassAxiomGenerator, InferredSubClassOfAxiomGenerator,
 };
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::shortform::SimpleShortFormProvider;
@@ -81,11 +80,8 @@ fn test_hst_explanation_generator_creation() {
     let hst = HSTExplanationGenerator::new(factory.clone(), config);
 
     let onto = simple_onto_ref();
-    let hst_with_onto = HSTExplanationGenerator::new_with_ontology(
-        onto.clone(),
-        factory,
-        HSTConfig::default(),
-    );
+    let hst_with_onto =
+        HSTExplanationGenerator::new_with_ontology(onto.clone(), factory, HSTConfig::default());
 
     let _ = hst;
     let _ = hst_with_onto;
@@ -166,7 +162,10 @@ fn test_blackbox_debugger_unsatisfiable_classes() {
 #[test]
 fn test_explanation_ordering() {
     let df = DF::new();
-    let ax = df.sub_class_of(df.class_ce("http://ex.org/A"), df.class_ce("http://ex.org/B"));
+    let ax = df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.class_ce("http://ex.org/B"),
+    );
 
     let j1 = Justification {
         entailment: ax.clone(),
@@ -195,7 +194,10 @@ fn test_explanation_ordering() {
 fn test_silent_progress_monitor() {
     let monitor = SilentExplanationProgressMonitor;
     let df = DF::new();
-    let ax = df.sub_class_of(df.class_ce("http://ex.org/A"), df.class_ce("http://ex.org/B"));
+    let ax = df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.class_ce("http://ex.org/B"),
+    );
     let justification = Justification {
         entailment: ax.clone(),
         justification: vec![ax],
@@ -214,7 +216,10 @@ fn test_concise_explanation_renderer() {
     let renderer = ConciseExplanationRenderer::new(provider);
 
     let df = DF::new();
-    let ax = df.sub_class_of(df.class_ce("http://ex.org/A"), df.class_ce("http://ex.org/B"));
+    let ax = df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.class_ce("http://ex.org/B"),
+    );
     let justification = Justification {
         entailment: ax.clone(),
         justification: vec![ax],

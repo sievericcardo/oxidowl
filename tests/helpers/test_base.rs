@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
+use oxidowl::DataFactory;
+use oxidowl::OntologyManager;
 use oxidowl::manager::changes::OntologyChange;
 use oxidowl::manager::*;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 use oxidowl::parsers::*;
-use oxidowl::DataFactory;
-use oxidowl::OntologyManager;
 use tempfile::TempDir;
 
 use super::df::DF;
@@ -225,11 +225,7 @@ impl TestBase {
         Ok(())
     }
 
-    pub fn plain_equal(
-        &mut self,
-        ontology: &Ontology,
-        compare_input: bool,
-    ) -> Result<(), String> {
+    pub fn plain_equal(&mut self, ontology: &Ontology, compare_input: bool) -> Result<(), String> {
         let o1 = self.round_trip(ontology, OntologyFormat::RdfXml)?;
         let o2 = self.round_trip(ontology, OntologyFormat::Functional)?;
         if compare_input {
@@ -247,11 +243,10 @@ impl TestBase {
 
     pub fn apply_add_axiom(&mut self, ont_ref: &OntologyRef, axiom: Axiom) {
         let iri = ont_ref.read().unwrap().get_iri().cloned().unwrap();
-        self.manager
-            .apply_change(OntologyChange::AddAxiom {
-                ontology_iri: iri,
-                axiom,
-            });
+        self.manager.apply_change(OntologyChange::AddAxiom {
+            ontology_iri: iri,
+            axiom,
+        });
     }
 
     pub fn core_roundtrip_formats() -> Vec<OntologyFormat> {

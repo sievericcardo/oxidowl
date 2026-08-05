@@ -8,8 +8,7 @@ use crate::factory::DataFactory;
 use crate::ontology::axioms::*;
 use crate::ontology::concepts::ClassExpression;
 use crate::ontology::{
-    Annotation, Class, DataProperty,
-    DataPropertyExpression, DataRange, IRI, ObjectProperty,
+    Annotation, Class, DataProperty, DataPropertyExpression, DataRange, IRI, ObjectProperty,
     ObjectPropertyExpression,
 };
 
@@ -66,9 +65,7 @@ impl FunctionalSyntaxFactory {
     }
 
     #[must_use]
-    pub fn object_intersection_of(
-        operands: Vec<ClassExpression>,
-    ) -> ClassExpression {
+    pub fn object_intersection_of(operands: Vec<ClassExpression>) -> ClassExpression {
         ClassExpression::ObjectIntersectionOf(operands)
     }
 
@@ -127,10 +124,7 @@ impl FunctionalSyntaxFactory {
         property: DataPropertyExpression,
         filler: DataRange,
     ) -> ClassExpression {
-        ClassExpression::DataSomeValuesFrom {
-            property,
-            filler,
-        }
+        ClassExpression::DataSomeValuesFrom { property, filler }
     }
 
     #[must_use]
@@ -138,10 +132,7 @@ impl FunctionalSyntaxFactory {
         property: DataPropertyExpression,
         filler: DataRange,
     ) -> ClassExpression {
-        ClassExpression::DataAllValuesFrom {
-            property,
-            filler,
-        }
+        ClassExpression::DataAllValuesFrom { property, filler }
     }
 
     #[must_use]
@@ -297,22 +288,16 @@ impl FunctionalSyntaxFactory {
 
     #[must_use]
     pub fn object_property(iri: &IRI) -> ObjectPropertyExpression {
-        ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-            iri: iri.clone(),
-        })
+        ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: iri.clone() })
     }
 
     #[must_use]
     pub fn inverse_object_property(iri: &IRI) -> ObjectPropertyExpression {
-        ObjectPropertyExpression::InverseObjectProperty(ObjectProperty {
-            iri: iri.clone(),
-        })
+        ObjectPropertyExpression::InverseObjectProperty(ObjectProperty { iri: iri.clone() })
     }
 
     #[must_use]
     pub fn data_property(iri: &IRI) -> DataPropertyExpression {
-        DataPropertyExpression::DataProperty(DataProperty {
-            iri: iri.clone(),
-        })
+        DataPropertyExpression::DataProperty(DataProperty { iri: iri.clone() })
     }
 }

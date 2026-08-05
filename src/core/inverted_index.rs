@@ -43,7 +43,10 @@ pub struct ConceptIndex {
 impl std::fmt::Debug for ConceptIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ConceptIndex")
-            .field("total_concepts", &self.total_concepts.load(Ordering::Relaxed))
+            .field(
+                "total_concepts",
+                &self.total_concepts.load(Ordering::Relaxed),
+            )
             .finish()
     }
 }
@@ -65,7 +68,10 @@ impl Clone for ConceptIndex {
         }
         #[cfg(not(feature = "cache"))]
         {
-            let guard = self.iri_to_concepts.read().unwrap_or_else(|e| e.into_inner());
+            let guard = self
+                .iri_to_concepts
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
             Self {
                 iri_to_concepts: std::sync::RwLock::new(guard.clone()),
                 total_concepts: AtomicU64::new(self.total_concepts.load(Ordering::Relaxed)),
@@ -130,9 +136,12 @@ impl ConceptIndex {
         }
         #[cfg(not(feature = "cache"))]
         {
-            let mut map = self.iri_to_concepts.write().map_err(|e| crate::Error::Cache {
-                message: format!("ConceptIndex lock poisoned: {e}"),
-            })?;
+            let mut map = self
+                .iri_to_concepts
+                .write()
+                .map_err(|e| crate::Error::Cache {
+                    message: format!("ConceptIndex lock poisoned: {e}"),
+                })?;
             for iri in iris {
                 let entry = map.entry(iri).or_default();
                 if !entry.iter().any(|(h, _)| *h == hash) {
@@ -159,9 +168,12 @@ impl ConceptIndex {
         }
         #[cfg(not(feature = "cache"))]
         {
-            let map = self.iri_to_concepts.read().map_err(|e| crate::Error::Cache {
-                message: format!("ConceptIndex lock poisoned: {e}"),
-            })?;
+            let map = self
+                .iri_to_concepts
+                .read()
+                .map_err(|e| crate::Error::Cache {
+                    message: format!("ConceptIndex lock poisoned: {e}"),
+                })?;
             if let Some(entry) = map.get(iri) {
                 self.cache_hits.fetch_add(1, Ordering::Relaxed);
                 return Ok(entry.iter().map(|(_, c)| c.clone()).collect());
@@ -221,9 +233,15 @@ impl ConceptIndex {
             ClassExpression::ObjectHasSelf { property } => {
                 self.extract_property_iris(property, iris, depth + 1);
             }
-            ClassExpression::ObjectMinCardinality { property, filler, .. }
-            | ClassExpression::ObjectMaxCardinality { property, filler, .. }
-            | ClassExpression::ObjectExactCardinality { property, filler, .. } => {
+            ClassExpression::ObjectMinCardinality {
+                property, filler, ..
+            }
+            | ClassExpression::ObjectMaxCardinality {
+                property, filler, ..
+            }
+            | ClassExpression::ObjectExactCardinality {
+                property, filler, ..
+            } => {
                 self.extract_property_iris(property, iris, depth + 1);
                 self.extract_iris_recursive(filler, iris, depth + 1);
             }
@@ -270,11 +288,7 @@ impl ConceptIndex {
         #[cfg(feature = "cache")]
         let total_iris = self.iri_to_concepts.len();
         #[cfg(not(feature = "cache"))]
-        let total_iris = self
-            .iri_to_concepts
-            .read()
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let total_iris = self.iri_to_concepts.read().map(|m| m.len()).unwrap_or(0);
 
         Ok(IndexStatistics {
             total_concepts: self.total_concepts.load(Ordering::Relaxed) as usize,
@@ -366,12 +380,15 @@ mod tests {
         let stats = index.get_statistics().unwrap();
         assert_eq!(stats.total_concepts, 1);
         assert_eq!(stats.total_iris, 1);
-        index.find_concepts_by_iri("http://example.org/Person").unwrap();
-        index.find_concepts_by_iri("http://example.org/Unknown").unwrap();
+        index
+            .find_concepts_by_iri("http://example.org/Person")
+            .unwrap();
+        index
+            .find_concepts_by_iri("http://example.org/Unknown")
+            .unwrap();
         let stats = index.get_statistics().unwrap();
         assert_eq!(stats.total_lookups, 2);
         assert_eq!(stats.cache_hits, 1);
         assert_eq!(stats.hit_rate(), 0.5);
     }
 }
-
