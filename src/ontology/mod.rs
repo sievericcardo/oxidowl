@@ -31,11 +31,10 @@ fn get_intern_pool() -> &'static dashmap::DashMap<Box<str>, std::sync::Weak<str>
 pub fn intern_iri(s: &str) -> std::sync::Arc<str> {
     let pool = get_intern_pool();
     // Fast path: check if already interned and still alive.
-    if let Some(weak) = pool.get(s) {
-        if let Some(strong) = weak.upgrade() {
+    if let Some(weak) = pool.get(s)
+        && let Some(strong) = weak.upgrade() {
             return strong;
         }
-    }
     // Slow path: create new interned value and store the weak reference.
     let arc: std::sync::Arc<str> = std::sync::Arc::from(s);
     let weak = std::sync::Arc::downgrade(&arc);

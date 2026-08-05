@@ -713,7 +713,6 @@ async fn run_with_tokio() -> Result<()> {
 #[cfg(feature = "server")]
 async fn run_server_mode(config: ReasonerConfig, quiet: bool) -> Result<()> {
     use std::sync::Arc;
-    use tokio::sync::RwLock;
 
     if !quiet {
         println!("Starting Oxidowl in server mode...");

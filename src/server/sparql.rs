@@ -277,8 +277,9 @@ impl SparqlServer {
                 }
             }
             Axiom::ClassAssertion(axiom) => {
-                if let Some(class_iri) = self.class_expr_to_iri(&axiom.class) {
-                    if let crate::ontology::Individual::Named(named) = &axiom.individual {
+                if let Some(class_iri) = self.class_expr_to_iri(&axiom.class)
+                    && let crate::ontology::Individual::Named(named) = &axiom.individual
+                {
                         let individual_iri =
                             NamedNode::new(named.iri.as_str()).map_err(|e| Error::Sparql {
                                 message: e.to_string(),
@@ -290,7 +291,6 @@ impl SparqlServer {
                             message: e.to_string(),
                         })?;
                         triples.push(Triple::new(individual_iri, rdf_type, class_iri));
-                    }
                 }
             }
             Axiom::ObjectPropertyAssertion(axiom) => {
@@ -300,7 +300,7 @@ impl SparqlServer {
                 ) = (&axiom.source, &axiom.target)
                 {
                     let prop_iri =
-                        NamedNode::new(&axiom.property.to_string()).map_err(|e| Error::Sparql {
+                        NamedNode::new(axiom.property.to_string()).map_err(|e| Error::Sparql {
                             message: e.to_string(),
                         })?;
                     let subj_iri =
@@ -534,7 +534,7 @@ async fn handle_sparql_query(
     let results = SparqlEvaluator::new()
         .parse_query(query_string)
         .map_err(|e| warp::reject::custom(SparqlError(format!("Query parse error: {}", e))))?
-        .on_store(&*store)
+        .on_store(&store)
         .execute()
         .map_err(|e| warp::reject::custom(SparqlError(format!("Query execution error: {}", e))))?;
 

@@ -847,14 +847,13 @@ impl ReasoningActor {
     /// acquired (both are treated as "version unknown" by the cache manager,
     /// which then falls back to a full `clear_all`).
     fn read_ontology_version(&self) -> u64 {
-        if let Some(ont_ref) = self.reasoner.get_ontology() {
-            if let Ok(guard) = crate::core::lock_helpers::read_lock(
+        if let Some(ont_ref) = self.reasoner.get_ontology()
+            && let Ok(guard) = crate::core::lock_helpers::read_lock(
                 ont_ref,
                 "actor: reading ontology version for cache invalidation",
             ) {
                 return guard.version();
             }
-        }
         0
     }
 

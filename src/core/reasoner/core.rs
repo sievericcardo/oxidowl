@@ -466,13 +466,11 @@ impl Reasoner {
             for other_class in all_classes {
                 if !self.classes_equivalent(&other_class, class).unwrap_or(false)
                     && !equivalent_classes.contains(&other_class)
-                {
-                    if self.is_subclass_of(class, &other_class)?
+                    && self.is_subclass_of(class, &other_class)?
                         && self.is_subclass_of(&other_class, class)?
                     {
                         equivalent_classes.push(other_class);
                     }
-                }
             }
 
             Ok(equivalent_classes)
@@ -647,7 +645,7 @@ impl Reasoner {
                 let validator = crate::profiles::el::ELValidator::new();
                 use crate::profiles::ProfileValidator;
                 validator
-                    .validate(&*ont)
+                    .validate(&ont)
                     .map(|r| r.conforms)
                     .unwrap_or(false)
             };
@@ -657,7 +655,7 @@ impl Reasoner {
                 let ont = read_lock(&ontology, "classify: EL")?;
                 let mut el_reasoner =
                     crate::profiles::el_reasoner::ELReasoner::new(self.config.clone());
-                el_reasoner.initialize(&*ont)?;
+                el_reasoner.initialize(&ont)?;
                 let result = el_reasoner.classify()?;
                 // Store for future use and cache the result.
                 self.el_reasoner = Some(Box::new(el_reasoner));

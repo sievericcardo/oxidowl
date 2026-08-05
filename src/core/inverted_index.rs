@@ -53,7 +53,7 @@ impl Clone for ConceptIndex {
         #[cfg(feature = "cache")]
         {
             let new_map = DashMap::new();
-            for entry in self.iri_to_concepts.iter() {
+            for entry in &self.iri_to_concepts {
                 new_map.insert(Arc::clone(entry.key()), entry.value().clone());
             }
             Self {

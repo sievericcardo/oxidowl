@@ -298,17 +298,15 @@ impl SaturationEngine {
             // class Dom, then C is also subsumed by Dom.
             let mut extra_superclasses: Vec<ClassExpression> = Vec::new();
             for sc in &node.saturated_concepts.clone() {
-                if let ClassExpression::ObjectSomeValuesFrom { property, .. } = sc {
-                    if let Some(prop_iri) = extract_property_iri_from_expr(property) {
-                        if let Some(domains) = domain_map.get(&prop_iri) {
+                if let ClassExpression::ObjectSomeValuesFrom { property, .. } = sc
+                    && let Some(prop_iri) = extract_property_iri_from_expr(property)
+                        && let Some(domains) = domain_map.get(&prop_iri) {
                             for d in domains {
                                 if !node.saturated_concepts.contains(d) {
                                     extra_superclasses.push(d.clone());
                                 }
                             }
                         }
-                    }
-                }
             }
             for sc in extra_superclasses {
                 node.add_saturated_concept(sc.clone());

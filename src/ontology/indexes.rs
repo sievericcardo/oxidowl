@@ -115,7 +115,7 @@ impl AxiomIndex {
     pub fn direct_superclasses(&self, class: &ClassExpression) -> &[ClassExpression] {
         self.subclass_by_sub
             .get(class)
-            .map(|v| v.as_slice())
+            .map(std::vec::Vec::as_slice)
             .unwrap_or(&[])
     }
 
@@ -124,7 +124,7 @@ impl AxiomIndex {
     pub fn direct_subclasses(&self, class: &ClassExpression) -> &[ClassExpression] {
         self.subclass_by_super
             .get(class)
-            .map(|v| v.as_slice())
+            .map(std::vec::Vec::as_slice)
             .unwrap_or(&[])
     }
 
@@ -133,7 +133,7 @@ impl AxiomIndex {
     pub fn equivalent_classes(&self, class: &ClassExpression) -> &[ClassExpression] {
         self.equivalent_by_class
             .get(class)
-            .map(|v| v.as_slice())
+            .map(std::vec::Vec::as_slice)
             .unwrap_or(&[])
     }
 }
