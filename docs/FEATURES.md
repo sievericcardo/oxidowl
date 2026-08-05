@@ -4,25 +4,22 @@ Oxidowl has been significantly enhanced with improvements that bring it up to co
 
 ## EL Profile Optimization
 
-For ontologies that conform to the OWL 2 EL profile, Oxidowl provides specialized polynomial-time reasoning:
+For ontologies that conform to the OWL 2 EL profile, Oxidowl provides specialized polynomial-time reasoning. The `Reasoner.classify()` method **auto-detects** EL-conforming ontologies and invokes the EL reasoner automatically, offering a ~100x speedup over full tableau classification:
 
 ```rust
 use oxidowl::{
-    profiles::el_reasoner::{ELReasoner, CompletionConfig},
-    config::OWLProfile,
+    profiles::el_reasoner::ELReasoner,
+    config::ReasonerConfig,
     ontology::Ontology,
 };
 
-// Configure for EL profile optimization
-let config = CompletionConfig {
-    max_iterations: 1000,
-    enable_caching: true,
-    batch_size: 50,
-    convergence_threshold: 0.01,
-};
+// The main Reasoner auto-detects EL profiles:
+//   reasoner.classify() → EL reasoner (if EL-conformant) else full tableau
 
-let mut el_reasoner = ELReasoner::new(ontology, config);
-let classification = el_reasoner.classify().await?;
+// Or use the EL reasoner directly:
+let mut el_reasoner = ELReasoner::new(ReasonerConfig::default());
+el_reasoner.initialize(&ontology)?;
+let classification = el_reasoner.classify()?;
 
 println!("EL classification completed in polynomial time!");
 ```
@@ -186,28 +183,14 @@ Oxidowl supports extensive configuration options:
 
 ```rust
 use oxidowl::config::{ReasonerConfig, TableauAlgorithm};
-use oxidowl::swrl::{SWRLConfig, SWRLReasoningStrategy};
 
 let config = ReasonerConfig {
-    algorithm: TableauAlgorithm::Traditional,
-    parallel_processing: true,
-    max_threads: Some(8),
-    timeout: Some(std::time::Duration::from_secs(300)),
-    blocking_strategy: BlockingStrategy::Anywhere,
-    caching_enabled: true,
-    max_cache_size: 10_000,
-    monitoring_level: MonitoringLevel::Basic,
-    // ... additional options
-};
-
-// Configure SWRL rule execution
-let swrl_config = SWRLConfig {
-    strategy: SWRLReasoningStrategy::ForwardChaining,
-    max_rule_applications: 1000,
-    max_execution_depth: 100,
-    enable_builtins: true,
-    debug: false,
-    timeout_ms: Some(30000),
+    reasoning: ReasoningConfig {
+        tableau_algorithm: TableauAlgorithm::Traditional,
+        timeout: Some(std::time::Duration::from_secs(300)),
+        ..Default::default()
+    },
+    ..Default::default()
 };
 ```
 
