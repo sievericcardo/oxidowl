@@ -16,7 +16,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 /// Options controlling what steps are performed in full reasoning.
@@ -46,6 +46,10 @@ struct Cli {
     /// Configuration file
     #[arg(long)]
     config: Option<PathBuf>,
+
+    /// Timeout in seconds for reasoning tasks (no timeout by default)
+    #[arg(long, value_name = "SECONDS")]
+    timeout: Option<u64>,
 
     /// Verbose output
     #[arg(short, long, action = clap::ArgAction::Count)]
@@ -676,6 +680,11 @@ async fn run_with_tokio() -> Result<()> {
     }
     if let Some(port) = cli.sparql_port {
         config.server.sparql_port = port;
+    }
+
+    // Apply CLI timeout override
+    if let Some(timeout_secs) = cli.timeout {
+        config.reasoning.timeout = Some(Duration::from_secs(timeout_secs));
     }
 
     // If server is enabled, run in server mode

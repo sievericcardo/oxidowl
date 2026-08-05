@@ -556,7 +556,7 @@ impl Default for TableauConfig {
     fn default() -> Self {
         Self {
             max_depth: 100,
-            timeout: Some(Duration::from_mins(5)),
+            timeout: None,
             blocking_enabled: true,
             optimization_enabled: true,
             rdf11_mode: false,                // RDF-star enabled by default
@@ -577,7 +577,7 @@ impl Default for ReasoningConfig {
             blocking_strategy: BlockingStrategy::Anywhere,
             expansion_strategy: ExpansionStrategy::CreationOrder,
             features,
-            timeout: Some(Duration::from_mins(5)), // 5 minutes
+            timeout: None,
             max_memory_mb: Some(4096),                  // 4 GB
             incremental_reasoning: false,
             max_expansion_depth: 100,
@@ -609,7 +609,7 @@ impl Default for ReasonerConfig {
                 blocking_strategy: BlockingStrategy::Anywhere,
                 expansion_strategy: ExpansionStrategy::CreationOrder,
                 features: reasoning_features,
-                timeout: Some(Duration::from_mins(5)), // 5 minutes
+                timeout: None,
                 max_memory_mb: Some(4096),                  // 4 GB
                 incremental_reasoning: false,
                 max_expansion_depth: 100,
