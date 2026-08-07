@@ -507,8 +507,10 @@ impl SaturationEngine {
             HashMap::with_capacity(nodes.len());
 
         for (concept, node) in nodes {
-            subsumption_graph
-                .insert(concept.clone(), node.direct_subsumers.iter().cloned().collect());
+            subsumption_graph.insert(
+                concept.clone(),
+                node.direct_subsumers.iter().cloned().collect(),
+            );
         }
 
         let concepts: Vec<_> = nodes.keys().cloned().collect();
