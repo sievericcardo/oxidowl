@@ -11,7 +11,6 @@ use crate::{
         lock_helpers::read_lock,
         reasoner::{
             datatype_validation::DatatypeValidator,
-            parallel_classification::ParallelClassificationScheduler,
             results::{ClassificationResult, PropertyClassificationResult, RealisationResult},
             statistics::ReasoningStatistics,
             tasks::ReasoningTaskService,
