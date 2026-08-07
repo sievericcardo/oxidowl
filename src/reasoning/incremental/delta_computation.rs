@@ -1022,7 +1022,7 @@ impl DeltaComputer {
             for (other_concept, node) in &saturation.nodes {
                 if (node.saturated_concepts.contains(&concept)
                     || node.direct_subsumers.contains(&concept)
-                    || node.all_subsumers.contains(&concept))
+                    || saturation.subsumptions.get(other_concept).map_or(false, |s| s.contains(&concept)))
                     && affected.insert(other_concept.clone())
                 {
                     to_process.push(other_concept.clone());

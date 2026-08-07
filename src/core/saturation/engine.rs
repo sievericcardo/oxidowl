@@ -90,7 +90,7 @@ impl SaturationResult {
         Self {
             nodes,
             statistics,
-            subsumptions,
+            subsumptions: HashMap::new(),
         }
     }
 
@@ -112,8 +112,8 @@ impl SaturationResult {
     /// Check if one concept subsumes another based on saturation
     #[must_use]
     pub fn subsumes(&self, subsumer: &ClassExpression, subsumed: &ClassExpression) -> bool {
-        if let Some(node) = self.nodes.get(subsumed) {
-            node.all_subsumers.contains(subsumer) || node.saturated_concepts.contains(subsumer)
+        if let Some(s) = self.subsumptions.get(subsumed) {
+            s.contains(subsumer)
         } else {
             false
         }
@@ -209,13 +209,15 @@ impl SaturationEngine {
         // Saturate each concept using the index-based fast path.
         let nodes = self.saturate_concepts_indexed(&concepts, ontology, &index)?;
 
-        // Compute transitive closure of subsumers (needed for all_subsumers field)
-        let nodes = self.compute_transitive_subsumers(nodes);
+        // Compute transitive closure of subsumers (returned separately to keep
+        // nodes light-weight).
+        let subsumptions = self.compute_transitive_subsumers(&nodes);
 
         let saturation_time = start_time.elapsed();
         info!("Saturation completed in {saturation_time:?}");
 
         let mut result = SaturationResult::new(nodes);
+        result.subsumptions = subsumptions;
         result.statistics.saturation_time = saturation_time;
 
         Ok(result)
@@ -489,50 +491,55 @@ impl SaturationEngine {
         Ok(nodes)
     }
 
-    /// Compute transitive closure of subsumers
+    /// Compute transitive closure of subsumers.
+    ///
+    /// Uses regular `HashSet` for transient computation (avoiding persistent
+    /// `im::HashSet` overhead) and returns only the subsumption map so that
+    /// the per-node `all_subsumers` field can remain empty.  This keeps the
+    /// peak memory footprint O(N·D) instead of O(N²) for dense hierarchies.
     fn compute_transitive_subsumers(
         &self,
-        mut nodes: HashMap<ClassExpression, SaturationNode>,
-    ) -> HashMap<ClassExpression, SaturationNode> {
+        nodes: &HashMap<ClassExpression, SaturationNode>,
+    ) -> HashMap<ClassExpression, ConceptSet> {
         debug!("Computing transitive closure of subsumers");
 
-        // Build adjacency list
-        let mut subsumption_graph: HashMap<ClassExpression, ConceptSet> = HashMap::new();
+        let mut subsumption_graph: HashMap<ClassExpression, HashSet<ClassExpression>> =
+            HashMap::with_capacity(nodes.len());
 
-        for (concept, node) in &nodes {
-            subsumption_graph.insert(concept.clone(), node.direct_subsumers.clone());
+        for (concept, node) in nodes {
+            subsumption_graph
+                .insert(concept.clone(), node.direct_subsumers.iter().cloned().collect());
         }
 
-        // Compute transitive closure using Warshall's algorithm
         let concepts: Vec<_> = nodes.keys().cloned().collect();
+        let mut subsumptions: HashMap<ClassExpression, ConceptSet> =
+            HashMap::with_capacity(concepts.len());
 
         for concept in &concepts {
-            if let Some(node) = nodes.get_mut(concept) {
-                let mut all_subsumers = node.direct_subsumers.clone();
-                let mut to_process: Vec<_> = node.direct_subsumers.iter().cloned().collect();
-                let mut visited = ConceptSet::new();
+            let direct: HashSet<ClassExpression> = nodes
+                .get(concept)
+                .map(|n| n.direct_subsumers.iter().cloned().collect())
+                .unwrap_or_default();
 
-                while let Some(subsumer) = to_process.pop() {
-                    if visited.contains(&subsumer) {
-                        continue;
-                    }
-                    visited = visited.update(subsumer.clone());
+            let mut all_subsumers = direct.clone();
+            let mut to_process: Vec<_> = direct.iter().cloned().collect();
+            let mut visited = direct;
 
-                    if let Some(indirect_subsumers) = subsumption_graph.get(&subsumer) {
-                        for indirect in indirect_subsumers {
-                            if !all_subsumers.contains(indirect) {
-                                all_subsumers = all_subsumers.update(indirect.clone());
-                                to_process.push(indirect.clone());
-                            }
+            while let Some(subsumer) = to_process.pop() {
+                if let Some(indirect_subsumers) = subsumption_graph.get(&subsumer) {
+                    for indirect in indirect_subsumers {
+                        if visited.insert(indirect.clone()) {
+                            all_subsumers.insert(indirect.clone());
+                            to_process.push(indirect.clone());
                         }
                     }
                 }
-
-                node.all_subsumers = all_subsumers;
             }
+
+            subsumptions.insert(concept.clone(), ConceptSet::from_iter(all_subsumers));
         }
 
-        nodes
+        subsumptions
     }
 
     /// Check if a node represents an inconsistent concept
@@ -593,9 +600,11 @@ impl SaturationEngine {
         }
 
         // Recompute transitive closure
-        let nodes = self.compute_transitive_subsumers(nodes);
+        let subsumptions = self.compute_transitive_subsumers(&nodes);
 
-        Ok(SaturationResult::new(nodes))
+        let mut result = SaturationResult::new(nodes);
+        result.subsumptions = subsumptions;
+        Ok(result)
     }
 
     /// Compute concepts affected by changes (transitively)

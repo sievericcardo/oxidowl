@@ -35,6 +35,7 @@ pub struct ClassificationService {
     task_service: ReasoningTaskService,
     datatype_validator: DatatypeValidator,
     saturation_engine: SaturationEngine,
+    performance_config: PerformanceConfig,
 }
 
 impl ClassificationService {
@@ -44,6 +45,7 @@ impl ClassificationService {
             task_service,
             datatype_validator: DatatypeValidator::new(),
             saturation_engine: SaturationEngine::new(SaturationConfig::default()),
+            performance_config: PerformanceConfig::from_env(),
         }
     }
 
@@ -56,7 +58,13 @@ impl ClassificationService {
             task_service,
             datatype_validator: DatatypeValidator::new(),
             saturation_engine: SaturationEngine::new(saturation_config),
+            performance_config: PerformanceConfig::from_env(),
         }
+    }
+
+    /// Set the performance configuration
+    pub fn set_performance_config(&mut self, config: PerformanceConfig) {
+        self.performance_config = config;
     }
 
     /// Perform classification (build class hierarchy)
@@ -126,97 +134,45 @@ impl ClassificationService {
         }
 
         // === PHASE 3: Tableau expansion for complex cases ===
-        let phase3_start = Instant::now();
-        let mut tableau_checks = 0;
-        let mut tableau_pairs = Vec::new();
-
-        // Identify pairs that need tableau expansion
-        for subclass in &classes {
-            if let Some(node) = saturation_result.get_node(subclass)
-                && (node.status == SaturationStatus::RequiresFullTableau
-                    || node.status == SaturationStatus::NonDeterministic)
-            {
-                for superclass in &classes {
-                    if subclass != superclass {
-                        // Check if not already determined by saturation
-                        if !saturation_result.subsumes(superclass, subclass) {
-                            tableau_pairs.push((subclass.clone(), superclass.clone()));
-                        }
-                    }
-                }
+        // Extract statuses and drop the heavy saturation result to free
+        // memory before Phase 3 begins.
+        let mut statuses: HashMap<ClassExpression, SaturationStatus> = HashMap::new();
+        for class in &classes {
+            if let Some(node) = saturation_result.get_node(class) {
+                statuses.insert(class.clone(), node.status);
             }
         }
+        drop(saturation_result);
 
-        info!(
-            "Phase 3: {} pairs require tableau expansion",
-            tableau_pairs.len()
-        );
+        let phase3_start = Instant::now();
+        let mut tableau_checks = 0;
 
-        // Store length before consuming tableau_pairs
-        let total_tableau_pairs = tableau_pairs.len();
-
-        // Get performance configuration for parallel execution
-        let perf_config = PerformanceConfig::from_env();
-        // Lower threshold from 100 to 16: parallelism pays off earlier since rayon's
-        // work-stealing scheduler has very low per-task overhead relative to a full
-        // tableau expansion.
-        let use_parallel = perf_config.is_enabled(crate::config::PerformanceFeature::LockFree)
-            && total_tableau_pairs > 16;
-
-        if use_parallel {
-            info!("Using parallel classification for {total_tableau_pairs} subsumption checks");
-
-            // Create parallel scheduler
-            let scheduler = ParallelClassificationScheduler::new(perf_config);
-
-            // Build told subsumers map for dependency tracking
-            let mut told_subsumers = std::collections::HashMap::new();
-            for (subclass, superclasses) in &hierarchy {
-                told_subsumers.insert(subclass.clone(), superclasses.clone());
-            }
-
-            // Schedule all tasks with priority ordering
-            let tasks = scheduler.schedule_classification_tasks(&classes, &told_subsumers);
-
-            // Filter to only the pairs that need tableau expansion
-            let filtered_tasks: Vec<_> = tasks
-                .into_iter()
-                .filter(|task| {
-                    tableau_pairs
-                        .iter()
-                        .any(|(s, p)| s == &task.subclass && p == &task.superclass)
-                })
-                .collect();
-
-            // Execute parallel subsumption checks
-            let results = scheduler.execute_parallel(filtered_tasks, |sub, sup| {
-                self.check_subsumption_from_axioms(sub, sup, &ontology_guard)
-            })?;
-
-            // Collect results into hierarchy
-            for result in results {
-                if result.holds {
-                    let entry = hierarchy
-                        .entry(result.subclass)
-                        .or_insert_with(HashSet::new);
-                    entry.insert(result.superclass);
-                }
-            }
-
-            tableau_checks = total_tableau_pairs;
-        } else {
-            info!("Using sequential classification for {total_tableau_pairs} subsumption checks");
-
-            // Perform tableau expansion for remaining pairs (sequential fallback)
-            for (subclass, superclass) in tableau_pairs {
-                if self.check_subsumption_from_axioms(&subclass, &superclass, &ontology_guard)? {
-                    let entry = hierarchy.entry(subclass).or_insert_with(HashSet::new);
-                    entry.insert(superclass);
-                }
-                tableau_checks += 1;
-
-                if tableau_checks % 100 == 0 {
-                    debug!("Tableau checks progress: {tableau_checks}/{total_tableau_pairs}");
+        // Process pairs directly without intermediate Vec to avoid O(N²) memory.
+        for subclass in &classes {
+            if let Some(&status) = statuses.get(subclass)
+                && (status == SaturationStatus::RequiresFullTableau
+                    || status == SaturationStatus::NonDeterministic)
+            {
+                for superclass in &classes {
+                    if subclass == superclass {
+                        continue;
+                    }
+                    if hierarchy
+                        .get(subclass)
+                        .map_or(false, |sups| sups.contains(superclass))
+                    {
+                        continue;
+                    }
+                    if self.check_subsumption_from_axioms(subclass, superclass, &ontology_guard)? {
+                        hierarchy
+                            .entry(subclass.clone())
+                            .or_insert_with(HashSet::new)
+                            .insert(superclass.clone());
+                    }
+                    tableau_checks += 1;
+                    if tableau_checks % 1000 == 0 {
+                        debug!("Tableau checks progress: {tableau_checks}");
+                    }
                 }
             }
         }

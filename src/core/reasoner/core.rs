@@ -156,8 +156,9 @@ impl Reasoner {
         let classification_tableau_factory = TableauFactory::new(config.clone())?;
 
         let task_service = ReasoningTaskService::new(task_tableau_factory);
-        let classification_service =
+        let mut classification_service =
             ClassificationService::new(ReasoningTaskService::new(classification_tableau_factory));
+        classification_service.set_performance_config(config.performance.clone());
 
         Ok(Self {
             ontology: None,

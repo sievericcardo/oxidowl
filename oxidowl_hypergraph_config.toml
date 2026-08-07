@@ -114,4 +114,4 @@ memory_pool_size_mb = 2048
 gc_threshold = 0.75
 
 # Maximum classification parallelism (optional, concurrent subsumption tests)
-max_parallel_classification_tasks = 1024
+max_parallel_classification_tasks = 8
