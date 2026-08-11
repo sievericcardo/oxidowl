@@ -42,7 +42,7 @@ features = 13
 # max_memory_mb = 4096
 
 # Enable incremental reasoning
-incremental_reasoning = true
+incremental_reasoning = false
 
 # Maximum tableau expansion depth
 max_expansion_depth = 1000
