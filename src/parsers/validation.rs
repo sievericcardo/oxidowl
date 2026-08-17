@@ -815,11 +815,23 @@ impl SyntaxValidator {
         // Simple tag matching (not a full XML validator, but catches common errors)
         let mut tag_stack: Vec<String> = Vec::new();
         let mut in_tag = false;
+        let mut in_comment = false;
         let mut current_tag = String::new();
         let mut is_closing = false;
         let mut is_processing_instruction = false;
 
         for ch in trimmed.chars() {
+            if in_comment {
+                // Consume everything until the "-->" comment terminator.
+                current_tag.push(ch);
+                if ch == '>' && current_tag.ends_with("-->") {
+                    in_comment = false;
+                    in_tag = false;
+                    current_tag.clear();
+                }
+                continue;
+            }
+
             match ch {
                 '<' => {
                     in_tag = true;
@@ -867,6 +879,10 @@ impl SyntaxValidator {
                 }
                 _ if in_tag => {
                     current_tag.push(ch);
+                    // Detect the start of a comment: <!--
+                    if current_tag == "!--" {
+                        in_comment = true;
+                    }
                 }
                 _ => {}
             }

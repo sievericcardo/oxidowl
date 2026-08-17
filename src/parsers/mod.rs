@@ -230,6 +230,23 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
         return Ok(OntologyFormat::Manchester);
     }
 
+    // Check for XML-based formats before Turtle.
+    // RDF/XML and OWL/XML documents may use rdf:type and owl: prefixes, which
+    // would otherwise match the Turtle heuristics below. An XML declaration or
+    // RDF/XML/OWL root element is unambiguous and never starts a Turtle file.
+    if trimmed.starts_with("<?xml")
+        || trimmed.starts_with("<rdf:RDF")
+        || trimmed.starts_with("<RDF")
+        || trimmed.starts_with("<owl:")
+    {
+        // RDF/XML is identified by the rdf:RDF root element. Check this first,
+        // since RDF/XML files may also use owl: and rdf:type prefixes.
+        if content.contains("rdf:RDF") || content.contains("<rdf:RDF") || content.contains("<RDF") {
+            return Ok(OntologyFormat::RdfXml);
+        }
+        return Ok(OntologyFormat::OwlXml);
+    }
+
     // Check for Turtle syntax
     // Turtle uses @prefix and @base directives
     if trimmed.starts_with("@prefix")
@@ -240,10 +257,9 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
         return Ok(OntologyFormat::Turtle);
     }
 
-    // Check for XML-based formats
-    if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
-        // Try to determine which XML type
-        // Check for OWL/XML elements
+    // Check for remaining XML-based formats (OWL/XML documents without an XML
+    // declaration that use unprefixed elements such as <Ontology or <Class)
+    if trimmed.starts_with('<') {
         let owl_xml_elements = [
             "<Ontology",
             "<Declaration",
@@ -252,15 +268,10 @@ fn detect_format_from_content<P: AsRef<Path>>(path: P) -> Result<OntologyFormat>
             "<DataProperty",
             "<AnnotationProperty",
             "<Individual",
-            "owl:Ontology",
             "<Import",
         ];
         if owl_xml_elements.iter().any(|&elem| content.contains(elem)) {
             return Ok(OntologyFormat::OwlXml);
-        }
-        // Check for RDF/XML
-        if content.contains("rdf:RDF") || content.contains("<rdf:RDF") {
-            return Ok(OntologyFormat::RdfXml);
         }
         // Default to OWL/XML for XML files (safer than RDF/XML)
         return Ok(OntologyFormat::OwlXml);
@@ -526,6 +537,16 @@ pub fn detect_format_from_content_public(
     {
         return Ok(OntologyFormat::Manchester);
     }
+    if trimmed.starts_with("<?xml")
+        || trimmed.starts_with("<rdf:RDF")
+        || trimmed.starts_with("<RDF")
+        || trimmed.starts_with("<owl:")
+    {
+        if content.contains("rdf:RDF") || content.contains("<rdf:RDF") || content.contains("<RDF") {
+            return Ok(OntologyFormat::RdfXml);
+        }
+        return Ok(OntologyFormat::OwlXml);
+    }
     if trimmed.starts_with("@prefix")
         || trimmed.starts_with("@base")
         || (content.contains("@prefix") && content.contains("<http"))
@@ -533,9 +554,8 @@ pub fn detect_format_from_content_public(
     {
         return Ok(OntologyFormat::Turtle);
     }
-    if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
-        if content.contains("owl:Ontology")
-            || content.contains("<Ontology")
+    if trimmed.starts_with('<') {
+        if content.contains("<Ontology")
             || content.contains("<Declaration")
             || content.contains("<Class")
         {
