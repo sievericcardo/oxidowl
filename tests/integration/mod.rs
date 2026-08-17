@@ -7,3 +7,5 @@ mod swrl_builtins_test;
 mod swrl_integration_test;
 // Re-enabling disjoint classes test
 mod disjoint_classes_test;
+
+pub mod ore_integration_test;
