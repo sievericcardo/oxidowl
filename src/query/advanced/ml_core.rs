@@ -16,6 +16,7 @@ use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+#[allow(unused_imports)]
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "ml")]
