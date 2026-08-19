@@ -9,11 +9,13 @@
 
 pub mod conjunctive;
 pub mod execution;
+pub mod evaluator;
 pub mod feature_extraction;
 pub mod ml_models;
 pub mod optimization;
 pub mod optimizer; // Advanced optimizer
 pub mod rewriting;
+pub mod strategies;
 
 // Core advanced components (using existing enhanced modules)
 pub mod actors; // Phase 3: execution engine actors

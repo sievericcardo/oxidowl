@@ -874,7 +874,12 @@ impl AdvancedExecutionEngine {
             Default::default(),
         );
         let strategy_selector = ExecutionStrategySelector::new();
-        let optimizer = OptimizerHandle::spawn(optimizer_inner, strategy_selector);
+        let optimizer = OptimizerHandle::spawn(
+            optimizer_inner,
+            strategy_selector,
+            ontology.clone(),
+            reasoning_service.clone(),
+        );
 
         let result_cache = Arc::new(AsyncRwLock::new(QueryResultCache::new(
             CacheConfig::default(),
@@ -914,6 +919,18 @@ impl AdvancedExecutionEngine {
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         let execution_id = ExecutionId(Uuid::new_v4().to_string());
         let start_time = Instant::now();
+
+        // Validate the query before doing any work.
+        if query.body_atoms.is_empty() {
+            return Err(AdvancedQueryError::InvalidQuery(
+                "Query has no body atoms".to_string(),
+            ));
+        }
+        if !query.is_well_formed() {
+            return Err(AdvancedQueryError::InvalidQuery(
+                "Query is not well-formed".to_string(),
+            ));
+        }
 
         // Step 1: Check cache if enabled
         if self.config.enable_caching
@@ -1622,12 +1639,21 @@ impl Default for ExecutionStrategySelector {
 impl ExecutionStrategySelector {
     #[must_use]
     pub fn new() -> Self {
-        Self {
+        let mut selector = Self {
             strategies: HashMap::new(),
             performance_history: HashMap::new(),
             selection_model: StrategySelectionModel::new(),
             learning_config: StrategyLearningConfig::default(),
+        };
+        for (name, strategy) in super::strategies::default_strategies() {
+            selector.register_strategy(name, strategy);
         }
+        selector
+    }
+
+    /// Register an execution strategy under a name.
+    pub fn register_strategy(&mut self, name: &str, strategy: Box<dyn ExecutionStrategy>) {
+        self.strategies.insert(name.to_string(), strategy);
     }
 
     pub fn select_strategy(
@@ -1904,8 +1930,13 @@ impl ExecutionStrategySelector {
     }
 
     pub fn get_strategy(&self, name: &str) -> Result<&dyn ExecutionStrategy, AdvancedQueryError> {
-        // Get strategy implementation by name
-        Err(AdvancedQueryError::strategy_not_found(name.to_string()))
+        // Look up the strategy by name, falling back to the default strategy so
+        // that any name produced by the rule-based or ML selectors resolves.
+        self.strategies.get(name).map(Box::as_ref).or_else(|| {
+            self.strategies
+                .get("default")
+                .map(Box::as_ref)
+        }).ok_or_else(|| AdvancedQueryError::strategy_not_found(name.to_string()))
     }
 
     pub fn update_performance_history(

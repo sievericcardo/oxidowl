@@ -51,7 +51,7 @@ fn simple_query(var: &str, class: &str) -> ConjunctiveQuery {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_ml_engine_creation() {
     println!("\n=== Test: ML Engine Creation ===");
 
@@ -72,7 +72,7 @@ async fn test_ml_engine_creation() {
     println!("✓ ML-enabled engine created successfully");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_ml_vs_legacy_execution() {
     println!("\n=== Test: ML vs Legacy Execution ===");
 
@@ -107,7 +107,7 @@ async fn test_ml_vs_legacy_execution() {
     println!("✓ Configuration variations work correctly");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_query_execution_basic() {
     println!("\n=== Test: Basic Query Execution ===");
 
@@ -151,7 +151,7 @@ async fn test_query_execution_basic() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_concurrent_queries() {
     println!("\n=== Test: Concurrent Query Execution ===");
 
@@ -204,7 +204,7 @@ async fn test_concurrent_queries() {
     println!("✓ Concurrent execution completed without deadlocks");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_multiple_query_execution() {
     println!("\n=== Test: Multiple Query Executions ===");
 
@@ -247,7 +247,7 @@ async fn test_multiple_query_execution() {
     assert!(successful <= 10, "Sanity check on success count");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_performance_measurement() {
     println!("\n=== Test: Performance Measurement ===");
 
@@ -278,7 +278,7 @@ async fn test_performance_measurement() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_error_handling() {
     println!("\n=== Test: Error Handling ===");
 
@@ -306,17 +306,13 @@ async fn test_error_handling() {
     let constraints = default_constraints();
     let result = engine.execute_query(&empty_query, constraints).await;
 
-    // The engine must reject an empty query with a specific internal error
+    // The engine must reject an empty query with a specific InvalidQuery error
     // rather than panic or silently return an empty result.
     println!("✓ Error handling completed without panicking");
     match result {
         Ok(r) => assert!(r.bindings.is_empty(), "Empty query should yield no bindings"),
         Err(e) => assert!(
-            matches!(
-                e,
-                AdvancedQueryError::InternalError(ref msg)
-                    if msg.contains("Execution strategy not found")
-            ),
+            matches!(e, AdvancedQueryError::InvalidQuery(ref msg) if msg.contains("no body atoms")),
             "Unexpected error: {e:?}"
         ),
     }

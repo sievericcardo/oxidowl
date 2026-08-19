@@ -4,13 +4,14 @@
 //! using various strategies including tableau reasoning, query rewriting, and
 //! direct evaluation.
 
-use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryConstraints, QueryVariable};
+use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
+use super::evaluator::QueryEvaluator;
 use super::optimization::{ExecutionStrategy, QueryOptimizer};
 use super::rewriting::QueryRewriter;
 use crate::ontology::{Individual, Literal, Ontology};
 use crate::reasoning::ReasoningService;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -18,7 +19,7 @@ use std::time::{Duration, Instant};
 pub struct QueryEngine {
     #[allow(dead_code)]
     ontology: Arc<Ontology>,
-    reasoning_service: Arc<ReasoningService>,
+    evaluator: QueryEvaluator,
     optimizer: QueryOptimizer,
     #[allow(dead_code)]
     rewriter: QueryRewriter,
@@ -151,10 +152,11 @@ impl QueryEngine {
         let optimizer = QueryOptimizer::new(ontology.clone(), reasoning_service.clone());
         let rewriter =
             QueryRewriter::new(ontology.clone()).map_err(AdvancedQueryError::RewritingError)?;
+        let evaluator = QueryEvaluator::new(reasoning_service.clone());
 
         Ok(Self {
             ontology: ontology.clone(),
-            reasoning_service,
+            evaluator,
             optimizer,
             rewriter,
             cache: QueryCache::new(),
@@ -230,83 +232,12 @@ impl QueryEngine {
         &mut self,
         query: &ConjunctiveQuery,
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        let mut bindings = Vec::new();
-        let mut reasoning_calls = 0;
-
-        // For simple queries, we can evaluate directly
-        if query.body_atoms.len() == 1 {
-            match &query.body_atoms[0] {
-                QueryAtom::ClassAtom {
-                    variable,
-                    class_expression,
-                } => {
-                    // Find all instances of the class
-                    if let Ok(instances) =
-                        self.reasoning_service.get_instances_sync(class_expression)
-                    {
-                        reasoning_calls += 1;
-                        for instance in instances {
-                            let mut binding = QueryBinding::new();
-                            binding
-                                .bind_variable(variable.clone(), BoundValue::Individual(instance));
-                            bindings.push(binding);
-                        }
-                    }
-                }
-                QueryAtom::ObjectPropertyAtom {
-                    subject,
-                    property,
-                    object,
-                } => {
-                    // Find all property assertions
-                    if let Ok(assertions) = self
-                        .reasoning_service
-                        .get_object_property_assertions_sync(property)
-                    {
-                        reasoning_calls += 1;
-                        for (subj, obj) in assertions {
-                            let mut binding = QueryBinding::new();
-                            binding.bind_variable(subject.clone(), BoundValue::Individual(subj));
-                            binding.bind_variable(object.clone(), BoundValue::Individual(obj));
-                            bindings.push(binding);
-                        }
-                    }
-                }
-                _ => {
-                    // Fall back to tableau execution for other atom types
-                    return self.execute_tableau(query, &query.body_atoms);
-                }
-            }
-        } else {
-            // Multiple atoms require more complex evaluation
-            return self.execute_tableau(query, &query.body_atoms);
-        }
-
-        // Apply result limit
-        let complete = if let Some(limit) = self.config.result_limit {
-            if bindings.len() > limit {
-                bindings.truncate(limit);
-                false
-            } else {
-                true
-            }
-        } else {
-            true
-        };
-
-        Ok(ConjunctiveQueryResult {
-            bindings,
-            metadata: ExecutionMetadata {
-                execution_time: Duration::from_millis(0), // Will be set by caller
-                optimization_time: Duration::from_millis(0),
-                strategy_used: "Direct".to_string(),
-                intermediate_results: 0,
-                cache_hit: false,
-                reasoning_calls,
-                memory_usage: MemoryUsage::default(),
-            },
-            complete,
-        })
+        self.evaluator.evaluate(
+            query,
+            &query.body_atoms,
+            "Direct",
+            self.config.result_limit,
+        )
     }
 
     /// Execute query using tableau reasoning
@@ -315,73 +246,12 @@ impl QueryEngine {
         query: &ConjunctiveQuery,
         expansion_order: &[QueryAtom],
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        let mut bindings = Vec::new();
-        let mut reasoning_calls = 0;
-
-        // Create initial binding with free variables
-        let mut current_bindings = vec![QueryBinding::new()];
-
-        // Process atoms in the specified order
-        for atom in expansion_order {
-            let mut next_bindings = Vec::new();
-
-            for current_binding in current_bindings {
-                let atom_bindings = self.evaluate_atom_with_binding(atom, &current_binding)?;
-                reasoning_calls += atom_bindings.len();
-
-                for atom_binding in atom_bindings {
-                    if let Some(combined_binding) = current_binding.combine(&atom_binding) {
-                        next_bindings.push(combined_binding);
-                    }
-                }
-            }
-
-            current_bindings = next_bindings;
-
-            // Check timeout
-            if let Some(timeout) = self.config.max_execution_time {
-                // Simplified timeout check - in practice would track elapsed time
-                if current_bindings.len() > 10000 {
-                    return Err(AdvancedQueryError::ExecutionTimeout(timeout));
-                }
-            }
-        }
-
-        // Filter to answer variables only
-        for binding in current_bindings {
-            let answer_binding = binding.project(&query.answer_variables);
-            bindings.push(answer_binding);
-        }
-
-        // Remove duplicates and apply constraints
-        bindings = self.apply_constraints(&bindings, &query.constraints)?;
-        bindings.dedup();
-
-        // Apply result limit
-        let complete = if let Some(limit) = self.config.result_limit {
-            if bindings.len() > limit {
-                bindings.truncate(limit);
-                false
-            } else {
-                true
-            }
-        } else {
-            true
-        };
-
-        Ok(ConjunctiveQueryResult {
-            bindings,
-            metadata: ExecutionMetadata {
-                execution_time: Duration::from_millis(0), // Will be set by caller
-                optimization_time: Duration::from_millis(0),
-                strategy_used: "Tableau".to_string(),
-                intermediate_results: reasoning_calls,
-                cache_hit: false,
-                reasoning_calls,
-                memory_usage: MemoryUsage::default(),
-            },
-            complete,
-        })
+        self.evaluator.evaluate(
+            query,
+            expansion_order,
+            "Tableau",
+            self.config.result_limit,
+        )
     }
 
     /// Execute query using OWL 2 QL rewriting
@@ -393,26 +263,25 @@ impl QueryEngine {
         let mut all_bindings = Vec::new();
         let mut total_reasoning_calls = 0;
 
-        // Execute each rewritten query
         for rewritten_query in rewritten_queries {
-            let result = self.execute_tableau(rewritten_query, &rewritten_query.body_atoms)?;
+            let result = self.evaluator.evaluate(
+                rewritten_query,
+                &rewritten_query.body_atoms,
+                "Rewriting",
+                None,
+            )?;
             all_bindings.extend(result.bindings);
             total_reasoning_calls += result.metadata.reasoning_calls;
         }
 
-        // Remove duplicates
         all_bindings.dedup();
 
-        // Apply result limit
-        let complete = if let Some(limit) = self.config.result_limit {
-            if all_bindings.len() > limit {
+        let complete = match self.config.result_limit {
+            Some(limit) if all_bindings.len() > limit => {
                 all_bindings.truncate(limit);
                 false
-            } else {
-                true
             }
-        } else {
-            true
+            _ => true,
         };
 
         Ok(ConjunctiveQueryResult {
@@ -437,279 +306,12 @@ impl QueryEngine {
         tableau_atoms: &[QueryAtom],
         _rewriting_atoms: &[QueryAtom],
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        // For now, fall back to tableau execution
-        // In practice, this would intelligently combine both approaches
-        self.execute_tableau(query, tableau_atoms)
-    }
-
-    /// Evaluate a single atom in the context of existing bindings
-    fn evaluate_atom_with_binding(
-        &mut self,
-        atom: &QueryAtom,
-        binding: &QueryBinding,
-    ) -> Result<Vec<QueryBinding>, AdvancedQueryError> {
-        match atom {
-            QueryAtom::ClassAtom {
-                variable,
-                class_expression,
-            } => {
-                if let Some(bound_value) = binding.get_binding(variable) {
-                    // Variable is already bound - check if it satisfies the class
-                    if let BoundValue::Individual(individual) = bound_value {
-                        if self
-                            .reasoning_service
-                            .is_instance_of_sync(individual, class_expression)
-                            .unwrap_or(false)
-                        {
-                            Ok(vec![QueryBinding::new()])
-                        } else {
-                            Ok(vec![])
-                        }
-                    } else {
-                        Ok(vec![])
-                    }
-                } else {
-                    // Variable is free - find all instances
-                    if let Ok(instances) =
-                        self.reasoning_service.get_instances_sync(class_expression)
-                    {
-                        Ok(instances
-                            .into_iter()
-                            .map(|instance| {
-                                let mut new_binding = QueryBinding::new();
-                                new_binding.bind_variable(
-                                    variable.clone(),
-                                    BoundValue::Individual(instance),
-                                );
-                                new_binding
-                            })
-                            .collect())
-                    } else {
-                        Ok(vec![])
-                    }
-                }
-            }
-            QueryAtom::ObjectPropertyAtom {
-                subject,
-                property,
-                object,
-            } => {
-                // Get property assertions
-                if let Ok(assertions) = self
-                    .reasoning_service
-                    .get_object_property_assertions_sync(property)
-                {
-                    let mut results = Vec::new();
-
-                    for (subj, obj) in assertions {
-                        // Check if bindings are compatible
-                        let mut compatible = true;
-
-                        if let Some(bound_subj) = binding.get_binding(subject)
-                            && let BoundValue::Individual(bound_individual) = bound_subj
-                            && bound_individual != &subj
-                        {
-                            compatible = false;
-                        }
-
-                        if let Some(bound_obj) = binding.get_binding(object)
-                            && let BoundValue::Individual(bound_individual) = bound_obj
-                            && bound_individual != &obj
-                        {
-                            compatible = false;
-                        }
-
-                        if compatible {
-                            let mut new_binding = QueryBinding::new();
-                            new_binding
-                                .bind_variable(subject.clone(), BoundValue::Individual(subj));
-                            new_binding.bind_variable(object.clone(), BoundValue::Individual(obj));
-                            results.push(new_binding);
-                        }
-                    }
-
-                    Ok(results)
-                } else {
-                    Ok(vec![])
-                }
-            }
-            QueryAtom::DataPropertyAtom {
-                subject,
-                property,
-                literal,
-            } => {
-                // NOTE: This is simplified - in production would use dedicated data property assertion method
-                // For now, return empty results as data property handling needs full implementation
-                let _ = (subject, property, literal); // Silence unused warnings
-                Ok(vec![])
-            }
-            QueryAtom::SameIndividualAtom { left, right } => {
-                // Check if two variables refer to the same individual
-                let left_value = binding.get_binding(left);
-                let right_value = binding.get_binding(right);
-
-                match (left_value, right_value) {
-                    (Some(BoundValue::Individual(l)), Some(BoundValue::Individual(r))) => {
-                        // Both bound - check if same
-                        if l == r {
-                            Ok(vec![QueryBinding::new()])
-                        } else {
-                            Ok(vec![])
-                        }
-                    }
-                    (Some(BoundValue::Individual(ind)), None)
-                    | (None, Some(BoundValue::Individual(ind))) => {
-                        // One bound - bind the other to same value
-                        let mut new_binding = QueryBinding::new();
-                        let var = if left_value.is_some() { right } else { left };
-                        new_binding.bind_variable(var.clone(), BoundValue::Individual(ind.clone()));
-                        Ok(vec![new_binding])
-                    }
-                    (None, None) => {
-                        // Both free - not determinable without more info
-                        Ok(vec![QueryBinding::new()])
-                    }
-                    _ => Ok(vec![]),
-                }
-            }
-            QueryAtom::DifferentIndividualsAtom { left, right } => {
-                // Check if two variables refer to different individuals
-                let left_value = binding.get_binding(left);
-                let right_value = binding.get_binding(right);
-
-                match (left_value, right_value) {
-                    (Some(BoundValue::Individual(l)), Some(BoundValue::Individual(r))) => {
-                        // Both bound - check if different
-                        if l != r {
-                            Ok(vec![QueryBinding::new()])
-                        } else {
-                            Ok(vec![])
-                        }
-                    }
-                    _ => {
-                        // At least one unbound - constraint will be checked later
-                        Ok(vec![QueryBinding::new()])
-                    }
-                }
-            }
-            QueryAtom::ConcreteIndividualAtom {
-                variable,
-                individual,
-            } => {
-                // Bind variable to concrete individual
-                if let Some(bound_value) = binding.get_binding(variable) {
-                    // Check if compatible with existing binding
-                    if let BoundValue::Individual(bound_ind) = bound_value {
-                        if bound_ind == individual {
-                            Ok(vec![QueryBinding::new()])
-                        } else {
-                            Ok(vec![])
-                        }
-                    } else {
-                        Ok(vec![])
-                    }
-                } else {
-                    let mut new_binding = QueryBinding::new();
-                    new_binding.bind_variable(
-                        variable.clone(),
-                        BoundValue::Individual(individual.clone()),
-                    );
-                    Ok(vec![new_binding])
-                }
-            }
-            QueryAtom::ConcreteLiteralAtom { variable, literal } => {
-                // Bind variable to concrete literal
-                if let Some(bound_value) = binding.get_binding(variable) {
-                    // Check if compatible with existing binding
-                    if let BoundValue::Literal(bound_lit) = bound_value {
-                        if bound_lit == literal {
-                            Ok(vec![QueryBinding::new()])
-                        } else {
-                            Ok(vec![])
-                        }
-                    } else {
-                        Ok(vec![])
-                    }
-                } else {
-                    let mut new_binding = QueryBinding::new();
-                    new_binding
-                        .bind_variable(variable.clone(), BoundValue::Literal(literal.clone()));
-                    Ok(vec![new_binding])
-                }
-            }
-        }
-    }
-
-    /// Apply query constraints to filter bindings
-    fn apply_constraints(
-        &self,
-        bindings: &[QueryBinding],
-        constraints: &QueryConstraints,
-    ) -> Result<Vec<QueryBinding>, AdvancedQueryError> {
-        let mut filtered_bindings = bindings.to_vec();
-
-        // Apply DISTINCT constraint - remove duplicate bindings
-        // distinct_variables is a Vec<Vec<QueryVariable>> representing sets of variables that must be distinct
-        for distinct_set in &constraints.distinct_variables {
-            let mut seen = HashSet::new();
-            filtered_bindings.retain(|binding| {
-                let distinct_sig: Vec<_> = distinct_set
-                    .iter()
-                    .map(|var| format!("{:?}", binding.get_binding(var)))
-                    .collect();
-                let sig = format!("{distinct_sig:?}");
-                seen.insert(sig)
-            });
-        }
-
-        // Apply type constraints - ensure variables match required types
-        for (variable, required_types) in &constraints.type_constraints {
-            filtered_bindings.retain(|binding| {
-                if let Some(bound_value) = binding.get_binding(variable) {
-                    // Check if bound value satisfies at least one of the required type expressions
-                    // This is simplified - production would use full reasoning
-                    match bound_value {
-                        BoundValue::Individual(_) => !required_types.is_empty(),
-                        BoundValue::Literal(_) => false, // Literals don't match class expressions
-                        BoundValue::Class(_) => true,
-                        BoundValue::Property(_) => false, // Properties don't match class expressions
-                    }
-                } else {
-                    true // Unbound variables pass type checks
-                }
-            });
-        }
-
-        // Apply value constraints - ensure variables match specific values
-        for (variable, required_value) in &constraints.value_constraints {
-            filtered_bindings.retain(|binding| {
-                if let Some(bound_value) = binding.get_binding(variable) {
-                    match (bound_value, required_value) {
-                        (
-                            BoundValue::Literal(lit),
-                            super::conjunctive::ValueConstraint::ExactValue(required_lit),
-                        ) => lit == required_lit,
-                        (
-                            BoundValue::Literal(lit),
-                            super::conjunctive::ValueConstraint::ValueSet(allowed_values),
-                        ) => allowed_values.contains(lit),
-                        (
-                            BoundValue::Literal(_lit),
-                            super::conjunctive::ValueConstraint::StringPattern(pattern),
-                        ) => {
-                            // Would use regex matching in production
-                            let _ = pattern;
-                            true // Simplified
-                        }
-                        _ => true, // Other constraint types not fully implemented
-                    }
-                } else {
-                    true // Unbound variables pass value checks
-                }
-            });
-        }
-
-        Ok(filtered_bindings)
+        self.evaluator.evaluate(
+            query,
+            tableau_atoms,
+            "Hybrid",
+            self.config.result_limit,
+        )
     }
 
     /// Validate that a query is well-formed and executable

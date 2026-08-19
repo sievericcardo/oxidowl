@@ -148,6 +148,16 @@ pub enum ReasoningRequest {
         class: ClassExpression,
         reply: oneshot::Sender<Result<bool>>,
     },
+    /// Synchronous bridge: used by `get_object_property_assertions_sync`
+    GetObjectPropertyAssertionsSync {
+        property: ObjectPropertyExpression,
+        reply: oneshot::Sender<Result<Vec<(Individual, Individual)>>>,
+    },
+    /// Synchronous bridge: used by `get_data_property_assertions_sync`
+    GetDataPropertyAssertionsSync {
+        property: DataPropertyExpression,
+        reply: oneshot::Sender<Result<Vec<(Individual, crate::ontology::Literal)>>>,
+    },
     InvalidateAllCaches {
         reply: oneshot::Sender<Result<()>>,
     },
@@ -361,6 +371,12 @@ impl ReasoningActor {
                 reply,
             } => {
                 let _ = reply.send(self.reasoner.is_instance_of(&individual, &class));
+            }
+            ReasoningRequest::GetObjectPropertyAssertionsSync { property, reply } => {
+                let _ = reply.send(self.reasoner.get_object_property_assertions(&property));
+            }
+            ReasoningRequest::GetDataPropertyAssertionsSync { property, reply } => {
+                let _ = reply.send(self.reasoner.get_data_property_assertions(&property));
             }
             ReasoningRequest::InvalidateAllCaches { reply } => {
                 tracing::debug!("All caches invalidated via actor request");

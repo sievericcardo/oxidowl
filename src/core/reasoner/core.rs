@@ -654,6 +654,54 @@ impl Reasoner {
         }
     }
 
+    /// Get all object property assertions for a given property expression.
+    pub fn get_object_property_assertions(
+        &self,
+        property: &ObjectPropertyExpression,
+    ) -> Result<Vec<(Individual, Individual)>> {
+        if let Some(ontology_ref) = &self.ontology {
+            let ontology = read_lock(
+                ontology_ref,
+                "core: reading ontology for object property assertions",
+            )?;
+            let mut assertions = Vec::new();
+            for axiom in ontology.axioms() {
+                if let crate::ontology::Axiom::ObjectPropertyAssertion(prop_assertion) = axiom
+                    && self.object_properties_equivalent(&prop_assertion.property, property)?
+                {
+                    assertions.push((prop_assertion.source.clone(), prop_assertion.target.clone()));
+                }
+            }
+            Ok(assertions)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Get all data property assertions for a given property expression.
+    pub fn get_data_property_assertions(
+        &self,
+        property: &DataPropertyExpression,
+    ) -> Result<Vec<(Individual, crate::ontology::Literal)>> {
+        if let Some(ontology_ref) = &self.ontology {
+            let ontology = read_lock(
+                ontology_ref,
+                "core: reading ontology for data property assertions",
+            )?;
+            let mut assertions = Vec::new();
+            for axiom in ontology.axioms() {
+                if let crate::ontology::Axiom::DataPropertyAssertion(prop_assertion) = axiom
+                    && self.data_properties_equivalent(&prop_assertion.property, property)?
+                {
+                    assertions.push((prop_assertion.individual.clone(), prop_assertion.value.clone()));
+                }
+            }
+            Ok(assertions)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
     /// Classify the ontology (compute class hierarchy).
     ///
     /// When the ontology conforms to the OWL 2 EL profile the faster

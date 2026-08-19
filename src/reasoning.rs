@@ -485,9 +485,19 @@ impl ReasoningService {
     /// Get object property assertions (for advanced query processing)
     pub fn get_object_property_assertions_sync(
         &self,
-        _property: &ObjectPropertyExpression,
+        property: &ObjectPropertyExpression,
     ) -> Result<Vec<(Individual, Individual)>> {
-        Ok(Vec::new())
+        let property = property.clone();
+        self.send_sync(|r| ReasoningRequest::GetObjectPropertyAssertionsSync { property, reply: r })
+    }
+
+    /// Get data property assertions (for advanced query processing)
+    pub fn get_data_property_assertions_sync(
+        &self,
+        property: &DataPropertyExpression,
+    ) -> Result<Vec<(Individual, crate::ontology::Literal)>> {
+        let property = property.clone();
+        self.send_sync(|r| ReasoningRequest::GetDataPropertyAssertionsSync { property, reply: r })
     }
 
     /// Create an incremental reasoning service wrapper
