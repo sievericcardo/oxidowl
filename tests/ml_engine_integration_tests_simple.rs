@@ -7,7 +7,8 @@ use oxidowl::ontology::concepts::Class;
 use oxidowl::ontology::{ClassExpression, IRI, Ontology};
 use oxidowl::query::advanced::execution_engine::{ExecutionConstraints, ExecutionPriority};
 use oxidowl::query::advanced::{
-    AdvancedExecutionConfig, AdvancedExecutionEngine, ConjunctiveQuery, QueryAtom, QueryVariable,
+    AdvancedExecutionConfig, AdvancedExecutionEngine, AdvancedQueryError, ConjunctiveQuery,
+    QueryAtom, QueryVariable,
 };
 use oxidowl::reasoning::ReasoningService;
 use std::sync::Arc;
@@ -137,8 +138,15 @@ async fn test_query_execution_basic() {
             assert!(!query_result.metadata.strategy_used.is_empty());
         }
         Err(e) => {
+            // No execution strategies are registered yet, so execution is
+            // expected to fail deterministically with a "strategy not found"
+            // internal error rather than panic or return a wrong result.
             println!("Query execution handled error: {:?}", e);
-            assert!(true, "Error handling works");
+            assert!(matches!(
+                e,
+                AdvancedQueryError::InternalError(ref msg)
+                    if msg.contains("Execution strategy not found")
+            ));
         }
     }
 }
@@ -162,32 +170,38 @@ async fn test_concurrent_queries() {
             .expect("Engine creation failed"),
     );
 
-    // Spawn 4 concurrent tasks
+    // Spawn 4 concurrent tasks, capturing each result.
     let mut handles = vec![];
     for thread_id in 0..4usize {
         let engine_clone = engine.clone();
         let handle = tokio::task::spawn(async move {
             let query = simple_query("var", &format!("Class{}", thread_id));
             let constraints = default_constraints();
-            engine_clone
-                .execute_query(&query, constraints)
-                .await
-                .is_ok()
+            engine_clone.execute_query(&query, constraints).await
         });
         handles.push(handle);
     }
 
-    // Wait for tasks
-    let mut success_count = 0;
+    // Wait for tasks; every task must complete without panic and return the
+    // deterministic "strategy not found" error (no strategies are registered).
     for handle in handles {
-        if handle.await.expect("Task panicked") {
-            success_count += 1;
+        let result = handle.await.expect("Task panicked");
+        match result {
+            Ok(query_result) => {
+                assert!(!query_result.metadata.strategy_used.is_empty());
+            }
+            Err(e) => assert!(
+                matches!(
+                    e,
+                    AdvancedQueryError::InternalError(ref msg)
+                        if msg.contains("Execution strategy not found")
+                ),
+                "Unexpected error: {e:?}"
+            ),
         }
     }
 
-    println!("✓ Concurrent execution completed");
-    println!("  Success: {}/4 tasks", success_count);
-    assert!(true, "Concurrent execution completed without deadlocks");
+    println!("✓ Concurrent execution completed without deadlocks");
 }
 
 #[tokio::test]
@@ -207,19 +221,30 @@ async fn test_multiple_query_execution() {
     let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
         .expect("Engine creation failed");
 
-    // Execute 10 queries
+    // Execute 10 queries, each must complete and return either a successful
+    // result or the specific "strategy not found" error.
     let mut successful = 0;
     for i in 0..10 {
         let query = simple_query("x", &format!("Type{}", i));
         let constraints = default_constraints();
-        let result = engine.execute_query(&query, constraints).await;
-        if result.is_ok() {
-            successful += 1;
+        match engine.execute_query(&query, constraints).await {
+            Ok(result) => {
+                successful += 1;
+                assert!(!result.metadata.strategy_used.is_empty());
+            }
+            Err(e) => assert!(
+                matches!(
+                    e,
+                    AdvancedQueryError::InternalError(ref msg)
+                        if msg.contains("Execution strategy not found")
+                ),
+                "Unexpected error: {e:?}"
+            ),
         }
     }
 
     println!("✓ Executed 10 queries: {} successful", successful);
-    assert!(true, "Multiple queries completed");
+    assert!(successful <= 10, "Sanity check on success count");
 }
 
 #[tokio::test]
@@ -279,10 +304,22 @@ async fn test_error_handling() {
     };
 
     let constraints = default_constraints();
-    let _ = engine.execute_query(&empty_query, constraints).await;
+    let result = engine.execute_query(&empty_query, constraints).await;
 
+    // The engine must reject an empty query with a specific internal error
+    // rather than panic or silently return an empty result.
     println!("✓ Error handling completed without panicking");
-    assert!(true, "Engine handles errors gracefully");
+    match result {
+        Ok(r) => assert!(r.bindings.is_empty(), "Empty query should yield no bindings"),
+        Err(e) => assert!(
+            matches!(
+                e,
+                AdvancedQueryError::InternalError(ref msg)
+                    if msg.contains("Execution strategy not found")
+            ),
+            "Unexpected error: {e:?}"
+        ),
+    }
 }
 
 #[test]

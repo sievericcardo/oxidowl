@@ -7,6 +7,7 @@
 //! - Performance monitoring
 
 use super::*;
+use super::execution::ExecutionMetadata;
 use crate::ontology::{ClassExpression, Ontology};
 use crate::reasoning::ReasoningService;
 use std::sync::Arc;
@@ -51,9 +52,25 @@ mod extended_integration_tests {
                 .expect("Failed to create ReasoningService"),
         );
 
-        let _optimizer = CostBasedOptimizer::new(ontology, reasoning_service, Default::default());
+        let mut optimizer =
+            CostBasedOptimizer::new(ontology, reasoning_service, Default::default());
 
-        assert!(true);
+        let query = ConjunctiveQuery {
+            answer_variables: vec![QueryVariable::new("x".to_string())],
+            body_atoms: vec![QueryAtom::ClassAtom {
+                variable: QueryVariable::new("x".to_string()),
+                class_expression: ClassExpression::Class(crate::ontology::Class {
+                    iri: crate::ontology::IRI::new("Person"),
+                }),
+            }],
+            constraints: Default::default(),
+            metadata: Default::default(),
+        };
+
+        let plan = optimizer
+            .optimize_query(&query)
+            .expect("Cost-based optimizer should produce a plan for a simple query");
+        assert!(plan.confidence_scores.overall_confidence.is_finite());
     }
 
     #[test]
@@ -120,26 +137,109 @@ mod extended_integration_tests {
 
     #[test]
     fn test_query_result_cache() {
-        let _cache = QueryResultCache::new(CacheConfig::default());
-        assert!(true);
+        let mut cache = QueryResultCache::new(CacheConfig::default());
+        let ontology = Ontology::new();
+        let query = ConjunctiveQuery {
+            answer_variables: vec![QueryVariable::new("x".to_string())],
+            body_atoms: vec![QueryAtom::ClassAtom {
+                variable: QueryVariable::new("x".to_string()),
+                class_expression: ClassExpression::Class(crate::ontology::Class {
+                    iri: crate::ontology::IRI::new("Person"),
+                }),
+            }],
+            constraints: Default::default(),
+            metadata: Default::default(),
+        };
+
+        // Empty cache returns no entry for a fresh query hash.
+        let hash = cache.compute_query_hash(&query, &ontology);
+        assert!(cache.get_entry(&hash).is_none());
+
+        // After insertion the entry is present and not yet expired.
+        let result = ConjunctiveQueryResult {
+            bindings: vec![],
+            metadata: ExecutionMetadata::default(),
+            complete: true,
+        };
+        cache
+            .insert(&query, result, &ontology)
+            .expect("Cache insert should succeed");
+        let entry = cache
+            .get_entry(&hash)
+            .expect("Cache entry should be present after insert");
+        assert!(!cache.is_entry_expired(entry));
     }
 
-    #[test]
-    fn test_execution_strategy_selector() {
-        let _selector = ExecutionStrategySelector::new();
-        assert!(true);
+    #[tokio::test]
+    async fn test_execution_strategy_selector() {
+        let ontology = Arc::new(Ontology::new());
+        let reasoning_service = Arc::new(
+            ReasoningService::new(Ontology::new(), Default::default())
+                .expect("Failed to create ReasoningService"),
+        );
+        let mut optimizer =
+            CostBasedOptimizer::new(ontology, reasoning_service, Default::default());
+        let query = ConjunctiveQuery {
+            answer_variables: vec![QueryVariable::new("x".to_string())],
+            body_atoms: vec![QueryAtom::ClassAtom {
+                variable: QueryVariable::new("x".to_string()),
+                class_expression: ClassExpression::Class(crate::ontology::Class {
+                    iri: crate::ontology::IRI::new("Person"),
+                }),
+            }],
+            constraints: Default::default(),
+            metadata: Default::default(),
+        };
+        let plan = optimizer
+            .optimize_query(&query)
+            .expect("Failed to build a query plan");
+
+        let mut selector = ExecutionStrategySelector::new();
+        let strategy = selector
+            .select_strategy(&query, &plan)
+            .expect("Strategy selection should succeed for a simple query");
+        assert_eq!(strategy, "direct");
     }
 
     #[test]
     fn test_execution_performance_monitor() {
-        let _monitor = ExecutionPerformanceMonitor::new();
-        assert!(true);
+        let mut monitor = ExecutionPerformanceMonitor::new();
+        let execution_id = ExecutionId("test-execution-1".to_string());
+        let query = ConjunctiveQuery {
+            answer_variables: vec![QueryVariable::new("x".to_string())],
+            body_atoms: vec![QueryAtom::ClassAtom {
+                variable: QueryVariable::new("x".to_string()),
+                class_expression: ClassExpression::Class(crate::ontology::Class {
+                    iri: crate::ontology::IRI::new("Person"),
+                }),
+            }],
+            constraints: Default::default(),
+            metadata: Default::default(),
+        };
+
+        monitor.start_execution(&execution_id, &query, "direct");
+        let result: Result<ConjunctiveQueryResult, AdvancedQueryError> = Ok(
+            ConjunctiveQueryResult {
+                bindings: vec![],
+                metadata: ExecutionMetadata::default(),
+                complete: true,
+            },
+        );
+        monitor.complete_execution(&execution_id, &result);
+
+        // The monitor owns a profiler that must remain accessible after a full
+        // start/complete round-trip.
+        let profiler = monitor.query_profiler();
+        assert!(Arc::strong_count(&profiler) >= 1);
     }
 
     #[test]
     fn test_parallel_execution_coordinator() {
-        let _coordinator = ParallelExecutionCoordinator::new(ParallelExecutionConfig::default());
-        assert!(true);
+        let config = ParallelExecutionConfig::default();
+        assert!(config.max_worker_threads > 0);
+        assert!(config.work_queue_size > 0);
+
+        let _coordinator = ParallelExecutionCoordinator::new(config);
     }
 
     #[test]

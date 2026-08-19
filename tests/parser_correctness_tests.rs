@@ -460,35 +460,30 @@ fn test_rdf_xml_strict_mode() {
 </rdf:RDF>
 "#;
 
-    let result = parse_rdf_xml(rdf_xml_text);
-    let ont = match result {
-        Ok(o) => {
-            assert!(true, "RDF/XML parsed successfully");
-            o
-        }
-        Err(e) => {
-            eprintln!(
-                "RDF/XML parse error (may be expected with untyped classes): {:?}",
-                e
-            );
-            return;
-        }
-    };
+    let ont = parse_rdf_xml(rdf_xml_text).expect("RDF/XML should parse");
 
-    assert!(!ont.axioms().is_empty(), "Ontology should contain axioms");
-    let class_iris: Vec<String> = ont
-        .axioms()
-        .iter()
-        .filter_map(|a| {
-            let s = format!("{:?}", a);
-            if s.contains("http://ex.org/A") {
-                Some("A".to_string())
-            } else {
-                None
-            }
-        })
-        .collect();
-    assert!(!class_iris.is_empty(), "Should reference class A");
+    // The parsed ontology must contain the subclass axiom A ⊑ B and the
+    // NamedIndividual declaration for i.
+    assert!(
+        ont.axioms().iter().any(|a| matches!(
+            a,
+            Axiom::SubClassOf(s)
+                if matches!(&s.subclass, ClassExpression::Class(c) if c.iri.as_str() == "http://ex.org/A")
+                && matches!(&s.superclass, ClassExpression::Class(c) if c.iri.as_str() == "http://ex.org/B")
+        )),
+        "Expected SubClassOf(A, B) axiom, got: {:?}",
+        ont.axioms()
+    );
+
+    assert!(
+        ont.axioms().iter().any(|a| matches!(
+            a,
+            Axiom::Declaration(d)
+                if matches!(&d.entity, Entity::NamedIndividual(c) if c.as_str() == "http://ex.org/i")
+        )),
+        "Expected Declaration(NamedIndividual(i)), got: {:?}",
+        ont.axioms()
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

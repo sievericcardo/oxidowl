@@ -72,6 +72,13 @@
     // non_std_lazy_statics: lazy_static! vocabulary module is widely used and stable
     clippy::non_std_lazy_statics,
 )]
+// Guardrails: forbid vacuous/placeholder assertions in tests so that reasoning
+// behaviour is always genuinely verified.
+#![warn(
+    clippy::assertions_on_constants,
+    clippy::nonminimal_bool,
+    clippy::absurd_extreme_comparisons
+)]
 //!
 //! This crate provides a complete Description Logic reasoner for SROIQV(D),
 //! supporting nearly all features of OWL 2 DL. It maintains the architecture

@@ -686,10 +686,15 @@ fn cross_phase_load_and_reason() {
     assert!(!axioms.is_empty());
     drop(guard);
 
-    // Phase 7: Expressivity
+    // Phase 7: Expressivity — a simple A ⊑ B ontology has no complex
+    // constructors, so the checker must report none of them as present.
     let guard = onto_clone.read().unwrap();
     let expr = DLExpressivityChecker.analyze(&guard);
-    assert!(expr.has_existential || !expr.has_existential); // always true
+    assert!(!expr.has_existential);
+    assert!(!expr.has_union);
+    assert!(!expr.has_complement);
+    assert!(!expr.has_cardinality);
+    assert!(!expr.has_nominals);
     drop(guard);
 }
 

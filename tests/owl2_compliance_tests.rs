@@ -509,11 +509,14 @@ fn test_complete_owl2_feature_coverage() {
             .is_ok()
     );
 
-    // 3. Test validation support
+    // 3. Test validation support: an empty ontology is valid OWL 2 DL.
     let ontology = Ontology::new();
-    let _validator = OWL2DLValidator::new(ontology);
-    // Just verify the validator can be created and has the expected interface
-    assert!(true); // Placeholder for more comprehensive validation tests
+    let mut validator = OWL2DLValidator::new(ontology);
+    let report = validator
+        .validate()
+        .expect("DL validation should succeed");
+    assert!(report.is_valid, "Empty ontology should be valid OWL 2 DL");
+    assert!(report.errors.is_empty());
 
     // 4. Test enhanced axiom support (this would be expanded with actual axiom tests)
     // The axiom types are already well-covered in the existing implementation

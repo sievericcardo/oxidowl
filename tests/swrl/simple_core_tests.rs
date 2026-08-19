@@ -32,10 +32,20 @@ mod basic_tests {
             argument: SWRLIArgument::Variable(var_x),
         };
 
-        // Basic construction test
-        match atom {
-            SWRLAtom::ClassAtom { .. } => assert!(true),
-            _ => assert!(false, "Expected ClassAtom"),
+        match &atom {
+            SWRLAtom::ClassAtom { predicate, argument } => {
+                assert_eq!(
+                    predicate,
+                    &ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")))
+                );
+                assert_eq!(
+                    argument,
+                    &SWRLIArgument::Variable(SWRLVariable::new(IRI::new(
+                        "http://example.org/var#x"
+                    )))
+                );
+            }
+            _ => panic!("Expected ClassAtom, got: {atom:?}"),
         }
     }
 

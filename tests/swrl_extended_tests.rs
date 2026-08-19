@@ -136,11 +136,13 @@ fn test_swrl_all_atom_types_roundtrip() {
         .axioms()
         .iter()
         .any(|a| matches!(a, Axiom::Rule(_)));
-    // NOTE: Current functional serializer may not support SWRL rules.
-    // This test documents the expected roundtrip behavior.
+    // The functional serializer currently emits SWRL rules as a comment
+    // ("# SWRL Rule: ...") which is not re-parsed, so the roundtrip is lossy.
+    // Assert the documented current behaviour: reparse succeeds (above) but does
+    // not preserve the Rule axiom.
     assert!(
-        has_rule || reparsed.axioms().len() >= 0,
-        "Roundtripped ontology should parse without error"
+        !has_rule,
+        "Functional serializer does not yet roundtrip SWRL rules"
     );
 }
 
