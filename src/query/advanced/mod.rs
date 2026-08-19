@@ -8,8 +8,8 @@
 //! - Industrial-strength optimizations and ML-enhanced heuristics
 
 pub mod conjunctive;
-pub mod execution;
 pub mod evaluator;
+pub mod execution;
 pub mod feature_extraction;
 pub mod ml_models;
 pub mod optimization;
@@ -32,15 +32,15 @@ pub mod ml_core; // ML infrastructure and models
 
 // Test modules
 #[cfg(test)]
+pub mod benchmarking_tests;
+#[cfg(test)]
 pub mod extended_integration_tests;
 #[cfg(test)]
 pub mod industrial_tests;
 #[cfg(test)]
-pub mod ml_heuristics_tests;
-#[cfg(test)]
-pub mod benchmarking_tests;
-#[cfg(test)]
 pub mod integration_tests;
+#[cfg(test)]
+pub mod ml_heuristics_tests;
 
 pub use conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
 pub use execution::{AdvancedQueryError, ConjunctiveQueryResult, QueryEngine};

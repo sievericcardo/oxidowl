@@ -512,9 +512,7 @@ fn test_complete_owl2_feature_coverage() {
     // 3. Test validation support: an empty ontology is valid OWL 2 DL.
     let ontology = Ontology::new();
     let mut validator = OWL2DLValidator::new(ontology);
-    let report = validator
-        .validate()
-        .expect("DL validation should succeed");
+    let report = validator.validate().expect("DL validation should succeed");
     assert!(report.is_valid, "Empty ontology should be valid OWL 2 DL");
     assert!(report.errors.is_empty());
 

@@ -232,12 +232,8 @@ impl QueryEngine {
         &mut self,
         query: &ConjunctiveQuery,
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        self.evaluator.evaluate(
-            query,
-            &query.body_atoms,
-            "Direct",
-            self.config.result_limit,
-        )
+        self.evaluator
+            .evaluate(query, &query.body_atoms, "Direct", self.config.result_limit)
     }
 
     /// Execute query using tableau reasoning
@@ -246,12 +242,8 @@ impl QueryEngine {
         query: &ConjunctiveQuery,
         expansion_order: &[QueryAtom],
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        self.evaluator.evaluate(
-            query,
-            expansion_order,
-            "Tableau",
-            self.config.result_limit,
-        )
+        self.evaluator
+            .evaluate(query, expansion_order, "Tableau", self.config.result_limit)
     }
 
     /// Execute query using OWL 2 QL rewriting
@@ -306,12 +298,8 @@ impl QueryEngine {
         tableau_atoms: &[QueryAtom],
         _rewriting_atoms: &[QueryAtom],
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        self.evaluator.evaluate(
-            query,
-            tableau_atoms,
-            "Hybrid",
-            self.config.result_limit,
-        )
+        self.evaluator
+            .evaluate(query, tableau_atoms, "Hybrid", self.config.result_limit)
     }
 
     /// Validate that a query is well-formed and executable

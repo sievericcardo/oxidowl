@@ -184,11 +184,9 @@ impl ReasoningTaskService {
         )?;
 
         // Build the tableau directly from typed class expressions (no string round-trip)
-        let tableau = self.tableau_factory.create_for_subsumption(
-            &ontology_guard,
-            subclass,
-            superclass,
-        )?;
+        let tableau =
+            self.tableau_factory
+                .create_for_subsumption(&ontology_guard, subclass, superclass)?;
 
         let result = self.run_tableau_subsumption_check(tableau, statistics)?;
 

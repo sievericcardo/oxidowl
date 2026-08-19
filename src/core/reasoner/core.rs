@@ -693,7 +693,10 @@ impl Reasoner {
                 if let crate::ontology::Axiom::DataPropertyAssertion(prop_assertion) = axiom
                     && self.data_properties_equivalent(&prop_assertion.property, property)?
                 {
-                    assertions.push((prop_assertion.individual.clone(), prop_assertion.value.clone()));
+                    assertions.push((
+                        prop_assertion.individual.clone(),
+                        prop_assertion.value.clone(),
+                    ));
                 }
             }
             Ok(assertions)
@@ -782,9 +785,10 @@ impl Reasoner {
             crate::ontology::Axiom::ClassAssertion(ca) => {
                 self.is_instance_of_ontology(&ca.individual, &ca.class, ontology)
             }
-            _ => self
-                .task_service
-                .check_entailment(axiom, ontology, stats, &mut self.cache_manager),
+            _ => {
+                self.task_service
+                    .check_entailment(axiom, ontology, stats, &mut self.cache_manager)
+            }
         }
     }
 

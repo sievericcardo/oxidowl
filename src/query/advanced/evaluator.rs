@@ -7,9 +7,7 @@
 //! [`super::execution_engine::ExecutionStrategy`] implementations, so the
 //! evaluation logic is never duplicated.
 
-use super::conjunctive::{
-    ConjunctiveQuery, QueryAtom, QueryConstraints, ValueConstraint,
-};
+use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryConstraints, ValueConstraint};
 use super::execution::{
     AdvancedQueryError, BoundValue, ConjunctiveQueryResult, ExecutionMetadata, MemoryUsage,
     QueryBinding,
@@ -68,10 +66,8 @@ impl QueryEvaluator {
                         .into_iter()
                         .map(|instance| {
                             let mut new_binding = QueryBinding::new();
-                            new_binding.bind_variable(
-                                variable.clone(),
-                                BoundValue::Individual(instance),
-                            );
+                            new_binding
+                                .bind_variable(variable.clone(), BoundValue::Individual(instance));
                             new_binding
                         })
                         .collect())
@@ -223,7 +219,8 @@ impl QueryEvaluator {
                     }
                 } else {
                     let mut new_binding = QueryBinding::new();
-                    new_binding.bind_variable(variable.clone(), BoundValue::Literal(literal.clone()));
+                    new_binding
+                        .bind_variable(variable.clone(), BoundValue::Literal(literal.clone()));
                     Ok(vec![new_binding])
                 }
             }
@@ -301,7 +298,9 @@ impl QueryEvaluator {
     pub fn estimate_atom_cost(&self, atom: &QueryAtom) -> f64 {
         match atom {
             QueryAtom::ConcreteIndividualAtom { .. } | QueryAtom::ConcreteLiteralAtom { .. } => 0.0,
-            QueryAtom::SameIndividualAtom { .. } | QueryAtom::DifferentIndividualsAtom { .. } => 0.5,
+            QueryAtom::SameIndividualAtom { .. } | QueryAtom::DifferentIndividualsAtom { .. } => {
+                0.5
+            }
             QueryAtom::ClassAtom { .. } => 1.0,
             QueryAtom::ObjectPropertyAtom { .. } | QueryAtom::DataPropertyAtom { .. } => 2.0,
         }

@@ -12,9 +12,7 @@ fn named_class(iri: &str) -> ClassExpression {
 }
 
 fn named_individual(iri: &str) -> Individual {
-    Individual::Named(NamedIndividual {
-        iri: IRI::new(iri),
-    })
+    Individual::Named(NamedIndividual { iri: IRI::new(iri) })
 }
 
 // Test that the core reasoner module is exported and can reason over an empty
@@ -74,13 +72,19 @@ fn test_comprehensive_integration() {
         .expect("Failed to load ontology");
 
     assert!(reasoner.is_consistent().expect("Consistency check failed"));
-    assert!(reasoner
-        .is_subclass_of(&a, &b)
-        .expect("Subsumption check failed"));
-    assert!(reasoner
-        .is_instance_of(&i, &a)
-        .expect("Direct instance check failed"));
-    assert!(reasoner
-        .is_instance_of(&i, &b)
-        .expect("Inherited instance check failed"));
+    assert!(
+        reasoner
+            .is_subclass_of(&a, &b)
+            .expect("Subsumption check failed")
+    );
+    assert!(
+        reasoner
+            .is_instance_of(&i, &a)
+            .expect("Direct instance check failed")
+    );
+    assert!(
+        reasoner
+            .is_instance_of(&i, &b)
+            .expect("Inherited instance check failed")
+    );
 }

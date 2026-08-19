@@ -1932,11 +1932,11 @@ impl ExecutionStrategySelector {
     pub fn get_strategy(&self, name: &str) -> Result<&dyn ExecutionStrategy, AdvancedQueryError> {
         // Look up the strategy by name, falling back to the default strategy so
         // that any name produced by the rule-based or ML selectors resolves.
-        self.strategies.get(name).map(Box::as_ref).or_else(|| {
-            self.strategies
-                .get("default")
-                .map(Box::as_ref)
-        }).ok_or_else(|| AdvancedQueryError::strategy_not_found(name.to_string()))
+        self.strategies
+            .get(name)
+            .map(Box::as_ref)
+            .or_else(|| self.strategies.get("default").map(Box::as_ref))
+            .ok_or_else(|| AdvancedQueryError::strategy_not_found(name.to_string()))
     }
 
     pub fn update_performance_history(

@@ -16,8 +16,12 @@ use std::collections::HashSet;
 fn atom_variables(atom: &QueryAtom) -> Vec<&QueryVariable> {
     match atom {
         QueryAtom::ClassAtom { variable, .. } => vec![variable],
-        QueryAtom::ObjectPropertyAtom { subject, object, .. } => vec![subject, object],
-        QueryAtom::DataPropertyAtom { subject, literal, .. } => vec![subject, literal],
+        QueryAtom::ObjectPropertyAtom {
+            subject, object, ..
+        } => vec![subject, object],
+        QueryAtom::DataPropertyAtom {
+            subject, literal, ..
+        } => vec![subject, literal],
         QueryAtom::SameIndividualAtom { left, right }
         | QueryAtom::DifferentIndividualsAtom { left, right } => vec![left, right],
         QueryAtom::ConcreteIndividualAtom { variable, .. }
@@ -215,13 +219,7 @@ impl ExecutionStrategy for CycleAwareStrategy {
         query: &ConjunctiveQuery,
         context: &ExecutionContext,
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        evaluate_with_order(
-            query,
-            context,
-            self.name(),
-            order_cycle_aware(query),
-            None,
-        )
+        evaluate_with_order(query, context, self.name(), order_cycle_aware(query), None)
     }
 
     fn estimate_cost(&self, query: &ConjunctiveQuery) -> f64 {
@@ -251,13 +249,7 @@ impl ExecutionStrategy for FilterFirstStrategy {
         query: &ConjunctiveQuery,
         context: &ExecutionContext,
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-        evaluate_with_order(
-            query,
-            context,
-            self.name(),
-            order_filter_first(query),
-            None,
-        )
+        evaluate_with_order(query, context, self.name(), order_filter_first(query), None)
     }
 
     fn estimate_cost(&self, query: &ConjunctiveQuery) -> f64 {
@@ -401,7 +393,10 @@ pub fn default_strategies() -> Vec<(&'static str, Box<dyn ExecutionStrategy>)> {
         ("filter_first", Box::new(FilterFirstStrategy)),
         ("indexed_lookup", Box::new(FilterFirstStrategy)),
         ("streaming", Box::new(StreamingStrategy)),
-        ("projection_optimized", Box::new(ProjectionOptimizedStrategy)),
+        (
+            "projection_optimized",
+            Box::new(ProjectionOptimizedStrategy),
+        ),
         ("data_optimized", Box::new(DataOptimizedStrategy)),
         // ML strategy names that have no dedicated behaviour yet fall back to
         // the balanced tableau strategy.

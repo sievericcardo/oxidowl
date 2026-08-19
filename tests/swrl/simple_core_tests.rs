@@ -33,7 +33,10 @@ mod basic_tests {
         };
 
         match &atom {
-            SWRLAtom::ClassAtom { predicate, argument } => {
+            SWRLAtom::ClassAtom {
+                predicate,
+                argument,
+            } => {
                 assert_eq!(
                     predicate,
                     &ClassExpression::Class(Class::new(IRI::new("http://example.org/Person")))

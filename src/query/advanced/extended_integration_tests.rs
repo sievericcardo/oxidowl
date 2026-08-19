@@ -6,8 +6,8 @@
 //! - Intelligent caching system
 //! - Performance monitoring
 
-use super::*;
 use super::execution::ExecutionMetadata;
+use super::*;
 use crate::ontology::{ClassExpression, Ontology};
 use crate::reasoning::ReasoningService;
 use std::sync::Arc;
@@ -218,13 +218,12 @@ mod extended_integration_tests {
         };
 
         monitor.start_execution(&execution_id, &query, "direct");
-        let result: Result<ConjunctiveQueryResult, AdvancedQueryError> = Ok(
-            ConjunctiveQueryResult {
+        let result: Result<ConjunctiveQueryResult, AdvancedQueryError> =
+            Ok(ConjunctiveQueryResult {
                 bindings: vec![],
                 metadata: ExecutionMetadata::default(),
                 complete: true,
-            },
-        );
+            });
         monitor.complete_execution(&execution_id, &result);
 
         // The monitor owns a profiler that must remain accessible after a full

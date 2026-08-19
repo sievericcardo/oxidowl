@@ -310,7 +310,10 @@ async fn test_error_handling() {
     // rather than panic or silently return an empty result.
     println!("✓ Error handling completed without panicking");
     match result {
-        Ok(r) => assert!(r.bindings.is_empty(), "Empty query should yield no bindings"),
+        Ok(r) => assert!(
+            r.bindings.is_empty(),
+            "Empty query should yield no bindings"
+        ),
         Err(e) => assert!(
             matches!(e, AdvancedQueryError::InvalidQuery(ref msg) if msg.contains("no body atoms")),
             "Unexpected error: {e:?}"

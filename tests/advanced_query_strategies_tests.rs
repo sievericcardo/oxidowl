@@ -30,9 +30,7 @@ fn named_class(iri: &str) -> ClassExpression {
 }
 
 fn named_individual(iri: &str) -> Individual {
-    Individual::Named(NamedIndividual {
-        iri: IRI::new(iri),
-    })
+    Individual::Named(NamedIndividual { iri: IRI::new(iri) })
 }
 
 fn default_constraints() -> ExecutionConstraints {
@@ -63,15 +61,15 @@ fn build_ontology() -> Ontology {
         individual: i.clone(),
         annotations: vec![],
     }));
-    ontology.add_axiom(Axiom::ObjectPropertyAssertion(ObjectPropertyAssertionAxiom {
-        id: 3,
-        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-            iri: IRI::new(R),
-        }),
-        source: i,
-        target: j,
-        annotations: vec![],
-    }));
+    ontology.add_axiom(Axiom::ObjectPropertyAssertion(
+        ObjectPropertyAssertionAxiom {
+            id: 3,
+            property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: IRI::new(R) }),
+            source: i,
+            target: j,
+            annotations: vec![],
+        },
+    ));
     ontology
 }
 
@@ -147,9 +145,7 @@ async fn test_object_property_atom_query_returns_bindings() {
         answer_variables: vec![QueryVariable::new("x"), QueryVariable::new("y")],
         body_atoms: vec![QueryAtom::ObjectPropertyAtom {
             subject: QueryVariable::new("x"),
-            property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-                iri: IRI::new(R),
-            }),
+            property: ObjectPropertyExpression::ObjectProperty(ObjectProperty { iri: IRI::new(R) }),
             object: QueryVariable::new("y"),
         }],
         constraints: Default::default(),
