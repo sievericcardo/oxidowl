@@ -1252,31 +1252,31 @@ fn process_owl_triple_inline(
                 ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
                     id,
                     entity: Entity::Class(IRI::new(subject)),
-                }))
+                }));
             }
             "http://www.w3.org/2002/07/owl#ObjectProperty" => {
                 ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
                     id,
                     entity: Entity::ObjectProperty(IRI::new(subject)),
-                }))
+                }));
             }
             "http://www.w3.org/2002/07/owl#DatatypeProperty" => {
                 ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
                     id,
                     entity: Entity::DataProperty(IRI::new(subject)),
-                }))
+                }));
             }
             "http://www.w3.org/2002/07/owl#NamedIndividual" => {
                 ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
                     id,
                     entity: Entity::NamedIndividual(IRI::new(subject)),
-                }))
+                }));
             }
             "http://www.w3.org/2002/07/owl#AnnotationProperty" => {
                 ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
                     id,
                     entity: Entity::AnnotationProperty(IRI::new(subject)),
-                }))
+                }));
             }
             "http://www.w3.org/2002/07/owl#Ontology" => {
                 ontology.set_iri(IRI::new(subject));
@@ -1321,7 +1321,7 @@ fn process_owl_triple_inline(
                 subclass: ClassExpression::Class(Class::new(IRI::new(subject))),
                 superclass: ClassExpression::Class(Class::new(IRI::new(object))),
                 annotations: vec![],
-            }))
+            }));
         }
         "http://www.w3.org/2002/07/owl#equivalentClass" => {
             ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
@@ -1331,7 +1331,7 @@ fn process_owl_triple_inline(
                     ClassExpression::Class(Class::new(IRI::new(object))),
                 ],
                 annotations: vec![],
-            }))
+            }));
         }
         "http://www.w3.org/2002/07/owl#disjointWith" => {
             ontology.add_axiom(Axiom::DisjointClasses(DisjointClassesAxiom {
@@ -1341,7 +1341,7 @@ fn process_owl_triple_inline(
                     ClassExpression::Class(Class::new(IRI::new(object))),
                 ],
                 annotations: vec![],
-            }))
+            }));
         }
         _ => ontology.add_axiom(Axiom::ObjectPropertyAssertion(
             ObjectPropertyAssertionAxiom {

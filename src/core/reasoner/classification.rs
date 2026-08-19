@@ -158,7 +158,7 @@ impl ClassificationService {
                     }
                     if hierarchy
                         .get(subclass)
-                        .map_or(false, |sups| sups.contains(superclass))
+                        .is_some_and(|sups| sups.contains(superclass))
                     {
                         continue;
                     }

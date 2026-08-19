@@ -138,6 +138,57 @@ impl ConformanceTestRunner {
         );
     }
 
+    /// Assert that every axiom in `conclusion_fs` is **entailed** by `premise_fs`
+    /// using the general [`Reasoner::check_entailment`] path, and cross-check the
+    /// result against the typed `is_subclass_of`/`is_instance_of` methods.
+    ///
+    /// This guards against the historical bug where `check_entailment` stringified
+    /// `SubClassOf` expressions with Rust's `{:?}` Debug formatter, producing
+    /// non-parseable concept strings and wrong entailment answers.
+    fn expect_entails_via_check_entailment(premise_fs: &str, conclusion_fs: &str) {
+        use oxidowl::ontology::axioms::Axiom;
+        let premise = Self::parse(premise_fs);
+        let conclusion = Self::parse(conclusion_fs);
+        let mut reasoner =
+            Reasoner::new(ReasonerConfig::default()).expect("Failed to create Reasoner");
+        reasoner
+            .load_ontology(premise)
+            .expect("Failed to load premise ontology");
+        let premise_ref = reasoner.get_ontology().expect("No ontology loaded").clone();
+        let mut stats = ReasoningStatistics::default();
+
+        for axiom in conclusion.axioms() {
+            let entailed = reasoner
+                .check_entailment(axiom, &premise_ref, &mut stats)
+                .expect("Entailment check failed");
+            assert!(entailed, "Expected axiom to be entailed: {axiom:?}");
+
+            match axiom {
+                Axiom::SubClassOf(sa) => {
+                    let typed = reasoner
+                        .is_subclass_of(&sa.subclass, &sa.superclass)
+                        .expect("Subsumption check failed");
+                    assert_eq!(
+                        entailed, typed,
+                        "check_entailment diverged from is_subclass_of for {:?} ⊑ {:?}",
+                        sa.subclass, sa.superclass
+                    );
+                }
+                Axiom::ClassAssertion(ca) => {
+                    let typed = reasoner
+                        .is_instance_of(&ca.individual, &ca.class)
+                        .expect("Instance check failed");
+                    assert_eq!(
+                        entailed, typed,
+                        "check_entailment diverged from is_instance_of for {:?} ∈ {:?}",
+                        ca.individual, ca.class
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// Assert that the ontology **conforms** to `profile`.
     fn expect_profile_valid(fs: &str, profile: OWL2Profile) {
         let ontology = Self::parse(fs);
@@ -1195,6 +1246,52 @@ Ontology(<http://example.org/test>
   FunctionalObjectProperty(:worksFor)
   ReflexiveObjectProperty(:worksFor)
   ClassAssertion(:Employee :alice)
+)
+"#,
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Regression — check_entailment must agree with is_subclass_of/is_instance_of
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `check_entailment` on a transitive `SubClassOf` chain must agree with
+/// `is_subclass_of` (guards against the `{:?}` string round-trip bug).
+#[test]
+fn test_check_entailment_subclass_transitivity() {
+    ConformanceTestRunner::expect_entails_via_check_entailment(
+        r#"
+Prefix(:=<http://example.org/test#>)
+Ontology(<http://example.org/test>
+  SubClassOf(:Cat :Mammal)
+  SubClassOf(:Mammal :Animal)
+)
+"#,
+        r#"
+Prefix(:=<http://example.org/test#>)
+Ontology(<http://example.org/test>
+  SubClassOf(:Cat :Animal)
+)
+"#,
+    );
+}
+
+/// `check_entailment` on a `ClassAssertion` through a subclass must agree with
+/// `is_instance_of`.
+#[test]
+fn test_check_entailment_class_assertion_via_subclass() {
+    ConformanceTestRunner::expect_entails_via_check_entailment(
+        r#"
+Prefix(:=<http://example.org/test#>)
+Ontology(<http://example.org/test>
+  SubClassOf(:Cat :Animal)
+  ClassAssertion(:Cat :tom)
+)
+"#,
+        r#"
+Prefix(:=<http://example.org/test#>)
+Ontology(<http://example.org/test>
+  ClassAssertion(:Animal :tom)
 )
 "#,
     );

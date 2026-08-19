@@ -120,57 +120,6 @@ impl ReasoningTaskService {
         Ok(result)
     }
 
-    /// Check if one class subsumes another
-    pub fn check_subsumption(
-        &self,
-        subclass: &str,
-        superclass: &str,
-        ontology: &OntologyRef,
-        statistics: &mut ReasoningStatistics,
-        cache: &mut CacheManager,
-    ) -> Result<bool> {
-        let start_time = Instant::now();
-        statistics.increment_subsumption_checks();
-
-        info!("Checking subsumption: {subclass} ⊑ {superclass}");
-
-        // Check cache first
-        if let (Some(sub_expr), Some(sup_expr)) = (
-            self.parse_class_expression(subclass),
-            self.parse_class_expression(superclass),
-        ) && let Some(cached_result) = cache.get_subsumption_result(&sub_expr, &sup_expr)
-        {
-            debug!("Subsumption result found in cache");
-            return Ok(cached_result);
-        }
-
-        let ontology_guard = read_lock(ontology, "tasks: reading ontology for subsumption check")?;
-
-        // Build tableau for subsumption checking
-        let tableau = self.tableau_factory.create_algorithm_for_subsumption(
-            &ontology_guard,
-            subclass,
-            superclass,
-        )?;
-
-        // Run tableau algorithm
-        let result = self.run_tableau_subsumption_check(tableau, statistics)?;
-
-        // Cache the result
-        if let (Some(sub_expr), Some(sup_expr)) = (
-            self.parse_class_expression(subclass),
-            self.parse_class_expression(superclass),
-        ) {
-            cache.cache_subsumption_result(sub_expr, sup_expr, result);
-        }
-
-        let reasoning_time = start_time.elapsed();
-        statistics.add_reasoning_time(reasoning_time);
-
-        info!("Subsumption check completed in {reasoning_time:?}: {result}");
-        Ok(result)
-    }
-
     /// Check if an individual is an instance of a class
     pub fn check_instance(
         &self,
@@ -234,14 +183,11 @@ impl ReasoningTaskService {
             "tasks: reading ontology for subsumption expressions check",
         )?;
 
-        // For now, convert to strings and use existing tableau methods
-        let subclass_str = format!("{subclass:?}");
-        let superclass_str = format!("{superclass:?}");
-
-        let tableau = self.tableau_factory.create_algorithm_for_subsumption(
+        // Build the tableau directly from typed class expressions (no string round-trip)
+        let tableau = self.tableau_factory.create_for_subsumption(
             &ontology_guard,
-            &subclass_str,
-            &superclass_str,
+            subclass,
+            superclass,
         )?;
 
         let result = self.run_tableau_subsumption_check(tableau, statistics)?;
@@ -271,10 +217,14 @@ impl ReasoningTaskService {
 
         let result = match axiom {
             crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) => {
-                // Check if subclass ⊑ superclass is entailed
-                let subclass_str = format!("{:?}", subclass_axiom.subclass);
-                let superclass_str = format!("{:?}", subclass_axiom.superclass);
-                self.check_subsumption(&subclass_str, &superclass_str, ontology, statistics, cache)?
+                // Check if subclass ⊑ superclass is entailed (typed path, no string round-trip)
+                self.check_subsumption_expressions(
+                    &subclass_axiom.subclass,
+                    &subclass_axiom.superclass,
+                    ontology,
+                    statistics,
+                    cache,
+                )?
             }
             crate::ontology::axioms::Axiom::ClassAssertion(class_assertion) => {
                 // Check if individual ∈ class is entailed
@@ -356,7 +306,7 @@ impl ReasoningTaskService {
     /// Run a tableau subsumption check
     fn run_tableau_subsumption_check(
         &self,
-        mut tableau: TableauAlgorithmInstance,
+        mut tableau: Box<dyn crate::core::reasoner::tableau::TableauRunner>,
         statistics: &mut ReasoningStatistics,
     ) -> Result<bool> {
         debug!("Running tableau subsumption check");

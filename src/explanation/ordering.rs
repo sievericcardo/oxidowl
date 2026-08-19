@@ -15,7 +15,7 @@ pub struct JustificationSizeOrderer;
 
 impl ExplanationOrderer for JustificationSizeOrderer {
     fn order(&self, mut explanations: Vec<Explanation>) -> Vec<Explanation> {
-        explanations.sort_by(|a, b| a.justification.len().cmp(&b.justification.len()));
+        explanations.sort_by_key(|a| a.justification.len());
         explanations
     }
 }

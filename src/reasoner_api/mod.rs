@@ -1762,8 +1762,17 @@ impl OWLReasoner for TableauOWLReasoner {
         let mut reasoner = self.reasoner.lock().map_err(|e| crate::Error::Internal {
             message: format!("Lock poisoned: {e}"),
         })?;
-        let mut stats = crate::core::reasoner::ReasoningStatistics::default();
-        reasoner.check_entailment(axiom, &self.ontology, &mut stats)
+        // Route SubClassOf/ClassAssertion through the typed reasoner methods
+        // (is_subclass_of / is_instance_of), which operate directly on
+        // ClassExpression values rather than the general check_entailment path.
+        match axiom {
+            Axiom::SubClassOf(a) => reasoner.is_subclass_of(&a.subclass, &a.superclass),
+            Axiom::ClassAssertion(a) => reasoner.is_instance_of(&a.individual, &a.class),
+            _ => {
+                let mut stats = crate::core::reasoner::ReasoningStatistics::default();
+                reasoner.check_entailment(axiom, &self.ontology, &mut stats)
+            }
+        }
     }
 
     fn precompute_inferences(&self, inference_types: &[InferenceType]) -> Result<()> {

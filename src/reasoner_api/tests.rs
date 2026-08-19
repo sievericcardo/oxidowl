@@ -270,6 +270,61 @@ mod tests {
     }
 
     #[test]
+    fn test_tableau_is_entailed_subclass() {
+        let o = make_simple_ontology();
+        let onto_ref = make_onto_ref(o);
+        let factory = TableauReasonerFactory;
+        let reasoner = factory
+            .create_reasoner(&onto_ref, &OWLReasonerConfiguration::default())
+            .unwrap();
+
+        let a = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
+        let b = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/B"),
+        });
+        let ax = Axiom::SubClassOf(SubClassOfAxiom {
+            id: 1,
+            subclass: a,
+            superclass: b,
+            annotations: vec![],
+        });
+        assert!(reasoner.is_entailed(&ax).unwrap());
+    }
+
+    #[test]
+    fn test_tableau_is_entailed_class_assertion() {
+        let mut o = Ontology::new();
+        let a = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
+        let ind = Individual::Named(NamedIndividual {
+            iri: IRI::new("http://ex.org/ind"),
+        });
+        o.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
+            id: 1,
+            class: a.clone(),
+            individual: ind.clone(),
+            annotations: vec![],
+        }));
+
+        let onto_ref = make_onto_ref(o);
+        let factory = TableauReasonerFactory;
+        let reasoner = factory
+            .create_reasoner(&onto_ref, &OWLReasonerConfiguration::default())
+            .unwrap();
+
+        let ax = Axiom::ClassAssertion(ClassAssertionAxiom {
+            id: 2,
+            class: a,
+            individual: ind,
+            annotations: vec![],
+        });
+        assert!(reasoner.is_entailed(&ax).unwrap());
+    }
+
+    #[test]
     fn test_reasoner_top_properties() {
         let o = make_simple_ontology();
         let onto_ref = make_onto_ref(o);

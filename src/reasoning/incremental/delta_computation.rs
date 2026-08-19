@@ -1025,7 +1025,7 @@ impl DeltaComputer {
                     || saturation
                         .subsumptions
                         .get(other_concept)
-                        .map_or(false, |s| s.contains(&concept)))
+                        .is_some_and(|s| s.contains(&concept)))
                     && affected.insert(other_concept.clone())
                 {
                     to_process.push(other_concept.clone());

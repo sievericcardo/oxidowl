@@ -185,45 +185,58 @@ impl Reasoner {
         subclass: &ClassExpression,
         superclass: &ClassExpression,
     ) -> Result<bool> {
+        if let Some(ontology) = &self.ontology {
+            self.is_subclass_of_ontology(subclass, superclass, ontology)
+        } else {
+            self.check_semantic_subsumption(subclass, superclass)
+        }
+    }
+
+    /// Subsumption check against a specific ontology (used by `check_entailment`
+    /// when the ontology to reason over differs from the loaded one).
+    fn is_subclass_of_ontology(
+        &self,
+        subclass: &ClassExpression,
+        superclass: &ClassExpression,
+        ontology: &OntologyRef,
+    ) -> Result<bool> {
         // Syntactic identity check
         if subclass == superclass {
             return Ok(true);
         }
 
-        if let Some(ontology) = &self.ontology {
-            let ontology_ref = read_lock(ontology, "core: reading ontology for is_subclass_of")?;
+        let ontology_ref = read_lock(ontology, "core: reading ontology for is_subclass_of")?;
 
-            // Build the index ONCE for this query (O(N) build, then O(1) per hop)
-            let index = ontology_ref.build_index();
+        // Build the index ONCE for this query (O(N) build, then O(1) per hop)
+        let index = ontology_ref.build_index();
 
-            // BFS through the subsumption hierarchy using index lookups
-            let mut queue: std::collections::VecDeque<ClassExpression> =
-                std::collections::VecDeque::new();
-            let mut visited: std::collections::HashSet<ClassExpression> =
-                std::collections::HashSet::new();
-            queue.push_back(subclass.clone());
-            visited.insert(subclass.clone());
+        // BFS through the subsumption hierarchy using index lookups
+        let mut queue: std::collections::VecDeque<ClassExpression> =
+            std::collections::VecDeque::new();
+        let mut visited: std::collections::HashSet<ClassExpression> =
+            std::collections::HashSet::new();
+        queue.push_back(subclass.clone());
+        visited.insert(subclass.clone());
 
-            while let Some(current) = queue.pop_front() {
-                // Check direct superclasses via SubClassOf index
-                for sup in index.direct_superclasses(&current) {
-                    if sup == superclass {
-                        return Ok(true);
-                    }
-                    if !visited.contains(sup) {
-                        visited.insert(sup.clone());
-                        queue.push_back(sup.clone());
-                    }
+        while let Some(current) = queue.pop_front() {
+            // Check direct superclasses via SubClassOf index
+            for sup in index.direct_superclasses(&current) {
+                if sup == superclass {
+                    return Ok(true);
                 }
-                // Check equivalent classes via EquivalentClasses index
-                for eq in index.equivalent_classes(&current) {
-                    if eq == superclass {
-                        return Ok(true);
-                    }
-                    if !visited.contains(eq) {
-                        visited.insert(eq.clone());
-                        queue.push_back(eq.clone());
-                    }
+                if !visited.contains(sup) {
+                    visited.insert(sup.clone());
+                    queue.push_back(sup.clone());
+                }
+            }
+            // Check equivalent classes via EquivalentClasses index
+            for eq in index.equivalent_classes(&current) {
+                if eq == superclass {
+                    return Ok(true);
+                }
+                if !visited.contains(eq) {
+                    visited.insert(eq.clone());
+                    queue.push_back(eq.clone());
                 }
             }
         }
@@ -509,12 +522,23 @@ impl Reasoner {
     /// Check if an individual is an instance of a class expression
     pub fn is_instance_of(&self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
         if let Some(ontology_ref) = &self.ontology {
-            let ontology = read_lock(ontology_ref, "core: reading ontology for is_instance_of")?;
-            self.classification_service
-                .check_instance_with_datatype_reasoning(individual, class, &ontology)
+            self.is_instance_of_ontology(individual, class, ontology_ref)
         } else {
             Ok(false)
         }
+    }
+
+    /// Instance check against a specific ontology (used by `check_entailment`
+    /// when the ontology to reason over differs from the loaded one).
+    fn is_instance_of_ontology(
+        &self,
+        individual: &Individual,
+        class: &ClassExpression,
+        ontology_ref: &OntologyRef,
+    ) -> Result<bool> {
+        let ontology = read_lock(ontology_ref, "core: reading ontology for is_instance_of")?;
+        self.classification_service
+            .check_instance_with_datatype_reasoning(individual, class, &ontology)
     }
 
     /// Get types of an individual
@@ -700,8 +724,20 @@ impl Reasoner {
         ontology: &Arc<RwLock<crate::ontology::Ontology>>,
         stats: &mut ReasoningStatistics,
     ) -> Result<bool> {
-        self.task_service
-            .check_entailment(axiom, ontology, stats, &mut self.cache_manager)
+        // Route SubClassOf/ClassAssertion through the typed reasoner methods,
+        // which operate directly on ClassExpression values rather than the
+        // general check_entailment tableau path.
+        match axiom {
+            crate::ontology::Axiom::SubClassOf(sa) => {
+                self.is_subclass_of_ontology(&sa.subclass, &sa.superclass, ontology)
+            }
+            crate::ontology::Axiom::ClassAssertion(ca) => {
+                self.is_instance_of_ontology(&ca.individual, &ca.class, ontology)
+            }
+            _ => self
+                .task_service
+                .check_entailment(axiom, ontology, stats, &mut self.cache_manager),
+        }
     }
 
     /// Explain why an entailment holds

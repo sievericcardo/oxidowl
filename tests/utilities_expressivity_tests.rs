@@ -331,8 +331,8 @@ fn test_reasoner_config_defaults() {
         oxidowl::TableauAlgorithm::Traditional
     );
     assert!(
-        config.reasoning.timeout.is_some(),
-        "Default should have a timeout"
+        config.reasoning.timeout.is_none(),
+        "No timeout by default (unlimited reasoning)"
     );
     assert!(
         config.reasoning.max_memory_mb.is_some(),

@@ -212,7 +212,7 @@ fn axiom_extract_iris(axiom: &Axiom, out: &mut Vec<IRI>) {
         }
         Axiom::AnnotationAssertion(a) => {
             if let crate::ontology::AnnotationSubject::IRI(iri) = &a.subject {
-                out.push(iri.clone())
+                out.push(iri.clone());
             }
         }
         Axiom::SubAnnotationPropertyOf(a) => {
