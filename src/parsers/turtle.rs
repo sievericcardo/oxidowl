@@ -1588,11 +1588,36 @@ impl TurtleParser {
             ));
         };
 
-        // Check if it's owl:someValuesFrom or owl:hasValue
-        if restriction_str.contains("owl:someValuesFrom") {
-            // Data property restriction with datatype
+        // Check if it's owl:someValuesFrom, owl:allValuesFrom, or owl:hasValue
+        if restriction_str.contains("owl:someValuesFrom")
+            || restriction_str.contains("owl:allValuesFrom")
+        {
+            let is_some = restriction_str.contains("owl:someValuesFrom");
+            let keyword = if is_some {
+                "owl:someValuesFrom"
+            } else {
+                "owl:allValuesFrom"
+            };
 
-            // Resolve property
+            // Extract the filler token (the value after the keyword)
+            let filler_str = if let Some(kw_start) = restriction_str.find(keyword) {
+                restriction_str[kw_start + keyword.len()..]
+                    .trim_start()
+                    .split(&[';', '\n', '\t'][..])
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+            } else {
+                ""
+            };
+
+            // A datatype filler is a blank node, xsd: prefix, rdfs:Literal, or full XSD IRI
+            let is_data_restriction = filler_str.starts_with('[')
+                || filler_str.starts_with("xsd:")
+                || filler_str == "rdfs:Literal"
+                || filler_str.contains("XMLSchema#");
+
+            // Resolve the property IRI
             let property_token = if property_name.contains(':') {
                 let parts: Vec<&str> = property_name.splitn(2, ':').collect();
                 if parts.len() == 2 {
@@ -1607,19 +1632,65 @@ impl TurtleParser {
                     "Invalid property name: {property_name}"
                 )));
             };
-
             let property_iri = self.resolve_token(&property_token, state)?;
-            let data_property = DataProperty {
-                iri: IRI::new(&property_iri),
-            };
 
-            // Parse the datatype restriction
-            let data_range = self.parse_datatype_restriction(restriction_str, state)?;
-
-            Ok(ClassExpression::DataSomeValuesFrom {
-                property: DataPropertyExpression::DataProperty(data_property),
-                filler: data_range,
-            })
+            if is_data_restriction {
+                let data_property = DataProperty {
+                    iri: IRI::new(&property_iri),
+                };
+                let data_range = self.parse_datatype_restriction(restriction_str, state)?;
+                if is_some {
+                    Ok(ClassExpression::DataSomeValuesFrom {
+                        property: DataPropertyExpression::DataProperty(data_property),
+                        filler: data_range,
+                    })
+                } else {
+                    Ok(ClassExpression::DataAllValuesFrom {
+                        property: DataPropertyExpression::DataProperty(data_property),
+                        filler: data_range,
+                    })
+                }
+            } else {
+                // Object property restriction — filler is a named class IRI
+                let object_property = ObjectProperty {
+                    iri: IRI::new(&property_iri),
+                };
+                let filler_class = if filler_str.starts_with('<') && filler_str.ends_with('>') {
+                    let iri_str = &filler_str[1..filler_str.len() - 1];
+                    ClassExpression::Class(Class {
+                        iri: IRI::new(iri_str),
+                    })
+                } else if filler_str.contains(':') {
+                    let parts: Vec<&str> = filler_str.splitn(2, ':').collect();
+                    if parts.len() == 2 {
+                        let filler_token =
+                            Token::PrefixedName(parts[0].to_string(), parts[1].to_string());
+                        let filler_iri = self.resolve_token(&filler_token, state)?;
+                        ClassExpression::Class(Class {
+                            iri: IRI::new(&filler_iri),
+                        })
+                    } else {
+                        return Err(Error::ontology_parsing(format!(
+                            "Invalid filler class name: {filler_str}"
+                        )));
+                    }
+                } else {
+                    return Err(Error::ontology_parsing(format!(
+                        "Invalid filler class name: {filler_str}"
+                    )));
+                };
+                if is_some {
+                    Ok(ClassExpression::ObjectSomeValuesFrom {
+                        property: ObjectPropertyExpression::ObjectProperty(object_property),
+                        filler: Box::new(filler_class),
+                    })
+                } else {
+                    Ok(ClassExpression::ObjectAllValuesFrom {
+                        property: ObjectPropertyExpression::ObjectProperty(object_property),
+                        filler: Box::new(filler_class),
+                    })
+                }
+            }
         } else if restriction_str.contains("owl:hasValue") {
             // Data property with specific value
 
