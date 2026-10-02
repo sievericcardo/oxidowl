@@ -18,7 +18,9 @@
 
 use crate::error::OxidowlError;
 use crate::ontology::axioms::AxiomTrait;
-use crate::ontology::{Axiom, ClassExpression, DataRange, ObjectPropertyExpression, Ontology};
+use crate::ontology::{
+    Axiom, ClassExpression, DataRange, Entity, ObjectPropertyExpression, Ontology,
+};
 use crate::profiles::{
     OWL2Profile, ProfileValidationReport, ProfileValidator, ProfileViolation, ProfileViolationType,
     ValidationStatistics,
@@ -217,10 +219,14 @@ impl ELValidator {
             Axiom::DataPropertyRange(_) => Ok(()),
 
             // Restricted or disallowed axioms
-            Axiom::DisjointClasses(_) => Err(ProfileViolation::new(
-                ProfileViolationType::DisallowedAxiom("DisjointClasses".to_string()),
-                "Disjoint classes not allowed in OWL 2 EL",
-            )),
+            Axiom::DisjointClasses(ax) => {
+                // OWL 2 EL permits DisjointClasses (each class expression must be an
+                // EL class expression, which validate_class_expression enforces).
+                for class_expr in &ax.classes {
+                    self.validate_class_expression(class_expr)?;
+                }
+                Ok(())
+            }
             Axiom::DisjointUnion(_) => Err(ProfileViolation::new(
                 ProfileViolationType::DisallowedAxiom("DisjointUnion".to_string()),
                 "Disjoint union not allowed in OWL 2 EL",
@@ -247,6 +253,10 @@ impl ELValidator {
                 ProfileViolationType::DisallowedAxiom("FunctionalDataProperty".to_string()),
                 "Functional data properties not allowed in OWL 2 EL",
             )),
+            Axiom::IrreflexiveObjectProperty(_) => Err(ProfileViolation::new(
+                ProfileViolationType::DisallowedAxiom("IrreflexiveObjectProperty".to_string()),
+                "Irreflexive object properties not allowed in OWL 2 EL",
+            )),
 
             // Inverse object properties — OWL 2 EL does not permit them
             Axiom::InverseObjectProperties(_) => Err(ProfileViolation::new(
@@ -266,6 +276,40 @@ impl Default for ELValidator {
     }
 }
 
+impl ELValidator {
+    /// Check for illegal punning between classes and datatypes.
+    ///
+    /// OWL 2 EL (like OWL 2 DL) disallows using a single IRI as both a class
+    /// and a datatype, although class/individual punning is permitted.
+    fn check_illegal_punning(&self, ontology: &Ontology, report: &mut ProfileValidationReport) {
+        let mut class_iris = std::collections::HashSet::new();
+        let mut datatype_iris = std::collections::HashSet::new();
+
+        for axiom in ontology.axioms() {
+            if let Axiom::Declaration(decl) = axiom {
+                match &decl.entity {
+                    Entity::Class(iri) => {
+                        class_iris.insert(iri.clone());
+                    }
+                    Entity::Datatype(iri) => {
+                        datatype_iris.insert(iri.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        for iri in class_iris.intersection(&datatype_iris) {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedAxiom("IllegalPunning".to_string()),
+                format!(
+                    "IRI {iri} is used both as a class and as a datatype (illegal punning in OWL 2 EL)"
+                ),
+            ));
+        }
+    }
+}
+
 impl ProfileValidator for ELValidator {
     fn validate(&self, ontology: &Ontology) -> Result<ProfileValidationReport, OxidowlError> {
         let start_time = Instant::now();
@@ -281,6 +325,9 @@ impl ProfileValidator for ELValidator {
                 report.add_violation(violation);
             }
         }
+
+        // OWL 2 EL disallows punning a single IRI as both a class and a datatype.
+        self.check_illegal_punning(ontology, &mut report);
 
         stats.duration_ms = start_time.elapsed().as_millis() as u64;
         report.stats = stats;

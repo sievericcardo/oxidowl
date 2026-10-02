@@ -159,6 +159,8 @@ impl Reasoner {
         let mut classification_service =
             ClassificationService::new(ReasoningTaskService::new(classification_tableau_factory));
         classification_service.set_performance_config(config.performance.clone());
+        classification_service
+            .set_absorption_enabled(config.reasoning.enable_absorption_classification);
 
         Ok(Self {
             ontology: None,
@@ -205,10 +207,35 @@ impl Reasoner {
             return Ok(true);
         }
 
+        // ── Fast path: answer from the cached classification result ─────────
+        if let Some(classif) = self.classification_service.cached_classification()
+            && let (ClassExpression::Class(_), ClassExpression::Class(_)) = (subclass, superclass)
+        {
+            // `_ ⊑ owl:Thing` always holds.
+            if let ClassExpression::Class(c) = superclass
+                && c.is_thing()
+            {
+                return Ok(true);
+            }
+            // `A ⊑ owl:Nothing` holds iff `A` is unsatisfiable.
+            if let ClassExpression::Class(c) = superclass
+                && c.is_nothing()
+            {
+                return Ok(classif.unsat.contains(subclass));
+            }
+            if classif.is_subsumed(subclass, superclass) {
+                return Ok(true);
+            }
+        }
+
         let ontology_ref = read_lock(ontology, "core: reading ontology for is_subclass_of")?;
 
-        // Build the index ONCE for this query (O(N) build, then O(1) per hop)
-        let index = ontology_ref.build_index();
+        // Use the incrementally-maintained axiom index (O(1) access — it is
+        // kept in sync by `add_axiom`/`remove_axiom`/`set_axioms`) instead of
+        // rebuilding a full index on every call.  The rebuild made each
+        // `false` answer cost O(axioms) — measured 3 ms → 120 ms per call at
+        // 2 k → 60 k axioms (CR-011 M1).
+        let index = ontology_ref.axiom_index();
 
         // BFS through the subsumption hierarchy using index lookups
         let mut queue: std::collections::VecDeque<ClassExpression> =
@@ -221,7 +248,7 @@ impl Reasoner {
         while let Some(current) = queue.pop_front() {
             // Check direct superclasses via SubClassOf index
             for sup in index.direct_superclasses(&current) {
-                if sup == superclass {
+                if sup == superclass || Self::union_set_equivalent(sup, superclass) {
                     return Ok(true);
                 }
                 if !visited.contains(sup) {
@@ -231,7 +258,7 @@ impl Reasoner {
             }
             // Check equivalent classes via EquivalentClasses index
             for eq in index.equivalent_classes(&current) {
-                if eq == superclass {
+                if eq == superclass || Self::union_set_equivalent(eq, superclass) {
                     return Ok(true);
                 }
                 if !visited.contains(eq) {
@@ -243,6 +270,104 @@ impl Reasoner {
 
         // Fallback: built-in OWL semantics (owl:Thing, owl:Nothing, intersections, etc.)
         self.check_semantic_subsumption(subclass, superclass)
+    }
+
+    /// Whether two class expressions denote the same union up to commutativity
+    /// (`B ⊔ C ≡ C ⊔ B`, order/duplicate insensitive). Non-unions fall back to
+    /// structural equality. Used so `A ⊑ (B ⊔ C)` answers `A ⊑ (C ⊔ B)`.
+    fn union_set_equivalent(a: &ClassExpression, b: &ClassExpression) -> bool {
+        match (a, b) {
+            (ClassExpression::ObjectUnionOf(aa), ClassExpression::ObjectUnionOf(bb)) => {
+                let sa: std::collections::HashSet<&ClassExpression> = aa.iter().collect();
+                let sb: std::collections::HashSet<&ClassExpression> = bb.iter().collect();
+                sa == sb
+            }
+            _ => a == b,
+        }
+    }
+
+    /// Upward subsumption closure of `start` — every superclass and
+    /// equivalent reachable through the axiom index, computed with an
+    /// explicit stack (no recursion).
+    ///
+    /// Walks exactly the edges `is_subclass_of_ontology`'s BFS walks
+    /// (`SubClassOf` superclasses + `EquivalentClasses`), but once per
+    /// *query* instead of once per class *pair* (CR-011 M1).
+    fn ancestor_closure(
+        index: &crate::ontology::indexes::AxiomIndex,
+        start: &ClassExpression,
+    ) -> std::collections::HashSet<ClassExpression> {
+        let mut seen: std::collections::HashSet<ClassExpression> = std::collections::HashSet::new();
+        let mut stack: Vec<ClassExpression> = vec![start.clone()];
+        seen.insert(start.clone());
+        while let Some(current) = stack.pop() {
+            for sup in index.direct_superclasses(&current) {
+                if seen.insert(sup.clone()) {
+                    stack.push(sup.clone());
+                }
+            }
+            for eq in index.equivalent_classes(&current) {
+                if seen.insert(eq.clone()) {
+                    stack.push(eq.clone());
+                }
+            }
+        }
+        seen
+    }
+
+    /// `subclass ⊑ superclass` evaluated against precomputed ancestor
+    /// closures — a faithful mirror of [`Self::is_subclass_of_ontology`]'s
+    /// decision order (classification fast path → index BFS → built-in OWL
+    /// semantics) with the index BFS answered from the shared closures.
+    ///
+    /// Both arguments must be members of the closure map's key set (the
+    /// `get_types(direct)` filter only pairs up members of one type list).
+    fn closure_subsumes(
+        &self,
+        classif: Option<&ClassificationResult>,
+        ancestors: &std::collections::HashMap<
+            ClassExpression,
+            std::collections::HashSet<ClassExpression>,
+        >,
+        subclass: &ClassExpression,
+        superclass: &ClassExpression,
+    ) -> bool {
+        // ── Fast path: answer from the cached classification ────────────
+        if let Some(classif) = classif
+            && let (ClassExpression::Class(_), ClassExpression::Class(_)) = (subclass, superclass)
+        {
+            // `_ ⊑ owl:Thing` always holds.
+            if let ClassExpression::Class(c) = superclass
+                && c.is_thing()
+            {
+                return true;
+            }
+            // `A ⊑ owl:Nothing` holds iff `A` is unsatisfiable (final answer,
+            // exactly as in `is_subclass_of_ontology`).
+            if let ClassExpression::Class(c) = superclass
+                && c.is_nothing()
+            {
+                return classif.unsat.contains(subclass);
+            }
+            if classif.is_subsumed(subclass, superclass) {
+                return true;
+            }
+        }
+
+        // ── Index BFS, answered from the shared per-query closure ────────
+        if let Some(closure) = ancestors.get(subclass)
+            && (closure.contains(superclass)
+                || (matches!(superclass, ClassExpression::ObjectUnionOf(_))
+                    && closure.iter().any(|reached| {
+                        reached != subclass && Self::union_set_equivalent(reached, superclass)
+                    })))
+        {
+            return true;
+        }
+
+        // ── Built-in OWL semantics (owl:Thing, owl:Nothing, ⊓, ⊔) ────────
+        self.check_semantic_subsumption(subclass, superclass)
+            .unwrap_or(false)
     }
 
     /// Enhanced semantic subsumption checking with proper OWL semantics
@@ -280,9 +405,9 @@ impl Reasoner {
             }
 
             // Union subsumption: A ⊑ A ⊔ B and B ⊑ A ⊔ B
-            (subclass, ClassExpression::ObjectUnionOf(components)) => {
-                Ok(components.contains(subclass))
-            }
+            (subclass, ClassExpression::ObjectUnionOf(components)) => Ok(components
+                .contains(subclass)
+                || Self::union_set_equivalent(subclass, superclass)),
 
             _ => Ok(false),
         }
@@ -292,6 +417,31 @@ impl Reasoner {
     #[must_use]
     pub fn get_ontology(&self) -> Option<&OntologyRef> {
         self.ontology.as_ref()
+    }
+
+    /// Run the tableau over the given ontology and return the individual→node
+    /// merge map of the *completed* tableau (workstream A7).
+    ///
+    /// Keys are individual Display names (the `Individual::to_string` form used
+    /// by the tableau's nominal labels); values are the canonical node id after
+    /// SameIndividual / functional / inverse-functional / HasKey merging. Two
+    /// individuals are forced equal exactly when they share a node id. Returns
+    /// `Ok(None)` when the ontology is inconsistent (vacuously everything is
+    /// same-as, but the caller falls back to its syntactic equality structure).
+    pub fn tableau_individual_components(
+        &self,
+        ontology: &OntologyRef,
+    ) -> Result<Option<HashMap<String, usize>>> {
+        if self.ontology.is_none() {
+            return Ok(Some(HashMap::new()));
+        }
+        let guard = read_lock(ontology, "core: reading ontology for tableau merge map")?;
+        let mut tableau = self.tableau_factory.create_algorithm_instance(&guard)?;
+        let state = tableau.run()?;
+        if state != TableauState::Satisfiable {
+            return Ok(None);
+        }
+        Ok(Some(tableau.snapshot().individual_nodes))
     }
 
     /// Check if the ontology is consistent
@@ -335,6 +485,14 @@ impl Reasoner {
         // owl:Nothing is always unsatisfiable by definition
         if let ClassExpression::Class(c) = class
             && c.is_nothing()
+        {
+            return Ok(false);
+        }
+
+        // Fast path: the classification result already proved this class
+        // equivalent to owl:Nothing.
+        if let Some(classif) = self.classification_service.cached_classification()
+            && classif.unsat.contains(class)
         {
             return Ok(false);
         }
@@ -537,8 +695,118 @@ impl Reasoner {
         ontology_ref: &OntologyRef,
     ) -> Result<bool> {
         let ontology = read_lock(ontology_ref, "core: reading ontology for is_instance_of")?;
-        self.classification_service
-            .check_instance_with_datatype_reasoning(individual, class, &ontology)
+        if self
+            .classification_service
+            .check_instance_with_datatype_reasoning(individual, class, &ontology)?
+        {
+            return Ok(true);
+        }
+
+        // Fallback: consult the *materialized* tableau closure. The structural checker
+        // above only sees asserted axioms, so it misses memberships that follow from a
+        // derived edge — e.g. `A ≡ ≥1 R.{b}`, `A(a)` materialises `R(a,b)`, making `a`
+        // an instance of `∃R.{b}` even though no `R(a,b)` axiom is asserted. Evaluating
+        // the queried expression against a completed tableau snapshot covers exactly
+        // those derived cases; constructors the evaluator cannot decide return `false`
+        // (the pre-existing conservative behaviour).
+        let mut tableau = self
+            .task_service
+            .tableau_factory
+            .create_algorithm_instance(&ontology)?;
+        let state = tableau.run()?;
+        if state != TableauState::Satisfiable {
+            // Inconsistent ontology: every instance query is vacuously true.
+            return Ok(true);
+        }
+        let snapshot = tableau.snapshot();
+        Ok(Self::snapshot_instance_of(
+            &snapshot, &tableau, individual, class,
+        ))
+    }
+
+    /// Evaluate a class expression against a completed tableau snapshot for a given
+    /// individual (see [`Reasoner::is_instance_of_ontology`] for when this is used).
+    fn snapshot_instance_of(
+        snapshot: &crate::core::reasoner::tableau::TableauSnapshot,
+        tableau: &crate::core::reasoner::tableau::TableauAlgorithmInstance,
+        individual: &Individual,
+        class: &ClassExpression,
+    ) -> bool {
+        let Some(node) = snapshot.node_of(individual) else {
+            return false;
+        };
+        Self::snapshot_node_instance_of(snapshot, tableau, node, class)
+    }
+
+    /// Evaluate a class expression against a completed tableau snapshot *node*.
+    /// Handles the constructors that are not answerable from the asserted axioms
+    /// alone — chiefly nominal fillers `{b}` whose witnessing edge is derived.
+    fn snapshot_node_instance_of(
+        snapshot: &crate::core::reasoner::tableau::TableauSnapshot,
+        tableau: &crate::core::reasoner::tableau::TableauAlgorithmInstance,
+        node: usize,
+        class: &ClassExpression,
+    ) -> bool {
+        match class {
+            ClassExpression::Class(_) => tableau.node_labeled_as(node, class),
+            ClassExpression::ObjectIntersectionOf(ops) => ops
+                .iter()
+                .all(|op| Self::snapshot_node_instance_of(snapshot, tableau, node, op)),
+            ClassExpression::ObjectUnionOf(ops) => ops
+                .iter()
+                .any(|op| Self::snapshot_node_instance_of(snapshot, tableau, node, op)),
+            ClassExpression::ObjectOneOf(individuals) => individuals
+                .iter()
+                .any(|ind| snapshot.node_of(ind) == Some(node)),
+            ClassExpression::ObjectSomeValuesFrom { property, filler } => {
+                let role = property.to_string();
+                snapshot.edges.iter().any(|(f, t, r)| {
+                    *f == node
+                        && r == &role
+                        && Self::snapshot_node_instance_of(snapshot, tableau, *t, filler)
+                })
+            }
+            ClassExpression::ObjectHasValue { property, value } => {
+                let role = property.to_string();
+                snapshot
+                    .node_of(value)
+                    .is_some_and(|target| snapshot.has_edge(node, target, &role))
+            }
+            ClassExpression::ObjectMinCardinality {
+                property,
+                cardinality,
+                filler,
+            } => {
+                let role = property.to_string();
+                let count = snapshot
+                    .edges
+                    .iter()
+                    .filter(|(f, t, r)| {
+                        *f == node
+                            && r == &role
+                            && Self::snapshot_node_instance_of(snapshot, tableau, *t, filler)
+                    })
+                    .count();
+                count >= *cardinality as usize
+            }
+            ClassExpression::DataSomeValuesFrom { property, filler } => {
+                let role = property.to_string();
+                let validator =
+                    crate::core::reasoner::datatype_validation::DatatypeValidator::new();
+                snapshot.data_edges.iter().any(|(f, r, v)| {
+                    *f == node
+                        && r == &role
+                        && validator
+                            .literal_satisfies_data_range(v, filler)
+                            .unwrap_or(false)
+                })
+            }
+            // Constructors the snapshot evaluator cannot decide (universal,
+            // cardinality >1 over non-nominal fillers, complements, data ranges with
+            // facets…) stay conservative: return false so the caller's structural
+            // check remains authoritative.
+            _ => false,
+        }
     }
 
     /// Get types of an individual
@@ -556,7 +824,100 @@ impl Reasoner {
                 }
             }
 
-            if !direct {
+            // Derive types from *defined* classes: the named class operand of an
+            // `EquivalentClasses` axiom whose other operand is a complex class
+            // expression (nominals, datatype restrictions, role restrictions, …).
+            // The assertion scan above only sees `ClassAssertion` axioms, so
+            // memberships that follow from a class *definition* — `A ≡ {a}`,
+            // `Adult ≡ ∃age.(int ⊓ [≥ 18])` — would otherwise be invisible here
+            // even though `get_instances` / `is_instance_of` already compute them
+            // through the classification service (locked in by the C2
+            // differential fixtures diff_005 / diff_012).
+            //
+            // The candidate set is deliberately bounded to *defined* classes
+            // rather than every named class in the signature: each membership
+            // check scans the axioms, so an unbounded scan would cost
+            // O(n_classes × n_axioms) per query (ORE-sized ontologies carry
+            // ~10^5 classes).  Classes introduced only by `SubClassOf` /
+            // `ClassAssertion` are already covered by the assertion scan plus
+            // the superclass closure below.
+            let mut candidates: Vec<ClassExpression> = Vec::new();
+            let mut seen_candidates: std::collections::HashSet<crate::ontology::IRI> =
+                std::collections::HashSet::new();
+            for axiom in ontology.axioms() {
+                if let crate::ontology::Axiom::EquivalentClasses(equivalent) = axiom
+                    && equivalent
+                        .classes
+                        .iter()
+                        .any(|operand| !matches!(operand, ClassExpression::Class(_)))
+                {
+                    for operand in &equivalent.classes {
+                        if let ClassExpression::Class(cls) = operand
+                            && seen_candidates.insert(cls.iri.clone())
+                        {
+                            candidates.push(ClassExpression::Class(cls.clone()));
+                        }
+                    }
+                }
+            }
+            // Derived defined-class memberships are candidates for the result
+            // set; a failing derivation must not fail the whole query — the
+            // asserted types above remain authoritative (same error policy as
+            // `get_instances`).
+            for candidate in &candidates {
+                if let Ok(true) = self
+                    .classification_service
+                    .check_instance_with_datatype_reasoning(individual, candidate, &ontology)
+                {
+                    types.push(candidate.clone());
+                }
+            }
+
+            if direct {
+                // Most-specific filtering for `direct = true` (CR-008 MAJOR #1):
+                // a type is dropped when the result set also contains one of its
+                // *strict* subclasses — e.g. `B ≡ {a}`, `A ⊑ B`, `A(x)` yields
+                // `{A, B}` unfiltered although `B ⊒ A`, so the direct answer is
+                // `{A}` only.  Mirrors the OWL API surface filter at
+                // `reasoner_api/mod.rs` (`get_types`): `other` is a strict
+                // subclass of `t` iff `other ⊑ t` but not `t ⊑ other`
+                // (equivalents are kept, matching `collect_strict_subclasses`).
+                //
+                // CR-011 M1 (perf): the subclass relation is evaluated from ONE
+                // incrementally-maintained axiom index plus a per-query upward
+                // closure per distinct type — O(types × closure) instead of
+                // O(types²) `is_subclass_of` calls, each of which used to fall
+                // through to a full `build_index()` rebuild on every `false`
+                // (measured 3/34/120 ms per call at 2 k/20 k/60 k axioms).
+                // Semantics are unchanged: `closure_subsumes` mirrors
+                // `is_subclass_of_ontology`'s decision order exactly.
+                // Error policy: an unavailable classification falls back to the
+                // index + built-in semantics (conservative, as before —
+                // `is_subclass_of` errors were already treated as `false`).
+                let classif = self.classification_service.cached_classification();
+                let index = ontology.axiom_index();
+                let mut ancestors: HashMap<
+                    ClassExpression,
+                    std::collections::HashSet<ClassExpression>,
+                > = HashMap::with_capacity(types.len());
+                for t in &types {
+                    ancestors
+                        .entry(t.clone())
+                        .or_insert_with(|| Self::ancestor_closure(index, t));
+                }
+                let mut most_specific = Vec::with_capacity(types.len());
+                for t in &types {
+                    let has_strict_sub_type = types.iter().any(|other| {
+                        other != t
+                            && self.closure_subsumes(classif, &ancestors, other, t)
+                            && !self.closure_subsumes(classif, &ancestors, t, other)
+                    });
+                    if !has_strict_sub_type {
+                        most_specific.push(t.clone());
+                    }
+                }
+                types = most_specific;
+            } else {
                 // Also add superclasses of the direct types
                 let mut all_types = types.clone();
                 for direct_type in &types {
@@ -729,14 +1090,39 @@ impl Reasoner {
             };
 
             if is_el {
+                // The EL reasoner's worklist completion is O(N³) on deep
+                // hierarchies, which blows up on 1000-class chains.  When
+                // absorption classification is enabled and the EL ontology uses
+                // only constructs the absorption + dependency-graph path is
+                // complete for (told subsumption, role-successor / domain /
+                // range / conjunction GCIs, equivalents — no role hierarchy,
+                // no transitive roles, no nominals / self / cardinalities), we
+                // route it through the (linear) A8 classification path instead.
+                let use_absorption = self.config.reasoning.enable_absorption_classification && {
+                    let ont = read_lock(&ontology, "classify: A8 EL coverage")?;
+                    el_covered_by_absorption(&ont)
+                };
+                if use_absorption {
+                    log::info!(
+                        "EL profile detected: using A8 absorption path (deterministic EL fragment)"
+                    );
+                    return self.classification_service.classify(
+                        &ontology,
+                        &mut statistics,
+                        &mut self.cache_manager,
+                    );
+                }
                 log::info!("EL profile detected: using ELReasoner (100x speedup)");
                 let ont = read_lock(&ontology, "classify: EL")?;
                 let mut el_reasoner =
                     crate::profiles::el_reasoner::ELReasoner::new(self.config.clone());
                 el_reasoner.initialize(&ont)?;
                 let result = el_reasoner.classify()?;
-                // Store for future use and cache the result.
+                // Store for future use, cache the result, and make the query
+                // fast-paths reuse it.
                 self.el_reasoner = Some(Box::new(el_reasoner));
+                self.classification_service
+                    .store_classification(result.clone());
                 self.cache_manager
                     .store_classification_result(&ontology, result.clone());
                 return Ok(result);
@@ -935,6 +1321,8 @@ impl Reasoner {
 
             // Clear cache since ontology has changed
             self.cache_manager.clear_all()?;
+            self.classification_service
+                .invalidate_classification_cache();
             self.materialization_stale
                 .store(true, std::sync::atomic::Ordering::Relaxed);
 
@@ -959,6 +1347,8 @@ impl Reasoner {
             if removed {
                 // Clear cache since ontology has changed
                 self.cache_manager.clear_all()?;
+                self.classification_service
+                    .invalidate_classification_cache();
             }
 
             // Return the boolean result properly wrapped
@@ -988,10 +1378,17 @@ impl Reasoner {
 
     /// Load an ontology into the reasoner
     pub fn load_ontology(&mut self, ontology: crate::ontology::Ontology) -> Result<()> {
-        self.ontology = Some(Arc::new(RwLock::new(ontology)));
+        self.ontology = Some(Arc::new(RwLock::new(ontology.clone())));
         self.materialization_stale
             .store(true, std::sync::atomic::Ordering::Relaxed);
         self.rl_reasoner = None;
+        // Drop any stale classification cache — the ontology has changed.
+        self.classification_service
+            .invalidate_classification_cache();
+        // Register DatatypeDefinition axioms so user-defined datatype values are validated
+        // against their defining data ranges (workstream A4).
+        self.classification_service
+            .register_datatype_definitions(&ontology);
         Ok(())
     }
 
@@ -2751,4 +3148,86 @@ impl Reasoner {
 
         guard.as_ref().unwrap().execute_update(sparql)
     }
+}
+
+/// Returns `true` when an (EL-conforming) ontology is fully covered by the
+/// A8 absorption + dependency-graph classification path — i.e. every axiom is
+/// either deterministically absorbed (told subsumption, role-successor /
+/// domain / range / conjunction GCIs, equivalents) or pushed to the tableau
+/// fallback without silently losing consequences.
+///
+/// The A8 path is *incomplete* for role-hierarchy / transitive-role driven
+/// existential consequences (`R ⊑ S` ⇒ `∃R.C` does not propagate to `∃S.C`),
+/// so ontologies using any role RBox axiom still use the EL reasoner.  It is
+/// also conservative about EL constructs whose consequences the deterministic
+/// propagation does not model (nominals, `hasSelf`, cardinality restrictions):
+/// those are flagged for the tableau, but for EL ontologies the EL reasoner is
+/// cheaper, so we keep them on the EL path too.
+fn el_covered_by_absorption(ontology: &crate::ontology::Ontology) -> bool {
+    use crate::ontology::{ClassExpression, axioms::Axiom};
+
+    fn absorption_safe_expr(expr: &ClassExpression) -> bool {
+        match expr {
+            // Deterministic EL fragment the A8 path is complete for.
+            ClassExpression::Class(_)
+            | ClassExpression::DataSomeValuesFrom { .. }
+            | ClassExpression::DataAllValuesFrom { .. } => true,
+            ClassExpression::ObjectSomeValuesFrom { filler, .. } => absorption_safe_expr(filler),
+            ClassExpression::ObjectIntersectionOf(parts) => parts.iter().all(absorption_safe_expr),
+            // Constructs the deterministic propagation does not model.
+            ClassExpression::ObjectOneOf(_)
+            | ClassExpression::ObjectHasSelf { .. }
+            | ClassExpression::ObjectHasValue { .. }
+            | ClassExpression::ObjectMinCardinality { .. }
+            | ClassExpression::ObjectMaxCardinality { .. }
+            | ClassExpression::ObjectExactCardinality { .. }
+            | ClassExpression::DataHasValue { .. }
+            | ClassExpression::DataMinCardinality { .. }
+            | ClassExpression::DataMaxCardinality { .. }
+            | ClassExpression::DataExactCardinality { .. }
+            | ClassExpression::ObjectUnionOf(_)
+            | ClassExpression::ObjectComplementOf(_)
+            | ClassExpression::ObjectAllValuesFrom { .. } => false,
+        }
+    }
+
+    for axiom in ontology.axioms() {
+        match axiom {
+            // Role RBox axioms → A8 existential propagation is incomplete.
+            Axiom::SubObjectPropertyOf(_)
+            | Axiom::EquivalentObjectProperties(_)
+            | Axiom::DisjointObjectProperties(_)
+            | Axiom::InverseObjectProperties(_)
+            | Axiom::FunctionalObjectProperty(_)
+            | Axiom::InverseFunctionalObjectProperty(_)
+            | Axiom::ReflexiveObjectProperty(_)
+            | Axiom::IrreflexiveObjectProperty(_)
+            | Axiom::SymmetricObjectProperty(_)
+            | Axiom::AsymmetricObjectProperty(_)
+            | Axiom::TransitiveObjectProperty(_) => return false,
+            // Class axioms: inspect the expressions for disallowed constructs.
+            Axiom::SubClassOf(ax) => {
+                if !absorption_safe_expr(&ax.subclass) || !absorption_safe_expr(&ax.superclass) {
+                    return false;
+                }
+            }
+            Axiom::EquivalentClasses(ax) => {
+                if ax.classes.iter().any(|c| !absorption_safe_expr(c)) {
+                    return false;
+                }
+            }
+            Axiom::ObjectPropertyDomain(_) | Axiom::ObjectPropertyRange(_) => {}
+            Axiom::DisjointClasses(_) | Axiom::DisjointUnion(_) => {}
+            Axiom::SubDataPropertyOf(_)
+            | Axiom::EquivalentDataProperties(_)
+            | Axiom::DataPropertyDomain(_)
+            | Axiom::DataPropertyRange(_) => {}
+            Axiom::FunctionalDataProperty(_) => {}
+            Axiom::Declaration(_) | Axiom::AnnotationAssertion(_) => {}
+            // Anything else (ABox, HasKey, DatatypeDefinition, rules, …) is not
+            // handled by the A8 TBox classification path.
+            _ => return false,
+        }
+    }
+    true
 }

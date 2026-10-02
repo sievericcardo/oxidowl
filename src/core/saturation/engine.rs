@@ -275,11 +275,19 @@ impl SaturationEngine {
             seen.insert(concept.clone());
 
             while let Some(current) = queue.pop_front() {
+                // Only the one-step superclasses of the root concept are *direct*
+                // subsumers; superclasses reached transitively are indirect.  Marking
+                // only the direct ones keeps `direct_subsumers` sparse, so
+                // `compute_transitive_subsumers` runs in O(N·D) instead of O(N³)
+                // on deep hierarchies (workstream A8).
+                let is_root = current == *concept;
                 // Direct superclasses from SubClassOf axioms
                 for superclass in index.direct_superclasses(&current) {
                     if seen.insert(superclass.clone()) {
                         node.add_saturated_concept(superclass.clone());
-                        node.add_direct_subsumer(superclass.clone());
+                        if is_root {
+                            node.add_direct_subsumer(superclass.clone());
+                        }
                         // Named-class superclasses continue the BFS chain
                         queue.push_back(superclass.clone());
                     }
@@ -289,7 +297,9 @@ impl SaturationEngine {
                 for equiv in index.equivalent_classes(&current) {
                     if seen.insert(equiv.clone()) {
                         node.add_saturated_concept(equiv.clone());
-                        node.add_direct_subsumer(equiv.clone());
+                        if is_root {
+                            node.add_direct_subsumer(equiv.clone());
+                        }
                         queue.push_back(equiv.clone());
                     }
                 }

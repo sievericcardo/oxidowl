@@ -11,82 +11,23 @@ use crate::{
         DataProperty, DataPropertyExpression, DataRange, FacetRestriction, IRI, Individual,
         Literal, NamedIndividual, ObjectProperty, ObjectPropertyExpression, Ontology,
         axioms::{
-            AnnotationAssertionAxiom, AsymmetricObjectPropertyAxiom, Axiom, ClassAssertionAxiom,
-            DataPropertyAssertionAxiom, DataPropertyDomainAxiom, DataPropertyRangeAxiom,
-            DeclarationAxiom, DifferentIndividualsAxiom, DisjointClassesAxiom, DisjointUnionAxiom,
-            Entity, EquivalentClassesAxiom, FunctionalObjectPropertyAxiom,
-            InverseFunctionalObjectPropertyAxiom, InverseObjectPropertiesAxiom,
-            IrreflexiveObjectPropertyAxiom, ObjectPropertyAssertionAxiom,
-            ObjectPropertyDomainAxiom, ObjectPropertyRangeAxiom, ReflexiveObjectPropertyAxiom,
-            SameIndividualAxiom, SubClassOfAxiom, SubDataPropertyOfAxiom, SubObjectPropertyOfAxiom,
-            SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
+            AnnotationAssertionAxiom, Axiom, DataPropertyAssertionAxiom, DeclarationAxiom,
+            DisjointUnionAxiom, Entity, EquivalentClassesAxiom, SubClassOfAxiom,
         },
     },
     semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple},
 };
 use std::{collections::HashMap, fs::File, io::Read, path::Path};
 
+/// Absolute IRI of `rdf:type` — the expansion of Turtle's predefined
+/// keyword `a` in predicate position (Turtle spec §2.3 / §4.1.2).
+const RDF_TYPE_IRI: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+
 /// Generate a unique axiom ID
 fn generate_axiom_id() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(1);
     COUNTER.fetch_add(1, Ordering::SeqCst)
-}
-
-/// Return true if `s` is a bare (unquoted) Turtle literal –
-/// i.e. an integer (`0`, `-1`), decimal (`3.14`), double (`1.0e5`),
-/// or boolean (`true` / `false`).
-/// These are NOT IRIs and must be treated as literal values.
-fn is_bare_literal(s: &str) -> bool {
-    if s.is_empty() {
-        return false;
-    }
-    if s == "true" || s == "false" {
-        return true;
-    }
-    // Strip optional leading minus
-    let s = s.strip_prefix('-').unwrap_or(s);
-    if s.is_empty() {
-        return false;
-    }
-    // First character must be a digit or '.'
-    let first = s.chars().next().unwrap();
-    if !first.is_ascii_digit() && first != '.' {
-        return false;
-    }
-    // All remaining characters must be digits, '.', 'e', 'E', '+', '-'
-    s.chars()
-        .all(|c| c.is_ascii_digit() || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-')
-}
-
-/// Given a bare numeric/boolean literal string, return `(value, datatype_url)`.
-fn bare_literal_parts(s: &str) -> (String, Option<url::Url>) {
-    if s == "true" || s == "false" {
-        return (
-            s.to_owned(),
-            url::Url::parse("http://www.w3.org/2001/XMLSchema#boolean").ok(),
-        );
-    }
-    let lower = s.to_lowercase();
-    if lower.contains('e') {
-        // double
-        (
-            s.to_owned(),
-            url::Url::parse("http://www.w3.org/2001/XMLSchema#double").ok(),
-        )
-    } else if lower.contains('.') {
-        // decimal
-        (
-            s.to_owned(),
-            url::Url::parse("http://www.w3.org/2001/XMLSchema#decimal").ok(),
-        )
-    } else {
-        // integer
-        (
-            s.to_owned(),
-            url::Url::parse("http://www.w3.org/2001/XMLSchema#integer").ok(),
-        )
-    }
 }
 
 /// Parse an IRI from a string, handling both absolute and relative URIs
@@ -623,7 +564,7 @@ impl TurtleParser {
 
         if tokens.len() >= 3 {
             let subject = self.resolve_token(&tokens[0], state)?;
-            let predicate = self.resolve_token(&tokens[1], state)?;
+            let predicate = self.resolve_predicate(&tokens[1], state)?;
             let object = if matches!(&tokens[2], Token::Literal(_)) {
                 format!("\"{}\"", self.resolve_token(&tokens[2], state)?)
             } else {
@@ -763,7 +704,7 @@ impl TurtleParser {
             } else {
                 // Parse new predicate
                 let pred = self
-                    .resolve_token(&tokens[start_index], state)
+                    .resolve_predicate(&tokens[start_index], state)
                     .map_err(|e| {
                         Error::ontology_parsing(format!(
                             "Failed to resolve predicate token at index {start_index}: {e}"
@@ -1080,7 +1021,7 @@ impl TurtleParser {
             let predicate = if let Some(ref pred) = current_predicate {
                 pred.clone()
             } else if i < tokens.len() {
-                let pred = self.resolve_token(&tokens[i], state)?;
+                let pred = self.resolve_predicate(&tokens[i], state)?;
                 i += 1;
                 current_predicate = Some(pred.clone());
                 pred
@@ -2209,7 +2150,7 @@ impl TurtleParser {
 
         // Resolve s/p/o strings from main tokens
         let subject_str = self.resolve_token(&main_tokens[0], state)?;
-        let predicate_str = self.resolve_token(&main_tokens[1], state)?;
+        let predicate_str = self.resolve_predicate(&main_tokens[1], state)?;
         let object_str = self.resolve_token(&main_tokens[2], state)?;
 
         // Process the main triple through the OWL pipeline
@@ -2636,7 +2577,14 @@ impl TurtleParser {
 
         // Recursively resolve tokens to RdfTerms
         let subject_term = self.token_to_rdf_term(&tokens[0], state)?;
-        let predicate_term = self.token_to_rdf_term(&tokens[1], state)?;
+        // Predicate position again: the Turtle `a` keyword expands to
+        // `rdf:type` inside quoted triples too (RDF-star Turtle §2.3).
+        let predicate_term = match &tokens[1] {
+            Token::Keyword(kw) if kw == "a" => RdfTerm::Iri(
+                url::Url::parse(RDF_TYPE_IRI).expect("RDF_TYPE_IRI is a valid absolute IRI"),
+            ),
+            other => self.token_to_rdf_term(other, state)?,
+        };
         let object_term = self.token_to_rdf_term(&tokens[2], state)?;
 
         Ok(RdfTriple {
@@ -2740,6 +2688,24 @@ impl TurtleParser {
                 )))
             }
         }
+    }
+
+    /// Resolve a token that appears in **predicate** position.
+    ///
+    /// Turtle's predefined keyword `a` (Turtle spec §2.3 / §4.1.2) is shorthand
+    /// for `rdf:type` and may only appear as a predicate: `:i a :A` must
+    /// resolve to `<…/i> rdf:type <…/A>`, never to an object property whose IRI
+    /// is literally `a` (CR-008 / B5 Slice 0 Part D).  [`Self::resolve_token`]
+    /// is shared with subject/object positions — where `a` is *not* a keyword —
+    /// so the expansion happens in this predicate-position wrapper instead.
+    fn resolve_predicate(&self, token: &Token, state: &ParseState) -> Result<String> {
+        // `a` is a lexical *keyword* token (CR-011 n5): only `Token::Keyword("a")`
+        // expands to `rdf:type` — a relative IRI `<a>` or a prefixed name that
+        // merely *resolves* to `a` must stay an IRI.
+        if matches!(token, Token::Keyword(kw) if kw == "a") {
+            return Ok(RDF_TYPE_IRI.to_string());
+        }
+        self.resolve_token(token, state)
     }
 
     /// Decode escape sequences in strings
@@ -2852,84 +2818,22 @@ impl TurtleParser {
         }
     }
 
-    // ── helper: check if a subject IRI is declared as a DatatypeProperty ────────
-    fn is_data_property(&self, iri: &str, ontology: &Ontology) -> bool {
-        ontology.axioms().iter().any(|a| {
-            if let Axiom::Declaration(d) = a
-                && let Entity::DataProperty(dp_iri) = &d.entity
-            {
-                return dp_iri.as_str() == iri;
-            }
-            false
-        })
-    }
+    // ── helpers: delegated to the shared RDF→OWL mapping module ────────────
+    //    (`parsers::rdf_to_owl`, factored out of this parser in B5 Slice 1 so
+    //     Turtle, RDF/XML and JSON-LD share a single RDF→OWL mapping.)
 
-    // ── helper: check if a predicate IRI is a well-known or declared AnnotationProperty
     fn is_annotation_property(&self, iri: &str, ontology: &Ontology) -> bool {
-        // Well-known OWL / RDFS annotation properties
-        if matches!(
-            iri,
-            "http://www.w3.org/2000/01/rdf-schema#label"
-                | "http://www.w3.org/2000/01/rdf-schema#comment"
-                | "http://www.w3.org/2000/01/rdf-schema#isDefinedBy"
-                | "http://www.w3.org/2000/01/rdf-schema#seeAlso"
-                | "http://www.w3.org/2002/07/owl#deprecated"
-                | "http://www.w3.org/2002/07/owl#priorVersion"
-                | "http://www.w3.org/2002/07/owl#backwardCompatibleWith"
-                | "http://www.w3.org/2002/07/owl#incompatibleWith"
-                | "http://www.w3.org/2002/07/owl#versionInfo"
-        ) {
-            return true;
-        }
-        // Any predicate declared as AnnotationProperty in the ontology
-        ontology.axioms().iter().any(|a| {
-            if let Axiom::Declaration(d) = a
-                && let Entity::AnnotationProperty(ap_iri) = &d.entity
-            {
-                return ap_iri.as_str() == iri;
-            }
-            false
-        })
+        super::rdf_to_owl::is_annotation_property(iri, ontology)
     }
 
-    // ── Fix 1.8: auto-declare an AnnotationProperty if not already present ───────
     fn ensure_annotation_property_declared(&self, iri: &str, ontology: &mut Ontology) {
-        // Do NOT auto-declare built-in OWL/RDFS annotation properties.  These are
-        // known to reasoners / the OWL API without an explicit Declaration axiom in
-        // the ontology; adding one would create extra Declarations that OWL API v5
-        // does not emit.
-        if matches!(
-            iri,
-            "http://www.w3.org/2000/01/rdf-schema#label"
-                | "http://www.w3.org/2000/01/rdf-schema#comment"
-                | "http://www.w3.org/2000/01/rdf-schema#isDefinedBy"
-                | "http://www.w3.org/2000/01/rdf-schema#seeAlso"
-                | "http://www.w3.org/2002/07/owl#deprecated"
-                | "http://www.w3.org/2002/07/owl#priorVersion"
-                | "http://www.w3.org/2002/07/owl#backwardCompatibleWith"
-                | "http://www.w3.org/2002/07/owl#incompatibleWith"
-                | "http://www.w3.org/2002/07/owl#versionInfo"
-        ) {
-            return;
-        }
-        let already_declared = ontology.axioms().iter().any(|a| {
-            if let Axiom::Declaration(d) = a
-                && let Entity::AnnotationProperty(ap_iri) = &d.entity
-            {
-                return ap_iri.as_str() == iri;
-            }
-            false
-        });
-        if !already_declared {
-            let decl = DeclarationAxiom {
-                id: generate_axiom_id(),
-                entity: Entity::AnnotationProperty(IRI::new(iri)),
-            };
-            ontology.add_axiom(Axiom::Declaration(decl));
-        }
+        super::rdf_to_owl::ensure_annotation_property_declared(iri, ontology)
     }
 
-    /// Enhanced triple processing with better OWL support
+    /// Enhanced triple processing with better OWL support.
+    ///
+    /// The mapping itself lives in [`super::rdf_to_owl::process_triple`] —
+    /// one shared implementation used by Turtle, RDF/XML and JSON-LD.
     fn process_enhanced_triple(
         &self,
         ontology: &mut Ontology,
@@ -2937,446 +2841,7 @@ impl TurtleParser {
         predicate: String,
         object: String,
     ) -> Result<()> {
-        match predicate.as_str() {
-            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" => {
-                match object.as_str() {
-                    "http://www.w3.org/2002/07/owl#Class" => {
-                        let decl_axiom = DeclarationAxiom {
-                            id: generate_axiom_id(),
-                            entity: Entity::Class(IRI::new(&subject)),
-                        };
-                        ontology.add_axiom(Axiom::Declaration(decl_axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#Ontology" => {
-                        ontology.set_iri(IRI::new(&subject));
-                    }
-                    "http://www.w3.org/2002/07/owl#ObjectProperty" => {
-                        let _property = ObjectProperty::new(IRI::new(&subject));
-                        let decl_axiom = DeclarationAxiom {
-                            id: generate_axiom_id(),
-                            entity: Entity::ObjectProperty(IRI::new(&subject)),
-                        };
-                        ontology.add_axiom(Axiom::Declaration(decl_axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#DatatypeProperty" => {
-                        let decl_axiom = DeclarationAxiom {
-                            id: generate_axiom_id(),
-                            entity: Entity::DataProperty(IRI::new(&subject)),
-                        };
-                        ontology.add_axiom(Axiom::Declaration(decl_axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#AnnotationProperty" => {
-                        let decl_axiom = DeclarationAxiom {
-                            id: generate_axiom_id(),
-                            entity: Entity::AnnotationProperty(IRI::new(&subject)),
-                        };
-                        ontology.add_axiom(Axiom::Declaration(decl_axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#NamedIndividual" => {
-                        let decl_axiom = DeclarationAxiom {
-                            id: generate_axiom_id(),
-                            entity: Entity::NamedIndividual(IRI::new(&subject)),
-                        };
-                        ontology.add_axiom(Axiom::Declaration(decl_axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#FunctionalProperty" => {
-                        let prop = ObjectProperty::new(IRI::new(&subject))?;
-                        let axiom = FunctionalObjectPropertyAxiom {
-                            id: generate_axiom_id(),
-                            property: ObjectPropertyExpression::ObjectProperty(prop),
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::FunctionalObjectProperty(axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#TransitiveProperty" => {
-                        let prop = ObjectProperty::new(IRI::new(&subject))?;
-                        let axiom = TransitiveObjectPropertyAxiom {
-                            id: generate_axiom_id(),
-                            property: ObjectPropertyExpression::ObjectProperty(prop),
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::TransitiveObjectProperty(axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#SymmetricProperty" => {
-                        let prop = ObjectProperty::new(IRI::new(&subject))?;
-                        let axiom = SymmetricObjectPropertyAxiom {
-                            id: generate_axiom_id(),
-                            property: ObjectPropertyExpression::ObjectProperty(prop),
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::SymmetricObjectProperty(axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#AsymmetricProperty" => {
-                        let prop = ObjectProperty::new(IRI::new(&subject))?;
-                        let axiom = AsymmetricObjectPropertyAxiom {
-                            id: generate_axiom_id(),
-                            property: ObjectPropertyExpression::ObjectProperty(prop),
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::AsymmetricObjectProperty(axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#ReflexiveProperty" => {
-                        let prop = ObjectProperty::new(IRI::new(&subject))?;
-                        let axiom = ReflexiveObjectPropertyAxiom {
-                            id: generate_axiom_id(),
-                            property: ObjectPropertyExpression::ObjectProperty(prop),
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::ReflexiveObjectProperty(axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#IrreflexiveProperty" => {
-                        let prop = ObjectProperty::new(IRI::new(&subject))?;
-                        let axiom = IrreflexiveObjectPropertyAxiom {
-                            id: generate_axiom_id(),
-                            property: ObjectPropertyExpression::ObjectProperty(prop),
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::IrreflexiveObjectProperty(axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#InverseFunctionalProperty" => {
-                        let prop = ObjectProperty::new(IRI::new(&subject))?;
-                        let axiom = InverseFunctionalObjectPropertyAxiom {
-                            id: generate_axiom_id(),
-                            property: ObjectPropertyExpression::ObjectProperty(prop),
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::InverseFunctionalObjectProperty(axiom));
-                    }
-                    _ => {
-                        // Class assertion
-                        let individual = Individual::Named(NamedIndividual {
-                            iri: IRI::new(&subject),
-                        });
-                        let class = Class::new(IRI::new(&object));
-
-                        let axiom = ClassAssertionAxiom {
-                            id: generate_axiom_id(),
-                            individual,
-                            class: ClassExpression::Class(class),
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::ClassAssertion(axiom));
-                    }
-                }
-            }
-            "http://www.w3.org/2002/07/owl#versionIRI" => {
-                // Fix 1.1: record the version IRI on the ontology
-                ontology.set_version_iri(Some(IRI::new(&object)));
-            }
-            "http://www.w3.org/2002/07/owl#imports" => {
-                // Prevent owl:imports falling through to a spurious ObjectPropertyAssertion.
-                // (Full import-following is handled separately; here we just no-op.)
-            }
-            "http://www.w3.org/2000/01/rdf-schema#subClassOf" => {
-                let subclass = Class::new(IRI::new(&subject));
-                let superclass = Class::new(IRI::new(&object));
-
-                let axiom = SubClassOfAxiom {
-                    id: generate_axiom_id(),
-                    subclass: ClassExpression::Class(subclass),
-                    superclass: ClassExpression::Class(superclass),
-                    annotations: vec![],
-                };
-                ontology.add_axiom(Axiom::SubClassOf(axiom));
-            }
-            "http://www.w3.org/2002/07/owl#equivalentClass" => {
-                let class1 = Class::new(IRI::new(&subject));
-                let class2 = Class::new(IRI::new(&object));
-                let axiom = EquivalentClassesAxiom {
-                    id: generate_axiom_id(),
-                    classes: vec![
-                        ClassExpression::Class(class1),
-                        ClassExpression::Class(class2),
-                    ],
-                    annotations: vec![],
-                };
-                ontology.add_axiom(Axiom::EquivalentClasses(axiom));
-            }
-            "http://www.w3.org/2002/07/owl#disjointWith" => {
-                let class1 = Class::new(IRI::new(&subject));
-                let class2 = Class::new(IRI::new(&object));
-                let axiom = DisjointClassesAxiom {
-                    id: generate_axiom_id(),
-                    classes: vec![
-                        ClassExpression::Class(class1),
-                        ClassExpression::Class(class2),
-                    ],
-                    annotations: vec![],
-                };
-                ontology.add_axiom(Axiom::DisjointClasses(axiom));
-            }
-            "http://www.w3.org/2000/01/rdf-schema#domain" => {
-                // Fix 1.2: route to DataPropertyDomain when the subject is a DatatypeProperty
-                if self.is_data_property(&subject, ontology) {
-                    let prop = DataProperty {
-                        iri: IRI::new(&subject),
-                    };
-                    let axiom = DataPropertyDomainAxiom {
-                        id: generate_axiom_id(),
-                        property: DataPropertyExpression::DataProperty(prop),
-                        domain: ClassExpression::Class(Class::new(IRI::new(&object))),
-                        annotations: vec![],
-                    };
-                    ontology.add_axiom(Axiom::DataPropertyDomain(axiom));
-                } else {
-                    let prop = ObjectProperty::new(IRI::new(&subject))?;
-                    let domain = ClassExpression::Class(Class::new(IRI::new(&object)));
-                    let axiom = ObjectPropertyDomainAxiom {
-                        id: generate_axiom_id(),
-                        property: ObjectPropertyExpression::ObjectProperty(prop),
-                        domain,
-                        annotations: vec![],
-                    };
-                    ontology.add_axiom(Axiom::ObjectPropertyDomain(axiom));
-                }
-            }
-            "http://www.w3.org/2000/01/rdf-schema#range" => {
-                // Fix 1.2: route to DataPropertyRange when subject is DatatypeProperty
-                // or when the range is an XSD / RDF datatype IRI.
-                let is_xsd_range = object.starts_with("http://www.w3.org/2001/XMLSchema#")
-                    || object.starts_with("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
-                if self.is_data_property(&subject, ontology) || is_xsd_range {
-                    let prop = DataProperty {
-                        iri: IRI::new(&subject),
-                    };
-                    let axiom = DataPropertyRangeAxiom {
-                        id: generate_axiom_id(),
-                        property: DataPropertyExpression::DataProperty(prop),
-                        range: DataRange::Datatype(IRI::new(&object)),
-                        annotations: vec![],
-                    };
-                    ontology.add_axiom(Axiom::DataPropertyRange(axiom));
-                } else {
-                    let prop = ObjectProperty::new(IRI::new(&subject))?;
-                    let range = ClassExpression::Class(Class::new(IRI::new(&object)));
-                    let axiom = ObjectPropertyRangeAxiom {
-                        id: generate_axiom_id(),
-                        property: ObjectPropertyExpression::ObjectProperty(prop),
-                        range,
-                        annotations: vec![],
-                    };
-                    ontology.add_axiom(Axiom::ObjectPropertyRange(axiom));
-                }
-            }
-            "http://www.w3.org/2002/07/owl#sameAs" => {
-                let ind1 = Individual::Named(NamedIndividual {
-                    iri: IRI::new(&subject),
-                });
-                let ind2 = Individual::Named(NamedIndividual {
-                    iri: IRI::new(&object),
-                });
-                let axiom = SameIndividualAxiom {
-                    id: generate_axiom_id(),
-                    individuals: vec![ind1, ind2],
-                    annotations: vec![],
-                };
-                ontology.add_axiom(Axiom::SameIndividual(axiom));
-            }
-            "http://www.w3.org/2002/07/owl#differentFrom" => {
-                let ind1 = Individual::Named(NamedIndividual {
-                    iri: IRI::new(&subject),
-                });
-                let ind2 = Individual::Named(NamedIndividual {
-                    iri: IRI::new(&object),
-                });
-                let axiom = DifferentIndividualsAxiom {
-                    id: generate_axiom_id(),
-                    individuals: vec![ind1, ind2],
-                    annotations: vec![],
-                };
-                ontology.add_axiom(Axiom::DifferentIndividuals(axiom));
-            }
-            "http://www.w3.org/2000/01/rdf-schema#subPropertyOf" => {
-                // Fix 1.3: route to SubDataPropertyOf when subject is a DatatypeProperty
-                if self.is_data_property(&subject, ontology) {
-                    let sub_prop = DataProperty {
-                        iri: IRI::new(&subject),
-                    };
-                    let sup_prop = DataProperty {
-                        iri: IRI::new(&object),
-                    };
-                    let axiom = SubDataPropertyOfAxiom {
-                        id: generate_axiom_id(),
-                        sub_property: DataPropertyExpression::DataProperty(sub_prop),
-                        super_property: DataPropertyExpression::DataProperty(sup_prop),
-                        annotations: vec![],
-                    };
-                    ontology.add_axiom(Axiom::SubDataPropertyOf(axiom));
-                } else {
-                    let sub_prop = ObjectProperty::new(IRI::new(&subject))?;
-                    let sup_prop = ObjectProperty::new(IRI::new(&object))?;
-                    let axiom = SubObjectPropertyOfAxiom {
-                        id: generate_axiom_id(),
-                        sub_property: ObjectPropertyExpression::ObjectProperty(sub_prop),
-                        super_property: ObjectPropertyExpression::ObjectProperty(sup_prop),
-                        annotations: vec![],
-                    };
-                    ontology.add_axiom(Axiom::SubObjectPropertyOf(axiom));
-                }
-            }
-            "http://www.w3.org/2002/07/owl#inverseOf" => {
-                let prop1 = ObjectProperty::new(IRI::new(&subject))?;
-                let prop2 = ObjectProperty::new(IRI::new(&object))?;
-                let axiom = InverseObjectPropertiesAxiom {
-                    id: generate_axiom_id(),
-                    property1: ObjectPropertyExpression::ObjectProperty(prop1),
-                    property2: ObjectPropertyExpression::ObjectProperty(prop2),
-                    annotations: vec![],
-                };
-                ontology.add_axiom(Axiom::InverseObjectProperties(axiom));
-            }
-            "http://www.w3.org/2002/07/owl#hasKey" => {
-                // hasKey with non-list object – skip silently (Fix 1.7)
-            }
-            "http://www.w3.org/2002/07/owl#propertyChainAxiom" => {
-                // propertyChainAxiom with non-list object – skip silently (Fix 1.7)
-            }
-            // ── Fix 1.7: other well-known OWL/RDFS structural predicates that must NOT
-            //    fall through to the ObjectPropertyAssertion default arm ──────────────
-            "http://www.w3.org/2002/07/owl#onProperty"
-            | "http://www.w3.org/2002/07/owl#allValuesFrom"
-            | "http://www.w3.org/2002/07/owl#someValuesFrom"
-            | "http://www.w3.org/2002/07/owl#hasValue"
-            | "http://www.w3.org/2002/07/owl#onClass"
-            | "http://www.w3.org/2002/07/owl#onDataRange"
-            | "http://www.w3.org/2002/07/owl#minCardinality"
-            | "http://www.w3.org/2002/07/owl#maxCardinality"
-            | "http://www.w3.org/2002/07/owl#cardinality"
-            | "http://www.w3.org/2002/07/owl#minQualifiedCardinality"
-            | "http://www.w3.org/2002/07/owl#maxQualifiedCardinality"
-            | "http://www.w3.org/2002/07/owl#qualifiedCardinality"
-            | "http://www.w3.org/2002/07/owl#distinctMembers"
-            | "http://www.w3.org/2002/07/owl#members"
-            | "http://www.w3.org/2002/07/owl#oneOf"
-            | "http://www.w3.org/2002/07/owl#unionOf"
-            | "http://www.w3.org/2002/07/owl#intersectionOf"
-            | "http://www.w3.org/2002/07/owl#complementOf"
-            | "http://www.w3.org/2002/07/owl#disjointUnionOf"
-            | "http://www.w3.org/2002/07/owl#withRestrictions"
-            | "http://www.w3.org/2002/07/owl#onDatatype"
-            | "http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
-            | "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
-            | "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil" => {
-                // Structural RDF/OWL predicates – handled by the blank-node / list
-                // parsers.  Ignore here to prevent spurious ObjectPropertyAssertions.
-            }
-            _ => {
-                // Fix 1.4: if the predicate is a (well-known or declared) annotation
-                // property, emit an AnnotationAssertionAxiom rather than a property
-                // assertion.  This covers IRI-valued annotations that are not already
-                // handled by the semicolon-statement literal path.
-                if self.is_annotation_property(&predicate, ontology) {
-                    let annotation_value = if object.starts_with('"') {
-                        // Strip surrounding quotes and create a plain literal
-                        let raw = object.trim_matches('"').to_string();
-                        AnnotationValue::Literal(Literal::new(raw))
-                    } else if object.is_empty() || object.starts_with("_:") {
-                        // Anonymous individual or empty – skip
-                        return Ok(());
-                    } else {
-                        AnnotationValue::IRI(IRI::new(&object))
-                    };
-
-                    // Ontology-level annotation vs entity annotation
-                    if ontology.get_iri().map(super::super::ontology::IRI::as_str)
-                        == Some(subject.as_str())
-                    {
-                        let annotation = Annotation {
-                            property: AnnotationProperty {
-                                iri: IRI::new(&predicate),
-                            },
-                            value: annotation_value,
-                            annotations: vec![],
-                        };
-                        ontology.annotations.push(annotation);
-                    } else {
-                        // Fix 1.8: auto-declare the annotation property if needed
-                        self.ensure_annotation_property_declared(&predicate, ontology);
-                        let axiom = AnnotationAssertionAxiom {
-                            id: generate_axiom_id(),
-                            subject: AnnotationSubject::IRI(IRI::new(&subject)),
-                            property: AnnotationProperty {
-                                iri: IRI::new(&predicate),
-                            },
-                            value: annotation_value,
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::AnnotationAssertion(axiom));
-                    }
-                } else {
-                    // Detect if object is a literal (data property) or an individual
-                    // (object property).  Cover three literal forms:
-                    //  1. Quoted string:  "value" or "value"^^datatype
-                    //  2. Bare numeric:   42, -3, 1.5, 1e6
-                    //  3. Bare boolean:   true / false
-                    let is_quoted_literal = object.starts_with('"') || object.contains("^^");
-                    let is_bare_num = !is_quoted_literal && is_bare_literal(&object);
-                    let is_literal = is_quoted_literal || is_bare_num;
-
-                    if is_literal {
-                        // DataPropertyAssertion
-                        let subject_ind = Individual::Named(NamedIndividual {
-                            iri: IRI::new(&subject),
-                        });
-                        let data_property = DataProperty {
-                            iri: IRI::new(&predicate),
-                        };
-
-                        // Parse literal value and datatype
-                        let (value, datatype) = if let Some(idx) = object.find("^^") {
-                            let val = object[..idx].trim_matches('"').to_string();
-                            let dt_str = object[idx + 2..].to_string();
-                            let dt_iri = IRI::new(&dt_str);
-                            let dt_url = dt_iri.to_url().ok();
-                            (val, dt_url)
-                        } else if is_bare_num {
-                            bare_literal_parts(&object)
-                        } else {
-                            (object.trim_matches('"').to_string(), None)
-                        };
-
-                        let literal = Literal {
-                            value,
-                            language: None,
-                            datatype,
-                        };
-
-                        let axiom = DataPropertyAssertionAxiom {
-                            id: generate_axiom_id(),
-                            property: crate::ontology::DataPropertyExpression::DataProperty(
-                                data_property,
-                            ),
-                            individual: subject_ind,
-                            value: literal,
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::DataPropertyAssertion(axiom));
-                    } else {
-                        // ObjectPropertyAssertion
-                        let subject_ind = Individual::Named(NamedIndividual {
-                            iri: IRI::new(&subject),
-                        });
-                        let object_ind = Individual::Named(NamedIndividual {
-                            iri: IRI::new(&object),
-                        });
-                        let property = ObjectProperty::new(IRI::new(&predicate))?;
-
-                        let axiom = ObjectPropertyAssertionAxiom {
-                            id: generate_axiom_id(),
-                            property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                                property,
-                            ),
-                            source: subject_ind,
-                            target: object_ind,
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::ObjectPropertyAssertion(axiom));
-                    }
-                }
-            }
-        }
-
-        Ok(())
+        super::rdf_to_owl::process_triple(ontology, &subject, &predicate, &object)
     }
 }
 
@@ -3603,8 +3068,64 @@ impl OntologySerializer for TurtleSerializer {
             }
         }
 
+        // ── CR-011 M2: ontology-level annotations and SWRL rules ────────
+        //    (shared preservation form; the hand-rolled axiom loop above
+        //    has no arm for either, so they would otherwise be dropped
+        //    silently on a Turtle round-trip.)
+        for triple in crate::semantics::owl_rdf_mapping::ontology_preservation_triples(ontology)? {
+            content.push_str(&render_preservation_triple(&triple)?);
+            content.push('\n');
+        }
+
         Ok(content)
     }
+}
+
+/// Render one preservation triple as a Turtle statement, escaping the
+/// literal payload so rule text (which contains quotes) round-trips.
+fn render_preservation_triple(triple: &RdfTriple) -> Result<String> {
+    let subject = match &triple.subject {
+        RdfTerm::Iri(url) => format!("<{url}>"),
+        RdfTerm::BlankNode(id) => format!("_:{id}"),
+        other => {
+            return Err(Error::ontology_parsing(format!(
+                "Turtle: unsupported preservation subject {other:?}"
+            )));
+        }
+    };
+    let predicate = match &triple.predicate {
+        RdfTerm::Iri(url) => format!("<{url}>"),
+        other => {
+            return Err(Error::ontology_parsing(format!(
+                "Turtle: unsupported preservation predicate {other:?}"
+            )));
+        }
+    };
+    let object = match &triple.object {
+        RdfTerm::Iri(url) => format!("<{url}>"),
+        RdfTerm::BlankNode(id) => format!("_:{id}"),
+        RdfTerm::Literal {
+            value,
+            datatype,
+            language,
+            ..
+        } => {
+            let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+            let mut out = format!("\"{escaped}\"");
+            if let Some(lang) = language {
+                out.push_str(&format!("@{lang}"));
+            } else if let Some(dt) = datatype {
+                out.push_str(&format!("^^<{dt}>"));
+            }
+            out
+        }
+        other => {
+            return Err(Error::ontology_parsing(format!(
+                "Turtle: unsupported preservation object {other:?}"
+            )));
+        }
+    };
+    Ok(format!("{subject} {predicate} {object} ."))
 }
 
 /// Save ontology to Turtle file

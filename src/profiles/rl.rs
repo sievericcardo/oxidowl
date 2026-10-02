@@ -13,7 +13,8 @@
 use crate::error::OxidowlError;
 use crate::ontology::axioms::AxiomTrait;
 use crate::ontology::{
-    Axiom, ClassExpression, DataPropertyExpression, DataRange, ObjectPropertyExpression, Ontology,
+    Axiom, ClassExpression, DataPropertyExpression, DataRange, Entity, ObjectPropertyExpression,
+    Ontology,
 };
 use crate::profiles::{
     OWL2Profile, ProfileValidationReport, ProfileValidator, ProfileViolation, ProfileViolationType,
@@ -28,6 +29,38 @@ impl RLValidator {
     #[must_use]
     pub fn new() -> Self {
         Self
+    }
+
+    /// Check for illegal punning between classes and datatypes.
+    ///
+    /// OWL 2 RL (like OWL 2 DL) disallows using a single IRI as both a class
+    /// and a datatype, although class/individual punning is permitted.
+    fn check_illegal_punning(&self, ontology: &Ontology, report: &mut ProfileValidationReport) {
+        let mut class_iris = std::collections::HashSet::new();
+        let mut datatype_iris = std::collections::HashSet::new();
+
+        for axiom in ontology.axioms() {
+            if let Axiom::Declaration(decl) = axiom {
+                match &decl.entity {
+                    Entity::Class(iri) => {
+                        class_iris.insert(iri.clone());
+                    }
+                    Entity::Datatype(iri) => {
+                        datatype_iris.insert(iri.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        for iri in class_iris.intersection(&datatype_iris) {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedAxiom("IllegalPunning".to_string()),
+                format!(
+                    "IRI {iri} is used both as a class and as a datatype (illegal punning in OWL 2 RL)"
+                ),
+            ));
+        }
     }
 
     /// Validate class expressions in the ontology
@@ -284,6 +317,9 @@ impl ProfileValidator for RLValidator {
         // which is not checked by is_axiom_allowed (it returns true unconditionally).
         self.validate_data_ranges(ontology, &mut report)?;
 
+        // OWL 2 RL disallows punning a single IRI as both a class and a datatype.
+        self.check_illegal_punning(ontology, &mut report);
+
         Ok(report)
     }
 
@@ -422,7 +458,7 @@ impl ProfileValidator for RLValidator {
             Axiom::DifferentIndividuals(_) => true,
 
             // Other axioms
-            Axiom::HasKey(_) => true,              // Allowed in RL
+            Axiom::HasKey(_) => false, // HasKey is not allowed in OWL 2 RL
             Axiom::DatatypeDefinition(_) => false, // Not allowed in RL
             Axiom::Declaration(_) => true,
             Axiom::AnnotationAssertion(_) => true,
@@ -651,18 +687,20 @@ mod tests {
         let validator = RLValidator::new();
         let mut ontology = Ontology::new();
 
-        // Add a non-RL axiom: DisjointUnion is explicitly prohibited in OWL 2 RL
+        // Add a non-RL axiom: DisjointUnion is explicitly prohibited in OWL 2 RL.
+        // `set_axioms` (not a bare field push) keeps the incremental axiom
+        // index in sync — direct `axioms` mutation leaves it stale (CR-011 NR-1).
         let class_a = ClassExpression::Class(Class::new(IRI::new("http://example.org/A")));
         let class_b = ClassExpression::Class(Class::new(IRI::new("http://example.org/B")));
         let class_c = ClassExpression::Class(Class::new(IRI::new("http://example.org/C")));
-        ontology.axioms.push(Axiom::DisjointUnion(
+        ontology.set_axioms(vec![Axiom::DisjointUnion(
             crate::ontology::axioms::DisjointUnionAxiom {
                 id: 0,
                 class: class_a,
                 disjoint_classes: vec![class_b, class_c],
                 annotations: Vec::new(),
             },
-        ));
+        )]);
 
         let report = validator
             .validate(&ontology)

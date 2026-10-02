@@ -17,12 +17,88 @@ use crate::Result;
 use crate::ontology::axioms::Axiom;
 use crate::ontology::{
     ClassExpression, DataPropertyExpression, DataRange, Individual, ObjectPropertyExpression,
-    OntologyRef,
+    Ontology, OntologyRef,
 };
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+// ── Top / Bottom Entity Markers ──────────────────────────────────────────────
+
+/// Identifies entities that are the built-in TOP or BOTTOM marker of their
+/// hierarchy (e.g. `owl:Thing` / `owl:Nothing`, `owl:topObjectProperty` /
+/// `owl:bottomObjectProperty`, `owl:topDataProperty` / `owl:bottomDataProperty`).
+///
+/// Used by [`Node::get_flattened_representative`] and the `get_entities_minus_*`
+/// helpers to mirror OWLAPI's behaviour of preferring non-marker entities.
+pub trait IsTopBottomEntity {
+    /// Whether this entity is a built-in TOP or BOTTOM marker.
+    fn is_top_bottom_entity(&self) -> bool;
+}
+
+impl IsTopBottomEntity for ClassExpression {
+    fn is_top_bottom_entity(&self) -> bool {
+        matches!(self, ClassExpression::Class(c) if c.is_thing() || c.is_nothing())
+    }
+}
+
+impl IsTopBottomEntity for ObjectPropertyExpression {
+    fn is_top_bottom_entity(&self) -> bool {
+        matches!(self, ObjectPropertyExpression::ObjectProperty(p) if is_top_bottom_object_property_iri(&p.iri))
+    }
+}
+
+impl IsTopBottomEntity for DataPropertyExpression {
+    fn is_top_bottom_entity(&self) -> bool {
+        matches!(self, DataPropertyExpression::DataProperty(p) if is_top_bottom_data_property_iri(&p.iri))
+    }
+}
+
+impl IsTopBottomEntity for Individual {
+    fn is_top_bottom_entity(&self) -> bool {
+        false
+    }
+}
+
+impl IsTopBottomEntity for crate::ontology::NamedIndividual {
+    fn is_top_bottom_entity(&self) -> bool {
+        false
+    }
+}
+
+impl IsTopBottomEntity for crate::ontology::Literal {
+    fn is_top_bottom_entity(&self) -> bool {
+        false
+    }
+}
+
+fn is_top_bottom_object_property_iri(iri: &crate::ontology::IRI) -> bool {
+    let s = iri.as_str();
+    s == "http://www.w3.org/2002/07/owl#topObjectProperty"
+        || s == "http://www.w3.org/2002/07/owl#bottomObjectProperty"
+}
+
+fn is_top_bottom_data_property_iri(iri: &crate::ontology::IRI) -> bool {
+    let s = iri.as_str();
+    s == "http://www.w3.org/2002/07/owl#topDataProperty"
+        || s == "http://www.w3.org/2002/07/owl#bottomDataProperty"
+}
+
+fn is_top_or_bottom_class(ce: &ClassExpression) -> bool {
+    matches!(ce, ClassExpression::Class(c) if c.is_thing() || c.is_nothing())
+}
+
+/// Reconstruct an [`Individual`] from its Display form (the key used by the
+/// tableau's nominal labels / `individual_map`). Named individuals display as
+/// their IRI; anonymous individuals display as `_:id` and are not reconstructible
+/// here (they carry no semantics for `get_same_individuals`).
+fn individual_from_display(display: &str) -> Option<Individual> {
+    if display.starts_with("_:") {
+        return None;
+    }
+    Some(Individual::named(crate::ontology::IRI::new(display)))
+}
 
 // ── Node / NodeSet ───────────────────────────────────────────────────────────
 
@@ -111,6 +187,62 @@ impl<T: Clone + Eq + Hash> Node<T> {
             .next()
             .cloned()
             .expect("Node must have at least one entity")
+    }
+
+    /// Get all entities in this node minus the built-in TOP marker
+    /// (e.g. `owl:Thing`).
+    #[must_use]
+    pub fn get_entities_minus_top(&self) -> HashSet<T>
+    where
+        T: IsTopBottomEntity,
+    {
+        self.entities
+            .iter()
+            .filter(|e| !e.is_top_bottom_entity())
+            .cloned()
+            .collect()
+    }
+
+    /// Get all entities in this node minus the built-in BOTTOM marker
+    /// (e.g. `owl:Nothing`).
+    #[must_use]
+    pub fn get_entities_minus_bottom(&self) -> HashSet<T>
+    where
+        T: IsTopBottomEntity,
+    {
+        self.entities
+            .iter()
+            .filter(|e| !e.is_top_bottom_entity())
+            .cloned()
+            .collect()
+    }
+
+    /// Get all entities in this node minus both the TOP and BOTTOM markers.
+    #[must_use]
+    pub fn get_entities_minus_top_bottom(&self) -> HashSet<T>
+    where
+        T: IsTopBottomEntity,
+    {
+        self.entities
+            .iter()
+            .filter(|e| !e.is_top_bottom_entity())
+            .cloned()
+            .collect()
+    }
+
+    /// Get a representative element, preferring an entity that is not a built-in
+    /// TOP or BOTTOM marker. For a bottom node such as `{owl:Nothing, K}` this
+    /// returns `K`; for a plain node it behaves like [`get_representative_element`].
+    #[must_use]
+    pub fn get_flattened_representative(&self) -> T
+    where
+        T: Clone + IsTopBottomEntity,
+    {
+        self.entities
+            .iter()
+            .find(|e| !e.is_top_bottom_entity())
+            .cloned()
+            .unwrap_or_else(|| self.get_representative_element())
     }
 
     /// Whether this is the TOP node (owl:Thing equivalence class).
@@ -213,6 +345,46 @@ impl<T: Clone + Eq + Hash> NodeSet<T> {
         result
     }
 
+    /// Get all entities flattened across all nodes, excluding the TOP node.
+    #[must_use]
+    pub fn get_entities_minus_top(&self) -> HashSet<T> {
+        let mut result = HashSet::new();
+        for node in &self.nodes {
+            if node.is_top_node() {
+                continue;
+            }
+            result.extend(node.entities.iter().cloned());
+        }
+        result
+    }
+
+    /// Get all entities flattened across all nodes, excluding the BOTTOM node.
+    #[must_use]
+    pub fn get_entities_minus_bottom(&self) -> HashSet<T> {
+        let mut result = HashSet::new();
+        for node in &self.nodes {
+            if node.is_bottom_node() {
+                continue;
+            }
+            result.extend(node.entities.iter().cloned());
+        }
+        result
+    }
+
+    /// Get all entities flattened across all nodes, excluding both the TOP and
+    /// BOTTOM nodes. Mirrors OWLAPI's `getEntitiesMinusTopMinusBottom`.
+    #[must_use]
+    pub fn get_entities_minus_top_bottom(&self) -> HashSet<T> {
+        let mut result = HashSet::new();
+        for node in &self.nodes {
+            if node.is_top_node() || node.is_bottom_node() {
+                continue;
+            }
+            result.extend(node.entities.iter().cloned());
+        }
+        result
+    }
+
     /// Check if any node contains the given entity.
     #[must_use]
     pub fn contains_entity(&self, entity: &T) -> bool {
@@ -225,6 +397,223 @@ impl<T: Clone + Eq + Hash> FromIterator<Node<T>> for NodeSet<T> {
         Self {
             nodes: iter.into_iter().collect(),
         }
+    }
+}
+
+// ── Individual Equality (SameAs / DifferentAs) ──────────────────────────────
+
+/// Precomputed `SameIndividual` / `DifferentIndividuals` reasoning for an
+/// ontology.
+///
+/// Same-as components are built as the connected components of the graph whose
+/// edges are the asserted `SameIndividual` axioms, additionally closed over
+/// equality forced by functional / inverse-functional object properties (a
+/// syntactic, sound approximation). Different individuals are tracked at the
+/// level of same-as components: any member of one component is different from
+/// every member of a component it is pairwise-declared different from.
+#[derive(Debug, Clone, Default)]
+pub struct IndividualEquality {
+    /// Same-as component representative -> set of members (includes the
+    /// representative).
+    components: HashMap<Individual, HashSet<Individual>>,
+    /// Individual -> representative of its same-as component.
+    rep_of: HashMap<Individual, Individual>,
+    /// Component representative -> set of different-component representatives.
+    different: HashMap<Individual, HashSet<Individual>>,
+    /// Whether a `SameIndividual`/`DifferentIndividuals` contradiction was
+    /// detected (the ontology is then inconsistent).
+    pub contradiction: bool,
+}
+
+impl IndividualEquality {
+    /// Build the equality structure from an ontology.
+    pub fn from_ontology(ontology: &Ontology) -> Self {
+        let mut adjacency: HashMap<Individual, Vec<Individual>> = HashMap::new();
+        let mut all: HashSet<Individual> = HashSet::new();
+        let mut add_edge = |a: Individual, b: Individual| {
+            adjacency.entry(a.clone()).or_default().push(b.clone());
+            adjacency.entry(b).or_default().push(a);
+        };
+
+        // 1. SameIndividual axioms → connected components.
+        for axiom in ontology.axioms() {
+            if let Axiom::SameIndividual(sa) = axiom {
+                for i in 0..sa.individuals.len() {
+                    all.insert(sa.individuals[i].clone());
+                    for j in (i + 1)..sa.individuals.len() {
+                        add_edge(sa.individuals[i].clone(), sa.individuals[j].clone());
+                    }
+                }
+            }
+        }
+
+        // 2. Functional / inverse-functional property-driven equality (syntactic).
+        Self::collect_functional_equality(ontology, &mut add_edge, &mut all);
+
+        // 3. BFS to build same-as components.
+        let mut components: HashMap<Individual, HashSet<Individual>> = HashMap::new();
+        let mut rep_of: HashMap<Individual, Individual> = HashMap::new();
+        let mut visited: HashSet<Individual> = HashSet::new();
+        for start in &all {
+            if visited.contains(start) {
+                continue;
+            }
+            let mut component = HashSet::new();
+            let mut stack = vec![start.clone()];
+            visited.insert(start.clone());
+            while let Some(node) = stack.pop() {
+                component.insert(node.clone());
+                if let Some(neighbors) = adjacency.get(&node) {
+                    for n in neighbors {
+                        if visited.insert(n.clone()) {
+                            stack.push(n.clone());
+                        }
+                    }
+                }
+            }
+            let rep = component
+                .iter()
+                .next()
+                .cloned()
+                .expect("component is never empty");
+            for m in &component {
+                rep_of.insert(m.clone(), rep.clone());
+            }
+            components.insert(rep, component);
+        }
+
+        // 4. DifferentIndividuals → edges between component representatives.
+        let mut different: HashMap<Individual, HashSet<Individual>> = HashMap::new();
+        let mut contradiction = false;
+        for axiom in ontology.axioms() {
+            if let Axiom::DifferentIndividuals(da) = axiom {
+                let reps: HashSet<Individual> = da
+                    .individuals
+                    .iter()
+                    .map(|i| rep_of.get(i).cloned().unwrap_or_else(|| i.clone()))
+                    .collect();
+                for r1 in &reps {
+                    for r2 in &reps {
+                        if r1 != r2 {
+                            different.entry(r1.clone()).or_default().insert(r2.clone());
+                        }
+                    }
+                }
+                // Two members of a DifferentIndividuals axiom in the SAME same-as
+                // component means SameIndividual ⊓ DifferentIndividuals → inconsistent.
+                let mut seen_comps: HashSet<Individual> = HashSet::new();
+                for i in &da.individuals {
+                    let r = rep_of.get(i).cloned().unwrap_or_else(|| i.clone());
+                    if !seen_comps.insert(r) {
+                        contradiction = true;
+                    }
+                }
+            }
+        }
+
+        Self {
+            components,
+            rep_of,
+            different,
+            contradiction,
+        }
+    }
+
+    /// Syntactic (sound) equality derivation from functional and
+    /// inverse-functional object properties:
+    /// - `p` functional ∧ `p(s,t1)` ∧ `p(s,t2)`  ⇒  `t1 ≡ t2`
+    /// - `p` inverse-functional ∧ `p(s1,t)` ∧ `p(s2,t)`  ⇒  `s1 ≡ s2`
+    fn collect_functional_equality(
+        ontology: &Ontology,
+        add_edge: &mut impl FnMut(Individual, Individual),
+        all: &mut HashSet<Individual>,
+    ) {
+        let mut functional: HashSet<ObjectPropertyExpression> = HashSet::new();
+        let mut inverse_functional: HashSet<ObjectPropertyExpression> = HashSet::new();
+        let mut assertions: Vec<&crate::ontology::axioms::ObjectPropertyAssertionAxiom> =
+            Vec::new();
+        for axiom in ontology.axioms() {
+            match axiom {
+                Axiom::FunctionalObjectProperty(a) => {
+                    functional.insert(a.property.clone());
+                }
+                Axiom::InverseFunctionalObjectProperty(a) => {
+                    inverse_functional.insert(a.property.clone());
+                }
+                Axiom::ObjectPropertyAssertion(a) => assertions.push(a),
+                _ => {}
+            }
+        }
+        if functional.is_empty() && inverse_functional.is_empty() {
+            return;
+        }
+
+        let mut by_src: HashMap<(ObjectPropertyExpression, Individual), Vec<Individual>> =
+            HashMap::new();
+        let mut by_tgt: HashMap<(ObjectPropertyExpression, Individual), Vec<Individual>> =
+            HashMap::new();
+        for a in assertions {
+            if functional.contains(&a.property) {
+                by_src
+                    .entry((a.property.clone(), a.source.clone()))
+                    .or_default()
+                    .push(a.target.clone());
+            }
+            if inverse_functional.contains(&a.property) {
+                by_tgt
+                    .entry((a.property.clone(), a.target.clone()))
+                    .or_default()
+                    .push(a.source.clone());
+            }
+        }
+        for ((_, _), targets) in by_src {
+            for i in 0..targets.len() {
+                all.insert(targets[i].clone());
+                for j in (i + 1)..targets.len() {
+                    add_edge(targets[i].clone(), targets[j].clone());
+                }
+            }
+        }
+        for ((_, _), sources) in by_tgt {
+            for i in 0..sources.len() {
+                all.insert(sources[i].clone());
+                for j in (i + 1)..sources.len() {
+                    add_edge(sources[i].clone(), sources[j].clone());
+                }
+            }
+        }
+    }
+
+    /// Get the `Node` of all individuals equivalent to `individual`.
+    pub fn same_as(&self, individual: &Individual) -> Node<Individual> {
+        if let Some(rep) = self.rep_of.get(individual)
+            && let Some(members) = self.components.get(rep)
+        {
+            return Node::new(members.clone());
+        }
+        Node::singleton(individual.clone())
+    }
+
+    /// Get the `NodeSet` of individuals different from `individual`, grouped by
+    /// same-as component.
+    pub fn different(&self, individual: &Individual) -> NodeSet<Individual> {
+        let rep = self
+            .rep_of
+            .get(individual)
+            .cloned()
+            .unwrap_or_else(|| individual.clone());
+        let mut nodes = HashSet::new();
+        if let Some(diffs) = self.different.get(&rep) {
+            for d in diffs {
+                let members = self
+                    .components
+                    .get(d)
+                    .cloned()
+                    .unwrap_or_else(|| HashSet::from([d.clone()]));
+                nodes.insert(Node::new(members));
+            }
+        }
+        NodeSet::new(nodes)
     }
 }
 
@@ -667,6 +1056,10 @@ pub trait OWLReasoner: Send + Sync {
     }
 
     /// Check whether entailment checking is supported for a given axiom type.
+    ///
+    /// The default is conservative (class axioms only); the tableau-backed
+    /// [`TableauOWLReasoner`] overrides this to report the full workstream-A7
+    /// coverage.
     fn is_entailment_checking_supported(
         &self,
         axiom_type: &crate::ontology::axioms::AxiomType,
@@ -728,6 +1121,8 @@ pub struct TableauOWLReasoner {
     cached_hierarchy: Mutex<Option<ClassificationCache>>,
     /// Cached property hierarchy (lazily computed).
     cached_property_hierarchy: Mutex<Option<PropertyHierarchyCache>>,
+    /// Cached SameAs / DifferentAs components (lazily computed).
+    cached_individual_equality: Mutex<Option<IndividualEquality>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -778,7 +1173,59 @@ impl TableauOWLReasoner {
             config,
             cached_hierarchy: Mutex::new(None),
             cached_property_hierarchy: Mutex::new(None),
+            cached_individual_equality: Mutex::new(None),
         })
+    }
+
+    /// Ensure the SameAs / DifferentAs components have been computed, populating
+    /// the cache.
+    fn ensure_individual_equality(&self) -> Result<IndividualEquality> {
+        let mut cache =
+            self.cached_individual_equality
+                .lock()
+                .map_err(|e| crate::Error::Internal {
+                    message: format!("Lock poisoned: {e}"),
+                })?;
+        if let Some(eq) = cache.as_ref() {
+            return Ok(eq.clone());
+        }
+        let guard = self.ontology.read().map_err(|e| crate::Error::Internal {
+            message: format!("Lock poisoned: {e}"),
+        })?;
+        let equality = IndividualEquality::from_ontology(&guard);
+        drop(guard);
+        *cache = Some(equality.clone());
+        Ok(equality)
+    }
+
+    /// Compute the transitive closure of the subclass relation for `class` from
+    /// the classification cache, excluding equivalent classes.
+    fn collect_strict_subclasses(
+        cache: &ClassificationCache,
+        class: &ClassExpression,
+    ) -> Vec<ClassExpression> {
+        let equivalents = cache.equivalent_map.get(class).cloned().unwrap_or_default();
+        let mut result: Vec<ClassExpression> = Vec::new();
+        let mut seen: HashSet<ClassExpression> = HashSet::new();
+        let mut stack: Vec<ClassExpression> = cache
+            .super_class_map
+            .get(class)
+            .into_iter()
+            .flat_map(|s| s.iter().cloned())
+            .collect();
+        while let Some(c) = stack.pop() {
+            if !seen.insert(c.clone()) {
+                continue;
+            }
+            if c == *class || equivalents.contains(&c) {
+                continue;
+            }
+            result.push(c.clone());
+            if let Some(subs) = cache.super_class_map.get(&c) {
+                stack.extend(subs.iter().cloned());
+            }
+        }
+        result
     }
 
     /// Ensure classification has been performed, populating the cache.
@@ -804,13 +1251,22 @@ impl TableauOWLReasoner {
         let mut unsat: HashSet<ClassExpression> = HashSet::new();
 
         for (sub, supers) in &classification.hierarchy {
-            if supers.is_empty() {
-                // subclass with no superclasses = unsatisfiable (owl:Nothing)
-                unsat.insert(sub.clone());
-            }
             for sup in supers {
                 scm.entry(sub.clone()).or_default().insert(sup.clone());
                 supcm.entry(sup.clone()).or_default().insert(sub.clone());
+            }
+        }
+
+        // Determine unsatisfiability via satisfiability checks rather than the
+        // (unsound) "no superclasses ⇒ unsatisfiable" heuristic: a class with no
+        // discovered subsumers is satisfiable unless the tableau proves otherwise.
+        let hierarchy_keys: Vec<ClassExpression> =
+            classification.hierarchy.keys().cloned().collect();
+        for sub in hierarchy_keys {
+            if matches!(&sub, ClassExpression::Class(c) if c.is_nothing())
+                || !reasoner.is_class_satisfiable(&sub)?
+            {
+                unsat.insert(sub.clone());
             }
         }
 
@@ -1258,29 +1714,66 @@ impl OWLReasoner for TableauOWLReasoner {
             })?;
         let cache = cache.as_ref().unwrap();
 
-        let mut disjoint_set = HashSet::new();
-        let _bottom = ClassExpression::Class(crate::ontology::Class {
-            iri: crate::ontology::IRI::owl_nothing(),
-        });
-        if let Some(subs) = cache.super_class_map.get(class) {
-            for sub in subs {
-                if cache.unsatisfiable.contains(sub) {
-                    disjoint_set.insert(sub.clone());
-                }
+        // Collect candidate named classes from the ontology signature.
+        let guard = self.ontology.read().map_err(|e| crate::Error::Internal {
+            message: format!("Lock poisoned: {e}"),
+        })?;
+        let signature = guard.signature()?;
+        drop(guard);
+        let candidates: Vec<ClassExpression> = signature
+            .classes
+            .iter()
+            .map(|c| ClassExpression::Class(c.clone()))
+            .filter(|c| !is_top_or_bottom_class(c))
+            .collect();
+
+        let unsat = cache.unsatisfiable.clone();
+        let equivalents = cache.equivalent_map.get(class).cloned().unwrap_or_default();
+
+        // `owl:Thing` case: `D` is disjoint with `⊤` iff `D` is unsatisfiable
+        // (`⊤ ⊓ D ≡ D ⊑ ⊥`). Return the bottom-equivalent classes.
+        if matches!(class, ClassExpression::Class(c) if c.is_thing()) {
+            let nodes: HashSet<Node<ClassExpression>> =
+                unsat.into_iter().map(Node::singleton).collect();
+            return Ok(NodeSet::new(nodes));
+        }
+
+        // Unsatisfiable `class` case: `¬class ≡ ⊤`, so every satisfiable named
+        // class is entailed disjoint (`D ⊑ ¬class`). Following OWLAPI semantics
+        // we return the named classes in the signature (excluding top/bottom
+        // markers and other bottom-equivalent classes).
+        if unsat.contains(class) || matches!(class, ClassExpression::Class(c) if c.is_nothing()) {
+            let nodes: HashSet<Node<ClassExpression>> = candidates
+                .into_iter()
+                .filter(|c| !unsat.contains(c))
+                .map(Node::singleton)
+                .collect();
+            return Ok(NodeSet::new(nodes));
+        }
+
+        // General case: `D` is disjoint with `ce` iff `ce ⊓ D` is unsatisfiable.
+        let mut disjoint: Vec<ClassExpression> = Vec::new();
+        for d in candidates {
+            if unsat.contains(&d) || equivalents.contains(&d) {
+                continue;
+            }
+            let intersection =
+                ClassExpression::ObjectIntersectionOf(vec![class.clone(), d.clone()]);
+            let reasoner = self.reasoner.lock().map_err(|e| crate::Error::Internal {
+                message: format!("Lock poisoned: {e}"),
+            })?;
+            let sat = reasoner.is_class_satisfiable(&intersection)?;
+            drop(reasoner);
+            if !sat {
+                disjoint.push(d);
             }
         }
-        if disjoint_set.is_empty() {
-            Ok(NodeSet::empty())
-        } else {
-            let mut nodes = HashSet::new();
-            for d in disjoint_set {
-                nodes.insert(Node::singleton(d));
-            }
-            Ok(NodeSet::new(nodes))
-        }
+        let nodes: HashSet<Node<ClassExpression>> =
+            disjoint.into_iter().map(Node::singleton).collect();
+        Ok(NodeSet::new(nodes))
     }
 
-    fn get_instances(&self, class: &ClassExpression, _direct: bool) -> Result<NodeSet<Individual>> {
+    fn get_instances(&self, class: &ClassExpression, direct: bool) -> Result<NodeSet<Individual>> {
         self.ensure_classified()?;
         let cache = self
             .cached_hierarchy
@@ -1290,13 +1783,45 @@ impl OWLReasoner for TableauOWLReasoner {
             })?;
         let cache = cache.as_ref().unwrap();
 
-        let mut result: HashSet<Node<Individual>> = HashSet::new();
-        if let Some(instances) = cache.instance_map.get(class) {
-            for ind in instances {
-                result.insert(Node::singleton(ind.clone()));
+        let mut instances: HashSet<Individual> =
+            cache.instance_map.get(class).cloned().unwrap_or_default();
+
+        if direct {
+            // Direct instances: individuals that are instances of `class` but not
+            // of any strict subclass of `class` in the computed class hierarchy.
+            let subclasses = Self::collect_strict_subclasses(cache, class);
+            let mut to_remove: HashSet<Individual> = HashSet::new();
+            for sub in &subclasses {
+                if let Some(insts) = cache.instance_map.get(sub) {
+                    to_remove.extend(insts.iter().cloned());
+                }
             }
+            instances.retain(|i| !to_remove.contains(i));
         }
-        Ok(NodeSet::new(result))
+
+        // Group same-as individuals into a single node when the configured
+        // policy requests it; otherwise each individual is its own node.
+        if matches!(
+            self.config.individual_node_set_policy,
+            IndividualNodeSetPolicy::BySameAs
+        ) {
+            let equality = self.ensure_individual_equality()?;
+            let mut nodes: HashSet<Node<Individual>> = HashSet::new();
+            let mut covered: HashSet<Individual> = HashSet::new();
+            for ind in &instances {
+                if !covered.insert(ind.clone()) {
+                    continue;
+                }
+                let node = equality.same_as(ind);
+                covered.extend(node.get_entities().iter().cloned());
+                nodes.insert(node);
+            }
+            Ok(NodeSet::new(nodes))
+        } else {
+            let nodes: HashSet<Node<Individual>> =
+                instances.into_iter().map(Node::singleton).collect();
+            Ok(NodeSet::new(nodes))
+        }
     }
 
     fn get_types(&self, individual: &Individual, direct: bool) -> Result<NodeSet<ClassExpression>> {
@@ -1313,16 +1838,15 @@ impl OWLReasoner for TableauOWLReasoner {
         if let Some(types) = cache.type_map.get(individual) {
             let mut all_types = types.clone();
             if direct {
-                // Remove types that have proper subtypes in the result set
+                // Direct types: keep a type `t` only if the individual is not an
+                // instance of any *proper subclass* of `t`. Equivalently, remove
+                // `t` when another type `other` in the set is a strict subclass
+                // of `t` (in the transitive subclass closure).
                 let to_remove: HashSet<_> = all_types
                     .iter()
                     .filter(|t| {
                         all_types.iter().any(|other| {
-                            other != *t
-                                && cache
-                                    .super_class_map
-                                    .get(other)
-                                    .is_some_and(|subs| subs.contains(t))
+                            other != *t && Self::collect_strict_subclasses(cache, t).contains(other)
                         })
                     })
                     .cloned()
@@ -1337,11 +1861,38 @@ impl OWLReasoner for TableauOWLReasoner {
     }
 
     fn get_same_individuals(&self, individual: &Individual) -> Result<Node<Individual>> {
-        Ok(Node::singleton(individual.clone()))
+        // Syntactic SameIndividual/functional equality first (always available).
+        let equality = self.ensure_individual_equality()?;
+        let mut members: HashSet<Individual> = equality.same_as(individual).get_entities().clone();
+
+        // Back the result with the completed tableau's merge map when it is
+        // available: SameIndividual, functional/inverse-functional and HasKey
+        // equalities materialised by the tableau collapse two individuals onto
+        // the same node. Merge (not replace) so individuals the tableau never
+        // saw still come from the syntactic structure.
+        let reasoner = self.reasoner.lock().map_err(|e| crate::Error::Internal {
+            message: format!("Lock poisoned: {e}"),
+        })?;
+        if let Some(map) = reasoner.tableau_individual_components(&self.ontology)? {
+            let target_node = map.get(&individual.to_string()).copied();
+            if let Some(node) = target_node {
+                for (name, &nid) in &map {
+                    if nid == node
+                        && let Some(ind) = individual_from_display(name)
+                    {
+                        members.insert(ind);
+                    }
+                }
+            }
+        }
+        drop(reasoner);
+
+        Ok(Node::new(members))
     }
 
-    fn get_different_individuals(&self, _individual: &Individual) -> Result<NodeSet<Individual>> {
-        Ok(NodeSet::empty())
+    fn get_different_individuals(&self, individual: &Individual) -> Result<NodeSet<Individual>> {
+        let equality = self.ensure_individual_equality()?;
+        Ok(equality.different(individual))
     }
 
     fn get_top_object_property(&self) -> ObjectPropertyExpression {
@@ -1765,6 +2316,11 @@ impl OWLReasoner for TableauOWLReasoner {
         // Route SubClassOf/ClassAssertion through the typed reasoner methods
         // (is_subclass_of / is_instance_of), which operate directly on
         // ClassExpression values rather than the general check_entailment path.
+        // Every other logical axiom type is answered semantically by
+        // `check_entailment` (workstream A7): property-characteristic and
+        // assertion axioms via the completed-tableau closure / consistency
+        // reductions, data-property hierarchy axioms via the asserted hierarchy
+        // closure.
         match axiom {
             Axiom::SubClassOf(a) => reasoner.is_subclass_of(&a.subclass, &a.superclass),
             Axiom::ClassAssertion(a) => reasoner.is_instance_of(&a.individual, &a.class),
@@ -1773,6 +2329,50 @@ impl OWLReasoner for TableauOWLReasoner {
                 reasoner.check_entailment(axiom, &self.ontology, &mut stats)
             }
         }
+    }
+
+    fn is_entailment_checking_supported(
+        &self,
+        axiom_type: &crate::ontology::axioms::AxiomType,
+    ) -> bool {
+        use crate::ontology::axioms::AxiomType;
+        // Workstream A7: every logical axiom type is answered semantically by
+        // `ReasoningTaskService::check_entailment_semantic`. Only non-logical
+        // types (annotations, SWRL rules, declarations, HasKey,
+        // DatatypeDefinition) are presence-only.
+        matches!(
+            axiom_type,
+            AxiomType::SubClassOf
+                | AxiomType::EquivalentClasses
+                | AxiomType::DisjointClasses
+                | AxiomType::DisjointUnion
+                | AxiomType::SubObjectPropertyOf
+                | AxiomType::EquivalentObjectProperties
+                | AxiomType::DisjointObjectProperties
+                | AxiomType::InverseObjectProperties
+                | AxiomType::ObjectPropertyDomain
+                | AxiomType::ObjectPropertyRange
+                | AxiomType::FunctionalObjectProperty
+                | AxiomType::InverseFunctionalObjectProperty
+                | AxiomType::ReflexiveObjectProperty
+                | AxiomType::IrreflexiveObjectProperty
+                | AxiomType::SymmetricObjectProperty
+                | AxiomType::AsymmetricObjectProperty
+                | AxiomType::TransitiveObjectProperty
+                | AxiomType::SubDataPropertyOf
+                | AxiomType::EquivalentDataProperties
+                | AxiomType::DisjointDataProperties
+                | AxiomType::DataPropertyDomain
+                | AxiomType::DataPropertyRange
+                | AxiomType::FunctionalDataProperty
+                | AxiomType::SameIndividual
+                | AxiomType::DifferentIndividuals
+                | AxiomType::ClassAssertion
+                | AxiomType::ObjectPropertyAssertion
+                | AxiomType::DataPropertyAssertion
+                | AxiomType::NegativeObjectPropertyAssertion
+                | AxiomType::NegativeDataPropertyAssertion
+        )
     }
 
     fn precompute_inferences(&self, inference_types: &[InferenceType]) -> Result<()> {

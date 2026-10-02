@@ -9,7 +9,8 @@ use oxidowl::manager::changes::OntologyChange;
 use oxidowl::manager::*;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
-use std::sync::{Arc, Mutex};
+use oxidowl::{LoaderConfig, MissingImportStrategy};
+use std::sync::{Arc, Mutex, RwLock};
 
 type AddedVec = Arc<Mutex<Vec<Axiom>>>;
 
@@ -377,27 +378,21 @@ fn test_undo_redo() {
         assert_contains_axiom(&guard, &axiom);
     }
 
+    // Undo now auto-applies the inverted (RemoveAxiom) change.
     let inverted = manager.undo(1).expect("Undo should succeed");
     assert_eq!(inverted.len(), 1);
     assert!(matches!(inverted[0], OntologyChange::RemoveAxiom { .. }));
 
     {
-        let mut guard = ont.write().unwrap();
-        guard.remove_axiom(&axiom);
-    }
-    {
         let guard = ont.read().unwrap();
         assert_not_contains_axiom(&guard, &axiom);
     }
 
+    // Redo now auto-applies the original (AddAxiom) change.
     let redo_changes = manager.redo(1).expect("Redo should succeed");
     assert_eq!(redo_changes.len(), 1);
     assert!(matches!(redo_changes[0], OntologyChange::AddAxiom { .. }));
 
-    {
-        let mut guard = ont.write().unwrap();
-        guard.add_axiom(axiom.clone());
-    }
     {
         let guard = ont.read().unwrap();
         assert_contains_axiom(&guard, &axiom);
@@ -451,6 +446,86 @@ fn test_copy_ontology_between_managers() {
         assert_contains_axiom(&guard, &ax2);
         assert_contains_axiom(&guard, &ax3);
     }
+}
+
+/// CR-011 re-review NR-1: `copy_ontology` must rebuild the target's
+/// incremental axiom index (via `Ontology::set_axioms`), not just clone the
+/// public `axioms` field.  Since M1, `is_subclass_of` and
+/// `get_types(direct = true)` answer from `axiom_index()` — a copy that
+/// leaves the index empty under-answers subsumption and leaks supertypes
+/// into the direct-type filter.
+#[test]
+fn test_copy_ontology_rebuilds_axiom_index() {
+    use oxidowl::{Reasoner, ReasonerConfig};
+
+    let mut mgr1 = OntologyManager::new();
+    let mut mgr2 = OntologyManager::new();
+    let df = DF::new();
+
+    let iri = IRI::new("http://ex.org/ont");
+    let ont = mgr1.create_ontology(iri.clone());
+
+    // A ⊑ B ⊑ C; i : A and i : B → direct types of i must be {A} only.
+    let a = df.class_ce("http://ex.org/A");
+    let b = df.class_ce("http://ex.org/B");
+    let c = df.class_ce("http://ex.org/C");
+    let i = df.named("http://ex.org/i");
+    {
+        let mut guard = ont.write().unwrap();
+        guard.add_axiom(df.sub_class_of(a.clone(), b.clone()));
+        guard.add_axiom(df.sub_class_of(b.clone(), c.clone()));
+        guard.add_axiom(df.class_assertion(a.clone(), i.clone()));
+        guard.add_axiom(df.class_assertion(b.clone(), i.clone()));
+    }
+
+    let copied = mgr2
+        .copy_ontology(&mgr1, &iri, None)
+        .expect("copy should succeed");
+
+    // The copy's index must expose the SubClassOf edges (empty before the fix).
+    {
+        let guard = copied.read().unwrap();
+        let index = guard.axiom_index();
+        assert_eq!(
+            index.direct_superclasses(&a).to_vec(),
+            vec![b.clone()],
+            "copied ontology's axiom_index must carry A ⊑ B (CR-011 NR-1)"
+        );
+        assert_eq!(
+            index.direct_superclasses(&b).to_vec(),
+            vec![c.clone()],
+            "copied ontology's axiom_index must carry B ⊑ C (CR-011 NR-1)"
+        );
+    }
+
+    // Index-backed reasoner queries over the copy must still answer.
+    let copied_ontology = {
+        let guard = copied.read().unwrap();
+        Ontology::clone(&guard)
+    };
+    let mut reasoner = Reasoner::new(ReasonerConfig::default()).expect("core reasoner");
+    reasoner
+        .load_ontology(copied_ontology)
+        .expect("load copied ontology");
+
+    assert!(
+        reasoner.is_subclass_of(&a, &c).expect("is_subclass_of"),
+        "A ⊑ C must hold over the copied ontology (axiom_index-backed)"
+    );
+    assert!(
+        !reasoner.is_subclass_of(&c, &a).expect("is_subclass_of"),
+        "C ⊑ A must not hold over the copied ontology"
+    );
+
+    let direct = reasoner
+        .get_types(&i, true)
+        .expect("get_types(direct = true)");
+    assert_eq!(
+        direct,
+        vec![a.clone()],
+        "only A is a direct type of i; supertypes B/C must be filtered out \
+         through the rebuilt axiom_index (CR-011 NR-1)"
+    );
 }
 
 #[test]
@@ -664,4 +739,193 @@ fn test_silent_missing_imports_config() {
     assert_eq!(manager.config().max_history_size, 100);
     assert!(!manager.config().enable_change_history);
     assert_eq!(manager.config().max_import_depth, 20);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Loader — Recursive Import Resolution
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_loader_resolves_imports_recursively() {
+    use oxidowl::OntologyLoader;
+    use oxidowl::SimpleIRIMapper;
+
+    let base = "http://test.org/loaderimports";
+    let imported_iri = IRI::new(&format!("{base}/B"));
+
+    // Write the imported ontology to a temp file.
+    let mut tb = TestBase::new();
+    let b_path = tb.temp_dir.path().join("B.ofn");
+    let b_content = format!(
+        "Ontology(<{imported_iri}>\n  ClassAssertion(<http://test.org/C> <http://test.org/i>)\n)\n"
+    );
+    std::fs::write(&b_path, &b_content).expect("write imported ontology");
+
+    // Write the main ontology that imports B.
+    let a_iri = IRI::new(&format!("{base}/A"));
+    let a_path = tb.temp_dir.path().join("A.ofn");
+    let a_content = format!(
+        "Ontology(<{a_iri}>\n  Import(<{imported_iri}>)\n  SubClassOf(<http://test.org/A> <http://test.org/B>)\n)\n"
+    );
+    std::fs::write(&a_path, &a_content).expect("write main ontology");
+
+    // Map the imported logical IRI to its document.
+    let manager = Arc::new(RwLock::new(OntologyManager::new()));
+    {
+        let mut mgr = manager.write().unwrap();
+        let doc_iri = IRI::new(&format!("file://{}", b_path.display()));
+        mgr.add_iri_mapper(Box::new(SimpleIRIMapper::new(
+            imported_iri.clone(),
+            doc_iri,
+        )));
+    }
+
+    let mut config = LoaderConfig::default();
+    config.resolve_imports = true;
+    let loader = OntologyLoader::new_with_config(manager.clone(), config);
+
+    let main = loader
+        .load_file(&a_path)
+        .expect("load main ontology with import resolution");
+
+    assert_eq!(
+        main.read().unwrap().get_iri().cloned(),
+        Some(a_iri.clone()),
+        "Main ontology IRI should be preserved"
+    );
+
+    // The imported ontology must have been pulled in and registered.
+    {
+        let mgr = manager.read().unwrap();
+        assert!(
+            mgr.contains_ontology(&imported_iri),
+            "Imported ontology should be registered on the manager"
+        );
+        assert!(
+            mgr.contains_ontology(&a_iri),
+            "Main ontology should be registered on the manager"
+        );
+        // Imports closure should include both.
+        let closure = mgr.get_imports_closure(&main).expect("imports closure");
+        assert_eq!(closure.len(), 2, "Closure should contain A and B");
+    }
+}
+
+#[test]
+fn test_loader_skips_unresolved_imports_in_silent_mode() {
+    use oxidowl::OntologyLoader;
+
+    let mut tb = TestBase::new();
+    let a_iri = IRI::new("http://test.org/missingimport/A");
+    let missing = IRI::new("urn:test:does-not-exist");
+    let a_path = tb.temp_dir.path().join("missing.ofn");
+    let a_content = format!("Ontology(<{a_iri}>\n  Import(<{missing}>)\n)\n");
+    std::fs::write(&a_path, &a_content).expect("write main ontology");
+
+    let manager = Arc::new(RwLock::new(OntologyManager::new()));
+    let mut config = LoaderConfig::default();
+    config.resolve_imports = true;
+    config.missing_import_strategy = MissingImportStrategy::Silent;
+    let loader = OntologyLoader::new_with_config(manager.clone(), config);
+
+    // Silent mode: unresolved imports are skipped, load still succeeds.
+    let main = loader.load_file(&a_path).expect("load should succeed");
+    let mgr = manager.read().unwrap();
+    assert!(mgr.contains_ontology(&a_iri));
+    assert!(!mgr.contains_ontology(&missing));
+    let _ = main;
+}
+
+#[test]
+fn test_loader_errors_on_unresolved_imports_in_strict_mode() {
+    use oxidowl::OntologyLoader;
+
+    let mut tb = TestBase::new();
+    let a_iri = IRI::new("http://test.org/strictmissing/A");
+    let missing = IRI::new("urn:test:does-not-exist");
+    let a_path = tb.temp_dir.path().join("strict.ofn");
+    let a_content = format!("Ontology(<{a_iri}>\n  Import(<{missing}>)\n)\n");
+    std::fs::write(&a_path, &a_content).expect("write main ontology");
+
+    let manager = Arc::new(RwLock::new(OntologyManager::new()));
+    let mut config = LoaderConfig::default();
+    config.resolve_imports = true;
+    config.missing_import_strategy = MissingImportStrategy::ThrowException;
+    let loader = OntologyLoader::new_with_config(manager.clone(), config);
+
+    assert!(
+        loader.load_file(&a_path).is_err(),
+        "Strict mode should fail on an unresolved import"
+    );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// XZ Compression Roundtrip
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_xz_save_and_load_roundtrip() {
+    use oxidowl::OntologyLoader;
+    use oxidowl::parsers::{load_xz, save_file_xz};
+
+    let mut tb = TestBase::new();
+    let iri = IRI::new("http://ex.org/xzont");
+    let ont = tb.manager.create_ontology(iri.clone());
+    let df = DF::new();
+
+    let a = df.class_ce("http://ex.org/A");
+    let b = df.class_ce("http://ex.org/B");
+    let c = df.class_ce("http://ex.org/C");
+    let ax1 = df.sub_class_of(a.clone(), b.clone());
+    let ax2 = df.sub_class_of(b.clone(), c.clone());
+    let ax3 = df.class_assertion(a.clone(), df.named("http://ex.org/i"));
+    {
+        let mut guard = ont.write().unwrap();
+        guard.add_axiom(ax1.clone());
+        guard.add_axiom(ax2.clone());
+        guard.add_axiom(ax3.clone());
+    }
+    let original = ont.read().unwrap().clone();
+
+    let xz_path = tb.temp_dir.path().join("ont.ofn.xz");
+    save_file_xz(&original, &xz_path, OntologyFormat::Functional).expect("save xz should succeed");
+    assert!(xz_path.exists(), "xz file should exist");
+
+    // Decompress + parse back.
+    let reloaded = load_xz(&xz_path).expect("load xz should succeed");
+    helpers::assertions::assert_ontologies_axiom_equal(&original, &reloaded);
+
+    // Also load via the manager-backed loader.
+    let manager = Arc::new(RwLock::new(OntologyManager::new()));
+    let loader = OntologyLoader::new(manager.clone());
+    let loaded_ref = loader
+        .load_xz(&xz_path)
+        .expect("loader load_xz should succeed");
+    let loaded = loaded_ref.read().unwrap().clone();
+    helpers::assertions::assert_ontologies_axiom_equal(&original, &loaded);
+}
+
+#[test]
+fn test_manager_save_ontology_xz_extension() {
+    let mut tb = TestBase::new();
+    let iri = IRI::new("http://ex.org/xzmanager");
+    let ont = tb.manager.create_ontology(iri.clone());
+    let df = DF::new();
+    let ax = df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.class_ce("http://ex.org/B"),
+    );
+    {
+        let mut guard = ont.write().unwrap();
+        guard.add_axiom(ax.clone());
+    }
+    let original = ont.read().unwrap().clone();
+
+    let xz_path = tb.temp_dir.path().join("ont2.ofn.xz");
+    tb.manager
+        .save_ontology(&iri, &xz_path, OntologyFormat::Functional)
+        .expect("manager save with .xz extension should succeed");
+
+    let reloaded = oxidowl::parsers::load_xz(&xz_path).expect("reload xz");
+    helpers::assertions::assert_ontologies_axiom_equal(&original, &reloaded);
 }

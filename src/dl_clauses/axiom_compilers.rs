@@ -108,6 +108,10 @@ pub trait AxiomCompiler: HelperMethods + UnionDisjunctiveCompiler {
                 debug!("Found SWRL Rule axiom");
                 self.compile_swrl_rule_axiom(axiom)
             }
+            Axiom::DatatypeDefinition(axiom) => {
+                debug!("Found DatatypeDefinition axiom");
+                self.compile_datatype_definition_axiom(axiom)
+            }
             _ => {
                 // For remaining unsupported axiom types, return empty clause set for now
                 debug!(
@@ -309,6 +313,17 @@ pub trait AxiomCompiler: HelperMethods + UnionDisjunctiveCompiler {
     fn compile_swrl_rule_axiom(
         &mut self,
         axiom: &crate::ontology::SWRLRuleAxiom,
+    ) -> Result<Vec<DLClause>>;
+
+    /// Compile `DatatypeDefinition` axiom (workstream A4).
+    ///
+    /// `DatatypeDefinition(D, DR)` generates the clause `D(x) → DR(x)`: every data value
+    /// of the defined datatype `D` is constrained by the defining data range `DR`. This is
+    /// surfaced to the tableau both through this clause and through the `DatatypeManager`
+    /// lookup in the datatype rules (`DatatypeValidator`).
+    fn compile_datatype_definition_axiom(
+        &mut self,
+        axiom: &crate::ontology::datatypes::DatatypeDefinitionAxiom,
     ) -> Result<Vec<DLClause>>;
 }
 
@@ -1529,6 +1544,22 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
         }
 
         let clause = DLClause::new(head_atoms, body_atoms, self.next_clause_id());
+
+        Ok(vec![clause])
+    }
+
+    fn compile_datatype_definition_axiom(
+        &mut self,
+        axiom: &crate::ontology::datatypes::DatatypeDefinitionAxiom,
+    ) -> Result<Vec<DLClause>> {
+        // DatatypeDefinition(D, DR) generates: D(x) → DR(x).
+        // Every literal of datatype D must lie in the value space of the defining range DR.
+        let var_x = self.fresh_variable();
+        let datatype_pred = format!("{}", axiom.datatype);
+        let datatype_atom = DLAtom::concept_assertion(&datatype_pred, &var_x);
+        let range_atom = self.compile_data_range_to_constraint(&axiom.data_range, &var_x)?;
+
+        let clause = DLClause::new(vec![range_atom], vec![datatype_atom], self.next_clause_id());
 
         Ok(vec![clause])
     }

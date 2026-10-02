@@ -162,7 +162,7 @@ fn test_el_violation_inverse() {
 }
 
 #[test]
-fn test_el_violation_disjoint_classes() {
+fn test_el_accepts_disjoint_classes() {
     let df = DF::new();
 
     let c = df.class_ce("http://ex.org/C");
@@ -175,10 +175,13 @@ fn test_el_violation_disjoint_classes() {
     let report = validator.validate(&ont).unwrap();
 
     assert!(
-        !report.is_valid(),
-        "EL validator should reject DisjointClasses"
+        report.is_valid(),
+        "OWL 2 EL permits DisjointClasses (atomic class expressions)"
     );
-    assert!(!report.violations.is_empty(), "Should have violations");
+    assert!(
+        report.violations.is_empty(),
+        "DisjointClasses of named classes must not violate EL"
+    );
 }
 
 #[test]
@@ -233,12 +236,33 @@ fn test_el_violation_irreflexive() {
     let validator = ELValidator::new();
     let report = validator.validate(&ont).unwrap();
 
-    // NOTE: Current EL validator does not explicitly reject IrreflexiveObjectProperty;
-    // it falls through to the wildcard arm. This is a known gap.
+    // OWL 2 EL does not permit IrreflexiveObjectProperty axioms.
     assert!(
-        report.is_valid(),
-        "Current EL validator does not yet reject IrreflexiveObjectProperty"
+        !report.is_valid(),
+        "EL validator should reject IrreflexiveObjectProperty"
     );
+    assert!(!report.violations.is_empty(), "Should have violations");
+}
+
+#[test]
+fn test_el_violation_punning_class_datatype() {
+    let df = DF::new();
+
+    let iri = IRI::new("http://ex.org/Punned");
+    let axioms = vec![
+        df.declaration_axiom(Entity::Class(iri.clone())),
+        df.declaration_axiom(Entity::Datatype(iri)),
+    ];
+    let ont = df.build_ontology(axioms);
+
+    let validator = ELValidator::new();
+    let report = validator.validate(&ont).unwrap();
+
+    assert!(
+        !report.is_valid(),
+        "EL validator should reject class + datatype punning"
+    );
+    assert!(!report.violations.is_empty(), "Should have violations");
 }
 
 #[test]

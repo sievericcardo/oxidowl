@@ -203,13 +203,14 @@ pub use crate::manager::{
     ChangeApplied, ChangeBroadcastStrategy, ManagerConfig, OntologyManagerRef, Snapshot,
 };
 pub use crate::parsers::{
-    DLSyntaxParser, DLSyntaxRenderer, ErrorVerbosity, FunctionalParser, FunctionalSyntaxSerializer,
-    KRSSParser, KRSSRenderer, KRSSVariant, LatexRenderer, ManchesterParser, ManchesterParserConfig,
-    ManchesterRenderer, NTriplesParser, NTriplesSerializer, OwlXmlParser, OwlXmlSerializer,
-    ParserConfig, ParserFactory, RdfCompatibilityMode, RdfXmlParser, RdfXmlSerializer,
-    SerializerConfig, SyntaxValidator, TurtleParser, TurtleSerializer, parse_functional_file,
-    parse_ntriples_file, parse_owl_xml_file, parse_rdf_xml_file, parse_turtle_file, save_file,
-    save_file_gzip, save_to_string,
+    DLSyntaxParser, DLSyntaxRenderer, ErrorVerbosity, FormatParser, FunctionalParser,
+    FunctionalSyntaxSerializer, KRSSParser, KRSSRenderer, KRSSVariant, LatexRenderer,
+    ManchesterParser, ManchesterParserConfig, ManchesterRenderer, NTriplesParser,
+    NTriplesSerializer, OwlXmlParser, OwlXmlSerializer, ParserConfig, ParserFactory,
+    RdfCompatibilityMode, RdfXmlParser, RdfXmlSerializer, SerializerConfig, SyntaxValidator,
+    TurtleParser, TurtleSerializer, parse_bytes, parse_functional_file, parse_ntriples_file,
+    parse_owl_xml_file, parse_rdf_xml_file, parse_str, parse_turtle_file, save_file,
+    save_file_gzip, save_to_bytes, save_to_string,
 };
 pub use crate::profiles::{
     OWL2Profile as ProfileType, ProfileDetectionResult, ProfileValidationReport, ProfileValidator,
@@ -307,8 +308,7 @@ pub use crate::ontology::axioms::{
     SWRLVariable,
 };
 pub use crate::ontology::datatypes::{
-    ConstrainingFacet, DataRange, DatatypeCategory, DatatypeDefinitionAxiom, FacetRestriction,
-    OWL2Datatype, OWLFacet,
+    ConstrainingFacet, DatatypeCategory, DatatypeDefinitionAxiom, OWL2Datatype, OWLFacet,
 };
 pub use crate::ontology::shortform::{
     AnnotationValueShortFormProvider, BidirectionalShortFormProvider, OntologyIRIShortFormProvider,
@@ -317,21 +317,21 @@ pub use crate::ontology::shortform::{
 pub use crate::ontology::vocabulary::{Namespaces, PrefixManager};
 pub use crate::ontology::{
     Annotation, AnnotationProperty, AnnotationSubject, AnnotationValue, Class, ClassExpression,
-    DataProperty, DataPropertyExpression, IRI, ImportsDeclaration, Individual, Literal,
-    NamedIndividual, ObjectProperty, ObjectPropertyExpression, Ontology, OntologyFormat,
-    OntologyID, OntologyRef, Signature,
+    DataProperty, DataPropertyExpression, DataRange, FacetRestriction, IRI, ImportsDeclaration,
+    Individual, Literal, NamedIndividual, ObjectProperty, ObjectPropertyExpression, Ontology,
+    OntologyFormat, OntologyID, OntologyRef, Signature,
 };
 pub use crate::parsers::obo::{
     OBOOutputConfig, OBOParser, OBOParserConfig, OBOWriter, Obo2Owl, Owl2Obo,
 };
 pub use crate::parsers::rio::{
     binary_rdf::{BinaryRdfParser, BinaryRdfRenderer},
-    hdt::{HDTParser, HDTRenderer},
+    hdt::{HdtParser, HdtRenderer},
     jsonld::{JsonLdParser, JsonLdRenderer},
     n3::{N3Parser, N3Renderer},
     nquads::{NQuadsParser, NQuadsRenderer},
     rdf_json::{RdfJsonParser, RdfJsonRenderer},
-    rdfa::RDFaParser,
+    rdfa::{RdfaParser, RdfaRenderer},
     trig::{TriGParser, TriGRenderer},
     trix::{TriXParser, TriXRenderer},
 };

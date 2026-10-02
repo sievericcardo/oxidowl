@@ -569,37 +569,30 @@ fn test_plain_literal_type_folding() {
 /// Construct a DatatypeDefinition axiom with a custom datatype.
 #[test]
 fn test_datatype_definition_in_ontology() {
-    use horned_owl::model::Build;
-
     let id: AxiomId = 42;
-    let b = Build::new_string();
 
-    let custom_dt = b.datatype("http://example.org/myInteger");
-    let integer_range = horned_owl::model::DataRange::Datatype(
-        b.datatype("http://www.w3.org/2001/XMLSchema#integer"),
-    );
+    let custom_dt = IRI::new("http://example.org/myInteger");
+    let integer_range = DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#integer"));
 
-    let axiom = DatatypeDefinitionAxiom::new(id, custom_dt.into(), integer_range, vec![]);
+    let axiom = DatatypeDefinitionAxiom::new(id, custom_dt, integer_range, vec![]);
 
     assert_eq!(axiom.id, 42);
-    assert!(axiom.datatype.as_ref().contains("myInteger"));
+    assert!(axiom.datatype.as_str().contains("myInteger"));
     assert!(axiom.annotations.is_empty());
 
     match &axiom.data_range {
-        horned_owl::model::DataRange::Datatype(dt) => {
-            assert!(dt.as_ref().contains("integer"));
+        DataRange::Datatype(dt) => {
+            assert!(dt.as_str().contains("integer"));
         }
         _ => panic!("Expected Datatype range"),
     }
 
     let axiom2 = DatatypeDefinitionAxiom {
         id: 43,
-        datatype: b.iri("http://example.org/myString").into(),
-        data_range: horned_owl::model::DataRange::Datatype(
-            b.datatype("http://www.w3.org/2001/XMLSchema#string"),
-        ),
+        datatype: IRI::new("http://example.org/myString"),
+        data_range: DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#string")),
         annotations: vec![],
     };
     assert_eq!(axiom2.id, 43);
-    assert!(axiom2.datatype.as_ref().contains("myString"));
+    assert!(axiom2.datatype.as_str().contains("myString"));
 }

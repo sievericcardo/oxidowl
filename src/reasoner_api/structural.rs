@@ -3,7 +3,9 @@
 //! Operates purely on asserted axioms (no tableau). O(1) lookups on
 //! indexed axiom sets. Useful for testing, pre-checks, and fallback.
 
-use super::{Node, NodeSet, OWLReasoner, OWLReasonerConfiguration, ReasonerFactory};
+use super::{
+    IndividualEquality, Node, NodeSet, OWLReasoner, OWLReasonerConfiguration, ReasonerFactory,
+};
 use crate::Result;
 use crate::ontology::axioms::Axiom;
 use crate::ontology::axioms::{
@@ -27,6 +29,8 @@ use std::collections::{HashMap, HashSet};
 pub struct StructuralReasoner {
     ontology: OntologyRef,
     index: AxiomIndex,
+    /// Precomputed SameAs / DifferentAs components (snapshot at construction).
+    individual_equality: IndividualEquality,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -66,8 +70,14 @@ impl StructuralReasoner {
         let mut reasoner = Self {
             ontology: ontology.clone(),
             index: AxiomIndex::default(),
+            individual_equality: IndividualEquality::default(),
         };
         reasoner.rebuild_index();
+        let Ok(guard) = ontology.read() else {
+            eprintln!("StructuralReasoner: ontology lock poisoned, equality index will be empty");
+            return reasoner;
+        };
+        reasoner.individual_equality = IndividualEquality::from_ontology(&guard);
         reasoner
     }
 
@@ -378,6 +388,20 @@ impl StructuralReasoner {
         }
         result
     }
+
+    /// All individuals directly asserted to be instances of `ce`.
+    fn asserted_instances_of(&self, ce: &ClassExpression) -> HashSet<Individual> {
+        let mut result = HashSet::new();
+        for (ind, assertions) in &self.index.class_assertions {
+            for ax in assertions {
+                if &ax.class == ce {
+                    result.insert(ind.clone());
+                    break;
+                }
+            }
+        }
+        result
+    }
 }
 
 impl OWLReasoner for StructuralReasoner {
@@ -475,59 +499,73 @@ impl OWLReasoner for StructuralReasoner {
         Ok(NodeSet::new(disjoint))
     }
 
-    fn get_instances(&self, class: &ClassExpression, _direct: bool) -> Result<NodeSet<Individual>> {
-        let mut nodes = HashSet::new();
-        // Search class assertions
-        for (ind, assertions) in &self.index.class_assertions {
-            for ax in assertions {
-                if &ax.class == class {
-                    nodes.insert(Node::singleton(ind.clone()));
-                    break;
+    fn get_instances(&self, class: &ClassExpression, direct: bool) -> Result<NodeSet<Individual>> {
+        let mut all = self.asserted_instances_of(class);
+
+        // Instances of equivalent classes are also instances of `class`.
+        if let Some(eqs) = self.index.equivalent_classes.get(class) {
+            for eq in eqs {
+                for ce in &eq.classes {
+                    all.extend(self.asserted_instances_of(ce));
                 }
             }
         }
-        Ok(NodeSet::new(nodes))
-    }
 
-    fn get_types(
-        &self,
-        individual: &Individual,
-        _direct: bool,
-    ) -> Result<NodeSet<ClassExpression>> {
-        let mut nodes = HashSet::new();
-        if let Some(assertions) = self.index.class_assertions.get(individual) {
-            for ax in assertions {
-                nodes.insert(Node::singleton(ax.class.clone()));
+        let subclasses = self.collect_all_subclasses(class, &mut HashSet::new());
+        if direct {
+            // Direct instances: instances of `class` that are not instances of
+            // any (asserted) strict subclass of `class`.
+            let mut to_remove = HashSet::new();
+            for sub in &subclasses {
+                to_remove.extend(self.asserted_instances_of(sub));
+            }
+            all.retain(|i| !to_remove.contains(i));
+        } else {
+            // All instances: also include instances of every subclass (asserted
+            // class hierarchy is monotone).
+            for sub in &subclasses {
+                all.extend(self.asserted_instances_of(sub));
             }
         }
-        Ok(NodeSet::new(nodes))
+
+        Ok(NodeSet::new(all.into_iter().map(Node::singleton).collect()))
+    }
+
+    fn get_types(&self, individual: &Individual, direct: bool) -> Result<NodeSet<ClassExpression>> {
+        let mut all_types: HashSet<ClassExpression> = HashSet::new();
+        if let Some(assertions) = self.index.class_assertions.get(individual) {
+            for ax in assertions {
+                all_types.insert(ax.class.clone());
+            }
+        }
+        if direct {
+            // Direct types: keep a type `t` only if no other asserted type is a
+            // strict subclass of `t`.
+            let to_remove: HashSet<_> = all_types
+                .iter()
+                .filter(|t| {
+                    all_types.iter().any(|other| {
+                        other != *t
+                            && self
+                                .collect_all_subclasses(t, &mut HashSet::new())
+                                .contains(other)
+                    })
+                })
+                .cloned()
+                .collect();
+            all_types.retain(|t| !to_remove.contains(t));
+        }
+        Ok(NodeSet::new(
+            all_types.into_iter().map(Node::singleton).collect(),
+        ))
     }
 
     fn get_same_individuals(&self, individual: &Individual) -> Result<Node<Individual>> {
-        let mut all = HashSet::new();
-        all.insert(individual.clone());
-        if let Some(sames) = self.index.same_individual.get(individual) {
-            for sa in sames {
-                for ind in &sa.individuals {
-                    all.insert(ind.clone());
-                }
-            }
-        }
-        Ok(Node::new(all))
+        Ok(self.individual_equality.same_as(individual))
     }
 
     fn get_different_individuals(&self, individual: &Individual) -> Result<NodeSet<Individual>> {
-        let mut nodes = HashSet::new();
-        if let Some(diffs) = self.index.different_individual.get(individual) {
-            for da in diffs {
-                for ind in &da.individuals {
-                    if ind != individual {
-                        nodes.insert(Node::singleton(ind.clone()));
-                    }
-                }
-            }
-        }
-        Ok(NodeSet::new(nodes))
+        Ok(self.individual_equality.different(individual))
     }
 
     fn get_top_object_property(&self) -> ObjectPropertyExpression {

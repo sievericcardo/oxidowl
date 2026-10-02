@@ -8,8 +8,9 @@ use super::changes::OntologyChange;
 /// Records change batches for undo/redo support.
 ///
 /// Each entry in the history is a batch of changes that were applied
-/// together. Undo computes the inverse of each change in the batch
-/// and returns them (caller must re-apply).
+/// together. Undo computes the inverse of each change in the batch and
+/// returns them; the `OntologyManager` applies the returned changes to
+/// the target ontologies automatically (OWLAPI `undo()` semantics).
 #[derive(Debug)]
 pub struct ChangeHistory {
     /// All recorded change batches, oldest first.
@@ -41,7 +42,7 @@ impl ChangeHistory {
     }
 
     /// Undo the last `n` change batches. Returns the inverse changes.
-    /// The caller must re-apply these inverse changes.
+    /// The `OntologyManager` applies these inverse changes to the model.
     #[must_use]
     pub fn undo(&mut self, n: usize) -> Vec<OntologyChange> {
         let to_undo = std::cmp::min(n, self.position);

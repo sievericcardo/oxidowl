@@ -90,6 +90,16 @@ pub enum ClashType {
         nodes: Vec<NodeId>,
     },
 
+    /// Datatype (concrete-domain) clash — an empty data range was encountered (e.g.
+    /// contradictory facets, an intersection of disjoint datatypes) or an asserted /
+    /// generated data value violates a required data range. Workstream A4.
+    Datatype {
+        /// Node carrying the violated data constraint
+        node: NodeId,
+        /// Human-readable description of the datatype violation
+        description: String,
+    },
+
     /// DL Clause violation detected during tableau expansion
     /// This indicates a clause from the ontology was violated by the tableau state
     ClauseViolation {

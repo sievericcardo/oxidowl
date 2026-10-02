@@ -46,6 +46,10 @@ const OWL_SYMMETRIC: &str = "http://www.w3.org/2002/07/owl#SymmetricProperty";
 const OWL_REFLEXIVE: &str = "http://www.w3.org/2002/07/owl#ReflexiveProperty";
 const OWL_FUNCTIONAL: &str = "http://www.w3.org/2002/07/owl#FunctionalProperty";
 const OWL_INVERSE_FUNCTIONAL: &str = "http://www.w3.org/2002/07/owl#InverseFunctionalProperty";
+const OWL_IRREFLEXIVE: &str = "http://www.w3.org/2002/07/owl#IrreflexiveProperty";
+const OWL_ASYMMETRIC: &str = "http://www.w3.org/2002/07/owl#AsymmetricProperty";
+const OWL_PROPERTY_DISJOINT_WITH: &str = "http://www.w3.org/2002/07/owl#propertyDisjointWith";
+const OWL_HAS_KEY: &str = "http://www.w3.org/2002/07/owl#hasKey";
 const XSD_STRING: &str = "http://www.w3.org/2001/XMLSchema#string";
 const XSD_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
 #[allow(unused)]
@@ -266,6 +270,10 @@ impl OxigraphStore {
             Axiom::ReflexiveObjectProperty(ax) => self.load_reflexive(ax),
             Axiom::FunctionalObjectProperty(ax) => self.load_functional(ax),
             Axiom::InverseFunctionalObjectProperty(ax) => self.load_inverse_functional(ax),
+            Axiom::IrreflexiveObjectProperty(ax) => self.load_irreflexive(ax),
+            Axiom::AsymmetricObjectProperty(ax) => self.load_asymmetric(ax),
+            Axiom::DisjointObjectProperties(ax) => self.load_disjoint_object_props(ax),
+            Axiom::HasKey(ax) => self.load_has_key(ax),
 
             _ => Ok(()), // other axiom types not yet needed
         }
@@ -522,6 +530,110 @@ impl OxigraphStore {
         } else {
             Ok(())
         }
+    }
+
+    /// Load `IrreflexiveObjectProperty(P)` as `P rdf:type owl:IrreflexiveProperty` so the
+    /// RL `prp-irp` consistency rule can detect `P(x,x)`.
+    fn load_irreflexive(
+        &self,
+        ax: &crate::ontology::axioms::IrreflexiveObjectPropertyAxiom,
+    ) -> Result<()> {
+        if let Some(iri) = obj_prop_iri_from_expr(&ax.property) {
+            self.insert(default_quad(
+                named(&iri),
+                named(RDF_TYPE),
+                named(OWL_IRREFLEXIVE),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Load `AsymmetricObjectProperty(P)` as `P rdf:type owl:AsymmetricProperty` so the
+    /// RL `prp-asyp` consistency rule can detect `P(x,y) ∧ P(y,x)`.
+    fn load_asymmetric(
+        &self,
+        ax: &crate::ontology::axioms::AsymmetricObjectPropertyAxiom,
+    ) -> Result<()> {
+        if let Some(iri) = obj_prop_iri_from_expr(&ax.property) {
+            self.insert(default_quad(
+                named(&iri),
+                named(RDF_TYPE),
+                named(OWL_ASYMMETRIC),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Load `DisjointObjectProperties(P1, P2, …)` as `owl:propertyDisjointWith` triples so
+    /// the RL `prp-pdw` consistency rule can detect `P1(x,y) ∧ P2(x,y)`.
+    fn load_disjoint_object_props(
+        &self,
+        ax: &crate::ontology::axioms::DisjointObjectPropertiesAxiom,
+    ) -> Result<()> {
+        let iris: Vec<String> = ax
+            .properties
+            .iter()
+            .filter_map(obj_prop_iri_from_expr)
+            .collect();
+        let disjoint = named(OWL_PROPERTY_DISJOINT_WITH);
+        for i in 0..iris.len() {
+            for j in (i + 1)..iris.len() {
+                self.insert(default_quad(
+                    named(&iris[i]),
+                    disjoint.clone(),
+                    named(&iris[j]),
+                ))?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Load `HasKey(C, keys)` as `C owl:hasKey <rdf:list of key properties>` so the RL
+    /// `prp-key` rule can derive `owl:sameAs` between two C-members sharing a key value.
+    fn load_has_key(&self, ax: &crate::ontology::axioms::HasKeyAxiom) -> Result<()> {
+        let mut key_terms: Vec<Term> = Vec::new();
+        for p in &ax.object_properties {
+            if let Some(iri) = obj_prop_iri_from_expr(p) {
+                key_terms.push(Term::NamedNode(named(&iri)));
+            }
+        }
+        for d in &ax.data_properties {
+            use crate::ontology::DataPropertyExpression;
+            let DataPropertyExpression::DataProperty(dp) = d;
+            key_terms.push(Term::NamedNode(named(dp.iri.as_str())));
+        }
+        if key_terms.is_empty() {
+            return Ok(());
+        }
+        // Build the RDF list (head → rdf:first P1, rdf:rest … → rdf:nil).
+        let head = fresh_blank();
+        let mut cur: NamedOrBlankNode = head.clone().into();
+        for (i, term) in key_terms.iter().enumerate() {
+            self.insert(default_quad(cur.clone(), named(RDF_FIRST), term.clone()))?;
+            if i + 1 == key_terms.len() {
+                self.insert(default_quad(cur.clone(), named(RDF_REST), named(RDF_NIL)))?;
+            } else {
+                let next = fresh_blank();
+                self.insert(default_quad(
+                    cur.clone(),
+                    named(RDF_REST),
+                    Term::BlankNode(next.clone()),
+                ))?;
+                cur = next.into();
+            }
+        }
+        // C owl:hasKey head
+        let class_term = self.class_expr_to_term(&ax.class)?;
+        if let Some(subject) = term_to_named_or_blank(&class_term) {
+            self.insert(default_quad(
+                subject,
+                named(OWL_HAS_KEY),
+                Term::BlankNode(head),
+            ))?;
+        }
+        Ok(())
     }
 
     /// Convert a ClassExpression to an Oxigraph Term, inserting blank-node triples as needed

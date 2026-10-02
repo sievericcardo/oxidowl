@@ -12,7 +12,9 @@
 
 use crate::error::OxidowlError;
 use crate::ontology::axioms::AxiomTrait;
-use crate::ontology::{Axiom, ClassExpression, DataRange, ObjectPropertyExpression, Ontology};
+use crate::ontology::{
+    Axiom, ClassExpression, DataRange, Entity, ObjectPropertyExpression, Ontology,
+};
 use crate::profiles::{
     OWL2Profile, ProfileValidationReport, ProfileValidator, ProfileViolation, ProfileViolationType,
 };
@@ -51,6 +53,38 @@ impl QLValidator {
 
         Self {
             prohibited_constructs,
+        }
+    }
+
+    /// Check for illegal punning between classes and datatypes.
+    ///
+    /// OWL 2 QL (like OWL 2 DL) disallows using a single IRI as both a class
+    /// and a datatype, although class/individual punning is permitted.
+    fn check_illegal_punning(&self, ontology: &Ontology, report: &mut ProfileValidationReport) {
+        let mut class_iris = std::collections::HashSet::new();
+        let mut datatype_iris = std::collections::HashSet::new();
+
+        for axiom in ontology.axioms() {
+            if let Axiom::Declaration(decl) = axiom {
+                match &decl.entity {
+                    Entity::Class(iri) => {
+                        class_iris.insert(iri.clone());
+                    }
+                    Entity::Datatype(iri) => {
+                        datatype_iris.insert(iri.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        for iri in class_iris.intersection(&datatype_iris) {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedAxiom("IllegalPunning".to_string()),
+                format!(
+                    "IRI {iri} is used both as a class and as a datatype (illegal punning in OWL 2 QL)"
+                ),
+            ));
         }
     }
 
@@ -515,6 +549,9 @@ impl ProfileValidator for QLValidator {
         self.validate_class_expressions(ontology, &mut report)?;
         self.validate_data_ranges(ontology, &mut report)?;
 
+        // OWL 2 QL disallows punning a single IRI as both a class and a datatype.
+        self.check_illegal_punning(ontology, &mut report);
+
         Ok(report)
     }
 
@@ -782,16 +819,18 @@ mod tests {
         let validator = QLValidator::new();
         let mut ontology = Ontology::new();
 
-        // Add a non-QL axiom (functional property)
+        // Add a non-QL axiom (functional property).  `set_axioms` (not a bare
+        // field push) keeps the incremental axiom index in sync — direct
+        // `axioms` mutation leaves it stale (CR-011 NR-1).
         let prop = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop"))
             .expect("Failed to create ObjectProperty for test: prop");
-        ontology.axioms.push(Axiom::FunctionalObjectProperty(
+        ontology.set_axioms(vec![Axiom::FunctionalObjectProperty(
             crate::ontology::axioms::FunctionalObjectPropertyAxiom {
                 id: 0,
                 property: crate::ontology::ObjectPropertyExpression::ObjectProperty(prop),
                 annotations: Vec::new(),
             },
-        ));
+        )]);
 
         let report = validator
             .validate(&ontology)

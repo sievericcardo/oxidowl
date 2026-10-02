@@ -1,0 +1,12 @@
+{
+  "id": "diff_003_alc_inconsistent",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff003#>)\nOntology(<http://example.org/diff003>\n  DisjointClasses(:A :B)\n  ClassAssertion(:A :x)\n  ClassAssertion(:B :x)\n)",
+  "base": "http://example.org/diff003#",
+  "axioms": { "min": 3 },
+  "expected": {
+    "consistent": false,
+    "profiles": { "el": true, "ql": true, "rl": true, "dl": true, "full": true }
+  },
+  "rationale": "x is asserted in both A and B while A and B are disjoint, so no interpretation can satisfy the ontology: inconsistent. Profile conformance is a purely syntactic property and is unaffected by the contradiction (DisjointClasses + ClassAssertion are allowed in all five profiles)."
+}

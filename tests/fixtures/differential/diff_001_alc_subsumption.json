@@ -1,0 +1,19 @@
+{
+  "id": "diff_001_alc_subsumption",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff001#>)\nOntology(<http://example.org/diff001>\n  SubClassOf(:A :B)\n  SubClassOf(:B :C)\n  ClassAssertion(:A :a)\n)",
+  "base": "http://example.org/diff001#",
+  "axioms": { "min": 3 },
+  "expected": {
+    "consistent": true,
+    "satisfiable": { "A": true, "B": true, "C": true },
+    "subsumptions": [["A", "B"], ["B", "C"], ["A", "C"], ["A", "owl:Thing"]],
+    "nonSubsumptions": [["C", "A"], ["B", "A"]],
+    "instances": { "A": ["a"], "B": ["a"], "C": ["a"] },
+    "types": { "a": ["A", "B", "C"] },
+    "entailed": ["SubClassOf(:A :C)", "ClassAssertion(:B :a)", "ClassAssertion(:C :a)"],
+    "notEntailed": ["SubClassOf(:C :A)", "SubClassOf(:C :B)"],
+    "profiles": { "el": true, "ql": true, "rl": true, "dl": true, "full": true }
+  },
+  "rationale": "A⊑B ∧ B⊑C entails A⊑C by transitivity of ⊑. a∈A entails a∈B and a∈C by modus ponens (A⊑B, A⊑C). No disjointness or complements, so A/B/C satisfiable and the ontology is consistent. A plain SubClassOf chain conforms to every OWL 2 profile (matches W3C EL/QL/RL/ProfileDetect tests)."
+}

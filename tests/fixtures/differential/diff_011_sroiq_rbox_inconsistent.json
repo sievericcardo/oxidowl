@@ -1,0 +1,11 @@
+{
+  "id": "diff_011_sroiq_rbox_inconsistent",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff011#>)\nOntology(<http://example.org/diff011>\n  IrreflexiveObjectProperty(:irr)\n  AsymmetricObjectProperty(:asym)\n  ObjectPropertyAssertion(:irr :y :y)\n  ObjectPropertyAssertion(:asym :a :b)\n  ObjectPropertyAssertion(:asym :b :a)\n)",
+  "base": "http://example.org/diff011#",
+  "axioms": { "min": 5 },
+  "expected": {
+    "consistent": false
+  },
+  "rationale": "SROIQ RBox violations: IrreflexiveObjectProperty(irr) forbids irr(y,y) (asserted), and AsymmetricObjectProperty(asym) forbids having both asym(a,b) and asym(b,a) (asserted). Either violation alone makes the ontology inconsistent."
+}

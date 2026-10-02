@@ -180,6 +180,89 @@ fn manager_undo_redo() {
     assert!(undone.is_ok(), "Undo should succeed: {:?}", undone.err());
 }
 
+#[test]
+fn manager_undo_redo_auto_applies() {
+    let config = ManagerConfig {
+        enable_change_history: true,
+        max_history_size: 100,
+        silent_missing_imports: true,
+        max_import_depth: 20,
+    };
+    let mut manager = OntologyManager::new_with_config(config);
+    let iri = IRI::new("http://ex.org/ont");
+    let ont = manager.create_ontology(iri.clone());
+    let df = DF::new();
+    let axiom = df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.class_ce("http://ex.org/B"),
+    );
+
+    manager.apply_change(OntologyChange::AddAxiom {
+        ontology_iri: iri.clone(),
+        axiom: axiom.clone(),
+    });
+
+    {
+        let guard = ont.read().unwrap();
+        assert_contains_axiom(&guard, &axiom);
+    }
+
+    // Undo auto-applies: axiom removed from the ontology.
+    let undone = manager.undo(1).expect("Undo should succeed");
+    assert_eq!(undone.len(), 1);
+    assert!(matches!(undone[0], OntologyChange::RemoveAxiom { .. }));
+    {
+        let guard = ont.read().unwrap();
+        assert_not_contains_axiom(&guard, &axiom);
+    }
+
+    // Redo auto-applies: axiom restored.
+    let redone = manager.redo(1).expect("Redo should succeed");
+    assert_eq!(redone.len(), 1);
+    assert!(matches!(redone[0], OntologyChange::AddAxiom { .. }));
+    {
+        let guard = ont.read().unwrap();
+        assert_contains_axiom(&guard, &axiom);
+    }
+}
+
+#[test]
+fn manager_add_axiom_convenience() {
+    let mut manager = OntologyManager::new();
+    let iri = IRI::new("http://ex.org/ont");
+    let ont = manager.create_ontology(iri.clone());
+    let df = DF::new();
+    let axiom = df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.class_ce("http://ex.org/B"),
+    );
+
+    let result = manager.add_axiom(&ont, axiom.clone());
+    assert_eq!(result, ChangeApplied::Successfully);
+
+    let guard = ont.read().unwrap();
+    assert_contains_axiom(&guard, &axiom);
+}
+
+#[test]
+fn manager_remove_axiom_convenience() {
+    let mut manager = OntologyManager::new();
+    let iri = IRI::new("http://ex.org/ont");
+    let ont = manager.create_ontology(iri.clone());
+    let df = DF::new();
+    let axiom = df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.class_ce("http://ex.org/B"),
+    );
+
+    manager.add_axiom(&ont, axiom.clone());
+    let result = manager.remove_axiom(&ont, axiom.clone());
+    assert_eq!(result, ChangeApplied::Successfully);
+
+    let guard = ont.read().unwrap();
+    assert_not_contains_axiom(&guard, &axiom);
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // OntologyManager — IRI Mapping
 // ══════════════════════════════════════════════════════════════════════════════

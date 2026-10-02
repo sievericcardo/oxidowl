@@ -1,6 +1,5 @@
 use crate::error::OxidowlError;
 use crate::ontology::axioms::*;
-use horned_owl::model::*;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
@@ -568,21 +567,25 @@ impl OWL2Datatype {
 }
 
 /// Datatype definition axiom implementation (OWL 2 Section 9.4)
+///
+/// The definition uses native oxidowl types exclusively: the datatype being
+/// defined is a plain `IRI`, the data range is the native [`crate::ontology::DataRange`],
+/// and annotations are native [`crate::ontology::Annotation`]s.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DatatypeDefinitionAxiom {
     pub id: AxiomId,
-    pub datatype: IRI<String>,
-    pub data_range: horned_owl::model::DataRange<String>,
-    pub annotations: Vec<Annotation<String>>,
+    pub datatype: crate::ontology::IRI,
+    pub data_range: crate::ontology::DataRange,
+    pub annotations: Vec<crate::ontology::Annotation>,
 }
 
 impl DatatypeDefinitionAxiom {
     #[must_use]
     pub fn new(
         id: AxiomId,
-        datatype: IRI<String>,
-        data_range: horned_owl::model::DataRange<String>,
-        annotations: Vec<Annotation<String>>,
+        datatype: crate::ontology::IRI,
+        data_range: crate::ontology::DataRange,
+        annotations: Vec<crate::ontology::Annotation>,
     ) -> Self {
         Self {
             id,
@@ -591,33 +594,6 @@ impl DatatypeDefinitionAxiom {
             annotations,
         }
     }
-}
-
-/// Enhanced `DataRange` enum to support all OWL 2 data range constructs
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum DataRange {
-    /// Named datatype
-    Datatype(IRI<String>),
-    /// Datatype restriction with facet constraints
-    DatatypeRestriction {
-        datatype: IRI<String>,
-        facets: Vec<FacetRestriction>,
-    },
-    /// Intersection of data ranges
-    DataIntersectionOf(Vec<DataRange>),
-    /// Union of data ranges
-    DataUnionOf(Vec<DataRange>),
-    /// Complement of a data range
-    DataComplementOf(Box<DataRange>),
-    /// Enumeration of literals
-    DataOneOf(Vec<horned_owl::model::Literal<String>>),
-}
-
-/// Facet restrictions for datatype restrictions
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FacetRestriction {
-    pub facet: ConstrainingFacet,
-    pub literal: horned_owl::model::Literal<String>,
 }
 
 /// OWL 2 constraining facets (Section 4.3)
@@ -687,13 +663,48 @@ impl ConstrainingFacet {
             }
         }
     }
+
+    /// Look up a constraining facet from its IRI.
+    ///
+    /// This bridges the native [`crate::ontology::FacetRestriction`] (which stores
+    /// the facet as an `IRI`) to the typed [`ConstrainingFacet`] used for
+    /// applicability/conflict validation.
+    #[must_use]
+    pub fn from_iri(iri: &crate::ontology::IRI) -> Option<Self> {
+        match iri.as_str() {
+            "http://www.w3.org/2001/XMLSchema#length" => Some(ConstrainingFacet::Length),
+            "http://www.w3.org/2001/XMLSchema#minLength" => Some(ConstrainingFacet::MinLength),
+            "http://www.w3.org/2001/XMLSchema#maxLength" => Some(ConstrainingFacet::MaxLength),
+            "http://www.w3.org/2001/XMLSchema#pattern" => Some(ConstrainingFacet::Pattern),
+            "http://www.w3.org/2001/XMLSchema#enumeration" => Some(ConstrainingFacet::Enumeration),
+            "http://www.w3.org/2001/XMLSchema#whiteSpace" => Some(ConstrainingFacet::WhiteSpace),
+            "http://www.w3.org/2001/XMLSchema#maxInclusive" => {
+                Some(ConstrainingFacet::MaxInclusive)
+            }
+            "http://www.w3.org/2001/XMLSchema#maxExclusive" => {
+                Some(ConstrainingFacet::MaxExclusive)
+            }
+            "http://www.w3.org/2001/XMLSchema#minInclusive" => {
+                Some(ConstrainingFacet::MinInclusive)
+            }
+            "http://www.w3.org/2001/XMLSchema#minExclusive" => {
+                Some(ConstrainingFacet::MinExclusive)
+            }
+            "http://www.w3.org/2001/XMLSchema#totalDigits" => Some(ConstrainingFacet::TotalDigits),
+            "http://www.w3.org/2001/XMLSchema#fractionDigits" => {
+                Some(ConstrainingFacet::FractionDigits)
+            }
+            _ => None,
+        }
+    }
 }
 
 /// Datatype manager for handling OWL 2 datatypes
+#[derive(Debug)]
 pub struct DatatypeManager {
     datatype_definitions: HashMap<url::Url, DatatypeDefinitionAxiom>,
     #[allow(dead_code)]
-    facet_restrictions: HashMap<url::Url, Vec<FacetRestriction>>,
+    facet_restrictions: HashMap<url::Url, Vec<crate::ontology::FacetRestriction>>,
     datatype_hierarchy: HashMap<OWL2Datatype, HashSet<OWL2Datatype>>,
 }
 
@@ -767,8 +778,21 @@ impl DatatypeManager {
 
     /// Add a datatype definition
     pub fn add_datatype_definition(&mut self, definition: DatatypeDefinitionAxiom) {
-        if let Ok(url) = url::Url::parse(definition.datatype.as_ref()) {
+        if let Ok(url) = url::Url::parse(definition.datatype.as_str()) {
             self.datatype_definitions.insert(url, definition);
+        }
+    }
+
+    /// Register all `DatatypeDefinition` axioms from an ontology.
+    ///
+    /// The value-space checkers (`crate::core::reasoner::datatype_validation`) consult this
+    /// table so that literals of a user-defined datatype are validated against its defining
+    /// `DataRange` (e.g. `AdultAge` defined as `xsd:int [minInclusive 18]`).
+    pub fn register_definitions_from_ontology(&mut self, ontology: &crate::ontology::Ontology) {
+        for axiom in ontology.axioms() {
+            if let crate::ontology::Axiom::DatatypeDefinition(def) = axiom {
+                self.add_datatype_definition(def.clone());
+            }
         }
     }
 
@@ -786,6 +810,18 @@ impl DatatypeManager {
         } else {
             false
         }
+    }
+
+    /// Look up the defining data range for a user-defined datatype IRI, if any.
+    #[must_use]
+    pub fn get_datatype_definition(
+        &self,
+        datatype_iri: &crate::ontology::IRI,
+    ) -> Option<&DatatypeDefinitionAxiom> {
+        datatype_iri
+            .to_url()
+            .ok()
+            .and_then(|url| self.datatype_definitions.get(&url))
     }
 
     /// Validate a literal value against its datatype

@@ -51,7 +51,7 @@ static OWL_KEYWORDS: phf::Set<&'static str> = phf_set! {
     "AnnotationPropertyDomain", "AnnotationPropertyRange",
 
     // SWRL
-    "DLSafeRule", "Body", "Head",
+    "DLSafeRule", "Rule", "Body", "Head",
 
     // Ontology structure
     "Ontology", "Import", "Prefix", "Declaration",
@@ -440,6 +440,9 @@ impl FunctionalParser {
                 position = self
                     .parse_ontology_declaration(tokens, position, ontology, prefixes, base_iri)?;
             }
+            "Import" => {
+                position = self.parse_import(tokens, position, ontology, prefixes)?;
+            }
             "Declaration" => {
                 position =
                     self.parse_declaration(tokens, position, ontology, prefixes, base_iri)?;
@@ -488,9 +491,11 @@ impl FunctionalParser {
             "HasKey" => {
                 position = self.parse_has_key(tokens, position, ontology, prefixes)?;
             }
-            "DLSafeRule" => {
-                // Simple SWRL rule parsing with minimal overhead
-                position = self.parse_swrl_rule(tokens, position)?;
+            "DatatypeDefinition" => {
+                position = self.parse_datatype_definition(tokens, position, ontology, prefixes)?;
+            }
+            "DLSafeRule" | "Rule" => {
+                position = self.parse_swrl_rule(tokens, position, ontology, prefixes)?;
             }
             "SubObjectPropertyOf" => {
                 position =
@@ -596,6 +601,33 @@ impl FunctionalParser {
         Ok(position)
     }
 
+    /// Parse import declaration: Import(<IRI>)
+    fn parse_import(
+        &self,
+        tokens: &[String],
+        mut position: usize,
+        ontology: &mut Ontology,
+        prefixes: &std::collections::HashMap<String, String>,
+    ) -> Result<usize> {
+        position += 1; // Skip "Import"
+        if position < tokens.len() && tokens[position] == "(" {
+            position += 1; // Skip "("
+
+            if position < tokens.len() && tokens[position] != ")" {
+                let iri_str = self.expand_iri(&tokens[position], prefixes)?;
+                position += 1;
+                ontology.imports.push(crate::ontology::ImportsDeclaration {
+                    imported_ontology_iri: crate::ontology::IRI::new(&iri_str),
+                });
+            }
+
+            if position < tokens.len() && tokens[position] == ")" {
+                position += 1;
+            }
+        }
+        Ok(position)
+    }
+
     /// Parse prefix declaration: Prefix(prefix:=<IRI>)
     fn parse_prefix(
         &self,
@@ -677,38 +709,342 @@ impl FunctionalParser {
         position
     }
 
-    /// Parse SWRL rule with minimal overhead
-    /// Uses simple validation - just checks basic structure
-    fn parse_swrl_rule(&self, tokens: &[String], mut position: usize) -> Result<usize> {
+    /// Parse a SWRL rule: `DLSafeRule(Body(atom...) Head(atom...))`.
+    ///
+    /// Accepts the standard `DLSafeRule` wrapper as well as a `Rule` alias.
+    /// Adds an `Axiom::Rule` to the ontology and returns the position after
+    /// the closing parenthesis.
+    fn parse_swrl_rule(
+        &self,
+        tokens: &[String],
+        mut position: usize,
+        ontology: &mut Ontology,
+        prefixes: &std::collections::HashMap<String, String>,
+    ) -> Result<usize> {
         position += 1; // Skip "DLSafeRule"
 
-        if position < tokens.len() && tokens[position] == "(" {
-            position += 1; // Skip "("
+        if position >= tokens.len() || tokens[position] != "(" {
+            return Err(Error::ontology_parsing(
+                "Expected '(' after DLSafeRule".to_string(),
+            ));
+        }
+        position += 1; // Skip "("
 
-            // Count parentheses to find the matching closing paren
-            let mut paren_count = 1;
+        // Skip any leading annotations.
+        position = self.skip_annotations(tokens, position);
 
-            while position < tokens.len() && paren_count > 0 {
-                if tokens[position] == "(" {
-                    paren_count += 1;
-                } else if tokens[position] == ")" {
-                    paren_count -= 1;
-                }
+        // Parse Body(...)
+        let mut body = Vec::new();
+        if position < tokens.len() && tokens[position] == "Body" {
+            position += 1;
+            if position < tokens.len() && tokens[position] == "(" {
                 position += 1;
-            }
-
-            // Minimal validation only in Detailed mode
-            if matches!(self.config.error_verbosity, ErrorVerbosity::Detailed) {
-                // Check that we found the closing paren
-                if paren_count != 0 {
-                    return Err(Error::ontology_parsing(
-                        "Unbalanced parentheses in SWRL rule".to_string(),
-                    ));
+                while position < tokens.len() && tokens[position] != ")" {
+                    let (atom, new_pos) = self.parse_swrl_atom(tokens, position, prefixes)?;
+                    body.push(atom);
+                    position = new_pos;
+                }
+                if position < tokens.len() && tokens[position] == ")" {
+                    position += 1;
                 }
             }
         }
 
+        // Parse Head(...)
+        let mut head = Vec::new();
+        if position < tokens.len() && tokens[position] == "Head" {
+            position += 1;
+            if position < tokens.len() && tokens[position] == "(" {
+                position += 1;
+                while position < tokens.len() && tokens[position] != ")" {
+                    let (atom, new_pos) = self.parse_swrl_atom(tokens, position, prefixes)?;
+                    head.push(atom);
+                    position = new_pos;
+                }
+                if position < tokens.len() && tokens[position] == ")" {
+                    position += 1;
+                }
+            }
+        }
+
+        if position < tokens.len() && tokens[position] == ")" {
+            position += 1; // Skip closing ")"
+        }
+
+        let rule = crate::ontology::SWRLRule { head, body };
+        ontology.add_axiom(crate::ontology::Axiom::Rule(
+            crate::ontology::SWRLRuleAxiom {
+                id: generate_axiom_id(),
+                rule,
+                annotations: Vec::new(),
+            },
+        ));
+
         Ok(position)
+    }
+
+    /// Parse a standalone SWRL rule axiom — the `DLSafeRule(...)` /
+    /// `Rule(...)` text produced by
+    /// [`serialize_swrl_rule`](crate::parsers::functional::serialize_swrl_rule).
+    ///
+    /// This is the decode half of the cross-format rule preservation
+    /// (CR-011 M2): RDF-based writers store rules as this text literal and
+    /// `rdf_to_owl::map_rdf_triples` / `process_triple` turn it back into an
+    /// [`Axiom::Rule`].
+    pub fn parse_swrl_rule_text(&self, text: &str) -> Result<crate::ontology::SWRLRuleAxiom> {
+        let tokens = self.tokenize(text)?;
+        if !matches!(
+            tokens.first().map(String::as_str),
+            Some("DLSafeRule" | "Rule")
+        ) {
+            return Err(Error::ontology_parsing(format!(
+                "not a functional-syntax SWRL rule (expected DLSafeRule, got {:?})",
+                tokens.first()
+            )));
+        }
+        let mut scratch = Ontology::new();
+        let prefixes = std::collections::HashMap::new();
+        let end = self.parse_swrl_rule(&tokens, 0, &mut scratch, &prefixes)?;
+        if end != tokens.len() {
+            return Err(Error::ontology_parsing(format!(
+                "trailing tokens after SWRL rule ({} of {} consumed)",
+                end,
+                tokens.len()
+            )));
+        }
+        scratch
+            .axioms()
+            .iter()
+            .find_map(|a| match a {
+                crate::ontology::Axiom::Rule(rule) => Some(rule.clone()),
+                _ => None,
+            })
+            .ok_or_else(|| {
+                Error::ontology_parsing("SWRL rule text produced no rule axiom".to_string())
+            })
+    }
+
+    /// Parse a single SWRL atom inside a `Body(...)`/`Head(...)` list.
+    fn parse_swrl_atom(
+        &self,
+        tokens: &[String],
+        mut position: usize,
+        prefixes: &std::collections::HashMap<String, String>,
+    ) -> Result<(crate::ontology::SWRLAtom, usize)> {
+        use crate::ontology::{DataProperty, DataPropertyExpression, IRI as OIRI, SWRLAtom};
+
+        let name = tokens
+            .get(position)
+            .cloned()
+            .ok_or_else(|| Error::ontology_parsing("Unexpected end of SWRL atom".to_string()))?;
+        position += 1;
+
+        if position >= tokens.len() || tokens[position] != "(" {
+            return Err(Error::ontology_parsing(format!(
+                "Expected '(' after {name} in SWRL atom"
+            )));
+        }
+        position += 1;
+
+        let atom = match name.as_str() {
+            "ClassAtom" => {
+                let (predicate, p) = self.parse_class_expression(tokens, position, prefixes)?;
+                position = p;
+                let (argument, p) = self.parse_swrl_iargument(tokens, position, prefixes)?;
+                position = p;
+                SWRLAtom::ClassAtom {
+                    predicate,
+                    argument,
+                }
+            }
+            "ObjectPropertyAtom" => {
+                let (predicate, p) =
+                    self.parse_object_property_expression(tokens, position, prefixes)?;
+                position = p;
+                let (first_argument, p) = self.parse_swrl_iargument(tokens, position, prefixes)?;
+                position = p;
+                let (second_argument, p) = self.parse_swrl_iargument(tokens, position, prefixes)?;
+                position = p;
+                SWRLAtom::ObjectPropertyAtom {
+                    predicate,
+                    first_argument,
+                    second_argument,
+                }
+            }
+            "DataPropertyAtom" => {
+                let property_iri = self.expand_iri(&tokens[position], prefixes)?;
+                position += 1;
+                let predicate = DataPropertyExpression::DataProperty(DataProperty {
+                    iri: OIRI::new(&property_iri),
+                });
+                let (first_argument, p) = self.parse_swrl_iargument(tokens, position, prefixes)?;
+                position = p;
+                let (second_argument, p) = self.parse_swrl_dargument(tokens, position, prefixes)?;
+                position = p;
+                SWRLAtom::DataPropertyAtom {
+                    predicate,
+                    first_argument,
+                    second_argument,
+                }
+            }
+            "DataRangeAtom" => {
+                let (predicate, p) = self.parse_data_range(tokens, position, prefixes)?;
+                position = p;
+                let (argument, p) = self.parse_swrl_dargument(tokens, position, prefixes)?;
+                position = p;
+                SWRLAtom::DataRangeAtom {
+                    predicate,
+                    argument,
+                }
+            }
+            "SameIndividualAtom" => {
+                let (first_argument, p) = self.parse_swrl_iargument(tokens, position, prefixes)?;
+                position = p;
+                let (second_argument, p) = self.parse_swrl_iargument(tokens, position, prefixes)?;
+                position = p;
+                SWRLAtom::SameIndividualAtom {
+                    first_argument,
+                    second_argument,
+                }
+            }
+            "DifferentIndividualsAtom" => {
+                let (first_argument, p) = self.parse_swrl_iargument(tokens, position, prefixes)?;
+                position = p;
+                let (second_argument, p) = self.parse_swrl_iargument(tokens, position, prefixes)?;
+                position = p;
+                SWRLAtom::DifferentIndividualsAtom {
+                    first_argument,
+                    second_argument,
+                }
+            }
+            "BuiltInAtom" => {
+                let predicate = OIRI::new(&self.expand_iri(&tokens[position], prefixes)?);
+                position += 1;
+                let mut arguments = Vec::new();
+                while position < tokens.len() && tokens[position] != ")" {
+                    let (arg, p) = self.parse_swrl_dargument(tokens, position, prefixes)?;
+                    arguments.push(arg);
+                    position = p;
+                }
+                SWRLAtom::BuiltInAtom {
+                    predicate,
+                    arguments,
+                }
+            }
+            _ => {
+                return Err(Error::ontology_parsing(format!(
+                    "Unknown SWRL atom type: {name}"
+                )));
+            }
+        };
+
+        if position < tokens.len() && tokens[position] == ")" {
+            position += 1;
+        }
+        Ok((atom, position))
+    }
+
+    /// Parse a SWRL individual argument: a `Variable(<IRI>)` (OWL 2 spec
+    /// form — keeps the full variable IRI, so rules round-trip losslessly),
+    /// a `?name` shorthand, or an individual.
+    fn parse_swrl_iargument(
+        &self,
+        tokens: &[String],
+        position: usize,
+        prefixes: &std::collections::HashMap<String, String>,
+    ) -> Result<(crate::ontology::SWRLIArgument, usize)> {
+        use crate::ontology::{SWRLIArgument, SWRLVariable};
+        let tok = tokens.get(position).ok_or_else(|| {
+            Error::ontology_parsing("Expected SWRL individual argument".to_string())
+        })?;
+
+        if let Some(variable_iri) = self.parse_swrl_variable(tokens, position, prefixes, tok)? {
+            return Ok((
+                SWRLIArgument::Variable(SWRLVariable::new(variable_iri)),
+                position + 4, // "Variable" "(" <IRI> ")"
+            ));
+        }
+        if let Some(var_name) = tok.strip_prefix('?') {
+            let variable = SWRLVariable::new(crate::ontology::IRI::new(&format!(
+                "urn:swrl:var#{var_name}"
+            )));
+            Ok((SWRLIArgument::Variable(variable), position + 1))
+        } else {
+            let individual = self.parse_individual_from_token(tok, prefixes)?;
+            Ok((SWRLIArgument::Individual(individual), position + 1))
+        }
+    }
+
+    /// Recognise the OWL 2 `Variable ( <IRI-or-CURIE> )` form and return the
+    /// resolved variable IRI.  Returns `Ok(None)` when the token does not
+    /// start a `Variable(...)` (the caller falls through to the `?name` /
+    /// individual paths).
+    fn parse_swrl_variable(
+        &self,
+        tokens: &[String],
+        position: usize,
+        prefixes: &std::collections::HashMap<String, String>,
+        tok: &str,
+    ) -> Result<Option<crate::ontology::IRI>> {
+        if tok != "Variable" {
+            return Ok(None);
+        }
+        let open = tokens
+            .get(position + 1)
+            .ok_or_else(|| Error::ontology_parsing("Expected '(' after Variable".to_string()))?;
+        if open != "(" {
+            return Err(Error::ontology_parsing(format!(
+                "Expected '(' after Variable, got {open:?}"
+            )));
+        }
+        let iri_tok = tokens.get(position + 2).ok_or_else(|| {
+            Error::ontology_parsing("Expected a variable IRI inside Variable(…)".to_string())
+        })?;
+        let close = tokens.get(position + 3).ok_or_else(|| {
+            Error::ontology_parsing("Expected ')' after variable IRI".to_string())
+        })?;
+        if close != ")" {
+            return Err(Error::ontology_parsing(format!(
+                "Expected ')' after variable IRI, got {close:?}"
+            )));
+        }
+        Ok(Some(crate::ontology::IRI::new(
+            &self.expand_iri(iri_tok, prefixes)?,
+        )))
+    }
+
+    /// Parse a SWRL data argument: a `Variable(<IRI>)`, a `?name` shorthand,
+    /// or a literal.
+    fn parse_swrl_dargument(
+        &self,
+        tokens: &[String],
+        position: usize,
+        prefixes: &std::collections::HashMap<String, String>,
+    ) -> Result<(crate::ontology::SWRLDArgument, usize)> {
+        use crate::ontology::{SWRLDArgument, SWRLVariable};
+        let tok = tokens
+            .get(position)
+            .ok_or_else(|| Error::ontology_parsing("Expected SWRL data argument".to_string()))?;
+
+        if let Some(variable_iri) = self.parse_swrl_variable(tokens, position, prefixes, tok)? {
+            return Ok((
+                SWRLDArgument::Variable(SWRLVariable::new(variable_iri)),
+                position + 4, // "Variable" "(" <IRI> ")"
+            ));
+        }
+        if let Some(var_name) = tok.strip_prefix('?') {
+            let variable = SWRLVariable::new(crate::ontology::IRI::new(&format!(
+                "urn:swrl:var#{var_name}"
+            )));
+            Ok((SWRLDArgument::Variable(variable), position + 1))
+        } else if tok.starts_with('"') {
+            let (literal, p) = self.parse_literal_token(tokens, position, prefixes)?;
+            Ok((SWRLDArgument::Literal(literal), p))
+        } else {
+            // Bare numeric literal (no surrounding quotes).
+            let literal = crate::ontology::Literal::new(tok.clone());
+            Ok((SWRLDArgument::Literal(literal), position + 1))
+        }
     }
 
     /// Parse ontology declaration: Ontology(<IRI> ...)
@@ -3199,6 +3535,51 @@ impl FunctionalParser {
         Ok(position)
     }
 
+    /// Parse `DatatypeDefinition` axiom:
+    /// `DatatypeDefinition(<datatype> <dataRange>)`
+    fn parse_datatype_definition(
+        &self,
+        tokens: &[String],
+        mut position: usize,
+        ontology: &mut Ontology,
+        prefixes: &std::collections::HashMap<String, String>,
+    ) -> Result<usize> {
+        position += 1; // Skip "DatatypeDefinition"
+        if position < tokens.len() && tokens[position] == "(" {
+            position += 1; // Skip "("
+
+            position = self.skip_annotations(tokens, position);
+
+            // Parse the datatype IRI of the defined datatype.
+            if position >= tokens.len() {
+                return Err(Error::ontology_parsing(
+                    "Expected datatype IRI in DatatypeDefinition".to_string(),
+                ));
+            }
+            let datatype_iri = self.expand_iri(&tokens[position], prefixes)?;
+            position += 1;
+
+            // Parse the data range.
+            let (data_range, new_pos) = self.parse_data_range(tokens, position, prefixes)?;
+            position = new_pos;
+
+            let axiom = crate::ontology::datatypes::DatatypeDefinitionAxiom {
+                id: generate_axiom_id(),
+                datatype: url::Url::parse(&datatype_iri)
+                    .map_err(|e| Error::ontology_parsing(format!("Invalid datatype IRI: {e}")))?
+                    .into(),
+                data_range,
+                annotations: vec![],
+            };
+            ontology.add_axiom(crate::ontology::Axiom::DatatypeDefinition(axiom));
+
+            if position < tokens.len() && tokens[position] == ")" {
+                position += 1; // Skip ")"
+            }
+        }
+        Ok(position)
+    }
+
     /// Parse `TransitiveObjectProperty` axiom
     fn parse_transitive_object_property(
         &self,
@@ -3817,14 +4198,114 @@ fn serialize_axiom(axiom: &crate::ontology::Axiom) -> String {
             )
         }
         crate::ontology::Axiom::DatatypeDefinition(dd) => {
-            format!("DatatypeDefinition(<{}> {:?})", dd.datatype, dd.data_range)
+            format!(
+                "DatatypeDefinition(<{}> {})",
+                dd.datatype,
+                serialize_data_range(&dd.data_range)
+            )
         }
         crate::ontology::Axiom::Declaration(decl) => {
             format!("Declaration({})", serialize_entity(&decl.entity))
         }
-        crate::ontology::Axiom::Rule(rule) => {
-            format!("# SWRL Rule: {:?}", rule.rule)
+        crate::ontology::Axiom::Rule(rule_ax) => serialize_swrl_rule(&rule_ax.rule),
+    }
+}
+
+/// Serialize a SWRL rule in OWL 2 Functional Syntax:
+/// `DLSafeRule(Body(atom...) Head(atom...))`.
+///
+/// Variables are emitted in the OWL 2 spec form `Variable(<IRI>)` so the
+/// full variable IRI survives a serialize → parse round-trip (CR-011 M2);
+/// the parser still accepts the legacy `?name` shorthand.
+pub fn serialize_swrl_rule(rule: &crate::ontology::SWRLRule) -> String {
+    let body: Vec<String> = rule.body.iter().map(serialize_swrl_atom).collect();
+    let head: Vec<String> = rule.head.iter().map(serialize_swrl_atom).collect();
+    format!(
+        "DLSafeRule(Body({}) Head({}))",
+        body.join(" "),
+        head.join(" ")
+    )
+}
+
+/// Serialize a SWRL atom in OWL 2 Functional Syntax.
+fn serialize_swrl_atom(atom: &crate::ontology::SWRLAtom) -> String {
+    use crate::ontology::SWRLAtom;
+    match atom {
+        SWRLAtom::ClassAtom {
+            predicate,
+            argument,
+        } => format!(
+            "ClassAtom({} {})",
+            serialize_class_expression(predicate),
+            serialize_swrl_iargument(argument)
+        ),
+        SWRLAtom::ObjectPropertyAtom {
+            predicate,
+            first_argument,
+            second_argument,
+        } => format!(
+            "ObjectPropertyAtom({} {} {})",
+            serialize_object_property_expression(predicate),
+            serialize_swrl_iargument(first_argument),
+            serialize_swrl_iargument(second_argument)
+        ),
+        SWRLAtom::DataPropertyAtom {
+            predicate,
+            first_argument,
+            second_argument,
+        } => format!(
+            "DataPropertyAtom({} {} {})",
+            serialize_data_property_expression(predicate),
+            serialize_swrl_iargument(first_argument),
+            serialize_swrl_dargument(second_argument)
+        ),
+        SWRLAtom::DataRangeAtom {
+            predicate,
+            argument,
+        } => format!(
+            "DataRangeAtom({} {})",
+            serialize_data_range(predicate),
+            serialize_swrl_dargument(argument)
+        ),
+        SWRLAtom::SameIndividualAtom {
+            first_argument,
+            second_argument,
+        } => format!(
+            "SameIndividualAtom({} {})",
+            serialize_swrl_iargument(first_argument),
+            serialize_swrl_iargument(second_argument)
+        ),
+        SWRLAtom::DifferentIndividualsAtom {
+            first_argument,
+            second_argument,
+        } => format!(
+            "DifferentIndividualsAtom({} {})",
+            serialize_swrl_iargument(first_argument),
+            serialize_swrl_iargument(second_argument)
+        ),
+        SWRLAtom::BuiltInAtom {
+            predicate,
+            arguments,
+        } => {
+            let args: Vec<String> = arguments.iter().map(serialize_swrl_dargument).collect();
+            format!("BuiltInAtom(<{predicate}> {})", args.join(" "))
         }
+    }
+}
+
+/// Serialize a SWRL individual argument (variable or individual).
+fn serialize_swrl_iargument(arg: &crate::ontology::SWRLIArgument) -> String {
+    match arg {
+        crate::ontology::SWRLIArgument::Individual(ind) => serialize_individual(ind),
+        crate::ontology::SWRLIArgument::Variable(var) => format!("Variable(<{}>)", var.iri),
+    }
+}
+
+/// Serialize a SWRL data argument (literal or variable).
+fn serialize_swrl_dargument(arg: &crate::ontology::SWRLDArgument) -> String {
+    match arg {
+        crate::ontology::SWRLDArgument::Literal(lit) => serialize_literal(lit),
+        crate::ontology::SWRLDArgument::Variable(var) => format!("Variable(<{}>)", var.iri),
     }
 }
 

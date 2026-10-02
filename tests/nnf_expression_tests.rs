@@ -515,16 +515,11 @@ fn test_has_key_axiom_construction() {
 /// test_datatype_definition_construction: DatatypeDefinition(customDT, DataComplementOf(Integer))
 #[test]
 fn test_datatype_definition_construction() {
-    use horned_owl::model::{Build, DataRange as HornedDataRange, Datatype as HornedDataType};
-
     let df = DF::new();
-    let b = Build::new_string();
 
-    let custom_dt = b.iri(format!("{}customDT", ex("")));
-    let integer_iri = b.iri("http://www.w3.org/2001/XMLSchema#integer".to_string());
-
-    let int_dr = HornedDataRange::Datatype(HornedDataType(integer_iri));
-    let complement_dr = HornedDataRange::DataComplementOf(Box::new(int_dr));
+    let custom_dt = IRI::new(&format!("{}customDT", ex("")));
+    let int_dr = DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#integer"));
+    let complement_dr = DataRange::DataComplementOf(Box::new(int_dr));
 
     let dt_def = DatatypeDefinitionAxiom {
         id: df.next_id(),
@@ -534,10 +529,7 @@ fn test_datatype_definition_construction() {
     };
 
     assert!(dt_def.annotations.is_empty());
-    assert!(matches!(
-        dt_def.data_range,
-        HornedDataRange::DataComplementOf(_)
-    ));
+    assert!(matches!(dt_def.data_range, DataRange::DataComplementOf(_)));
 
     let ax = Axiom::DatatypeDefinition(dt_def);
 

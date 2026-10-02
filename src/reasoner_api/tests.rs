@@ -92,6 +92,49 @@ mod tests {
         assert!(!ns.contains_entity(&"Y"));
     }
 
+    #[test]
+    fn test_node_flattened_representative_prefers_non_marker() {
+        use crate::ontology::{Class, ClassExpression, IRI};
+        let nothing = ClassExpression::Class(Class {
+            iri: IRI::owl_nothing(),
+        });
+        let unsat = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/Unsat"),
+        });
+        let mut set = std::collections::HashSet::new();
+        set.insert(nothing.clone());
+        set.insert(unsat.clone());
+        let node = Node::new(set);
+        // Prefers the non-marker entity over owl:Nothing.
+        assert_eq!(node.get_flattened_representative(), unsat.clone());
+        let minus = node.get_entities_minus_top_bottom();
+        assert_eq!(minus.len(), 1);
+        assert!(minus.contains(&unsat));
+        assert!(!minus.contains(&nothing));
+    }
+
+    #[test]
+    fn test_node_set_entities_minus_top_bottom() {
+        use crate::ontology::{Class, ClassExpression, IRI};
+        let thing = ClassExpression::Class(Class {
+            iri: IRI::owl_thing(),
+        });
+        let a = ClassExpression::Class(Class {
+            iri: IRI::new("http://ex.org/A"),
+        });
+        let top = Node::top_node(thing.clone());
+        let regular = Node::singleton(a.clone());
+        let ns: NodeSet<ClassExpression> = [top, regular].into_iter().collect();
+        let minus = ns.get_entities_minus_top_bottom();
+        assert_eq!(minus.len(), 1);
+        assert!(minus.contains(&a));
+        assert!(!minus.contains(&thing));
+        // The top node alone is a top singleton.
+        let top_only: NodeSet<ClassExpression> = std::iter::once(Node::top_node(thing)).collect();
+        assert!(top_only.is_top_singleton());
+        assert!(!top_only.is_bottom_singleton());
+    }
+
     // ── StructuralReasoner Tests ─────────────────────────────────────────────
 
     #[test]

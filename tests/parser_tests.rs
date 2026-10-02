@@ -127,3 +127,95 @@ fn manchester_parser_class_frame() {
     let result = parser.parse_string(input);
     assert!(result.is_ok());
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Turtle `a` shorthand (B5 Slice 0 — Part D)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Turtle's predefined keyword `a` in *predicate* position must resolve to
+/// `rdf:type` (Turtle spec §2.3 / §4.1.2), never to an object property
+/// literally named "a".
+#[test]
+fn turtle_predicate_a_shorthand_is_rdf_type() {
+    let ont = parse_turtle(concat!(
+        "@prefix : <http://example.org/> .\n",
+        "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n",
+        ":A a owl:Class .\n",
+        ":i a :A .\n",
+    ))
+    .expect("Turtle documents using the `a` shorthand must parse");
+
+    // `:A a owl:Class` ⇒ Declaration(Class :A)
+    let declares_a = ont.axioms().iter().any(|ax| match ax {
+        Axiom::Declaration(d) => {
+            matches!(&d.entity, Entity::Class(iri) if iri.as_str() == "http://example.org/A")
+        }
+        _ => false,
+    });
+    assert!(
+        declares_a,
+        "`:A a owl:Class` must declare class A; axioms: {:?}",
+        ont.axioms()
+    );
+
+    // `:i a :A` ⇒ ClassAssertion(A, i)
+    let asserts_i = ont.axioms().iter().any(|ax| match ax {
+        Axiom::ClassAssertion(ca) => {
+            ca.individual
+                .iri()
+                .is_some_and(|i| i.as_str() == "http://example.org/i")
+                && matches!(&ca.class, ClassExpression::Class(c)
+                    if c.iri.as_str() == "http://example.org/A")
+        }
+        _ => false,
+    });
+    assert!(
+        asserts_i,
+        "`:i a :A` must produce ClassAssertion(:A, :i); axioms: {:?}",
+        ont.axioms()
+    );
+
+    // The bare predicate `a` must not leak through as an object property IRI.
+    let spurious = ont.axioms().iter().any(|ax| match ax {
+        Axiom::ObjectPropertyAssertion(opa) => {
+            matches!(&opa.property, ObjectPropertyExpression::ObjectProperty(p)
+                if p.iri.as_str() == "a")
+        }
+        _ => false,
+    });
+    assert!(
+        !spurious,
+        "predicate `a` must not become an ObjectPropertyAssertion; axioms: {:?}",
+        ont.axioms()
+    );
+}
+
+/// The `a` shorthand must also work in semicolon-separated predicate lists.
+#[test]
+fn turtle_predicate_a_shorthand_in_semicolon_list() {
+    let ont = parse_turtle(concat!(
+        "@prefix : <http://example.org/> .\n",
+        "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n",
+        ":A a owl:Class ; rdfs:subClassOf :B .\n",
+    ))
+    .expect("Turtle `a` inside a semicolon list must parse");
+
+    let declares_a = ont.axioms().iter().any(|ax| match ax {
+        Axiom::Declaration(d) => {
+            matches!(&d.entity, Entity::Class(iri) if iri.as_str() == "http://example.org/A")
+        }
+        _ => false,
+    });
+    assert!(declares_a, "axioms: {:?}", ont.axioms());
+
+    let sub = ont.axioms().iter().any(|ax| match ax {
+        Axiom::SubClassOf(s) => {
+            matches!(&s.subclass, ClassExpression::Class(c)
+                if c.iri.as_str() == "http://example.org/A")
+                && matches!(&s.superclass, ClassExpression::Class(c)
+                    if c.iri.as_str() == "http://example.org/B")
+        }
+        _ => false,
+    });
+    assert!(sub, "rdfs:subClassOf must still produce SubClassOf; axioms: {:?}", ont.axioms());
+}

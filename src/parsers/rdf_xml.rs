@@ -498,7 +498,7 @@ impl RdfXmlParser {
                                 .map(|(_, v)| v)
                         });
                         if let (Some(s), Some(o)) = (subject.clone(), obj) {
-                            process_owl_triple_inline(ontology, &s, &pred, o);
+                            process_owl_triple_inline(ontology, &s, &pred, o)?;
                         }
                     }
                 }
@@ -527,7 +527,7 @@ impl RdfXmlParser {
                                     .map(|(_, v)| v)
                             });
                         if let (Some(s), Some(o)) = (subject.clone(), obj) {
-                            process_owl_triple_inline(ontology, &s, &pred, o);
+                            process_owl_triple_inline(ontology, &s, &pred, o)?;
                         }
                     }
                 }
@@ -1236,129 +1236,18 @@ fn serialize_axiom_to_rdf_xml<W: Write>(
 }
 
 /// Process a single RDF triple (subject, predicate, object) into an OWL axiom.
-/// This function mirrors the Turtle parser's `process_enhanced_triple`.
-/// Uses pre-extracted axiom IDs to avoid borrow conflicts.
+///
+/// Delegates to the shared RDF→OWL mapping in [`super::rdf_to_owl`]
+/// (the same mapping the Turtle parser and the JSON-LD parser use) so the
+/// three RDF syntaxes cannot drift apart.  This used to be a second,
+/// simplified copy of Turtle's `process_enhanced_triple`.
 fn process_owl_triple_inline(
     ontology: &mut crate::ontology::Ontology,
     subject: &str,
     predicate: &str,
     object: &str,
-) {
-    use crate::ontology::*;
-    let id = ontology.next_axiom_id();
-    match predicate {
-        "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" => match object {
-            "http://www.w3.org/2002/07/owl#Class" => {
-                ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
-                    id,
-                    entity: Entity::Class(IRI::new(subject)),
-                }));
-            }
-            "http://www.w3.org/2002/07/owl#ObjectProperty" => {
-                ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
-                    id,
-                    entity: Entity::ObjectProperty(IRI::new(subject)),
-                }));
-            }
-            "http://www.w3.org/2002/07/owl#DatatypeProperty" => {
-                ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
-                    id,
-                    entity: Entity::DataProperty(IRI::new(subject)),
-                }));
-            }
-            "http://www.w3.org/2002/07/owl#NamedIndividual" => {
-                ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
-                    id,
-                    entity: Entity::NamedIndividual(IRI::new(subject)),
-                }));
-            }
-            "http://www.w3.org/2002/07/owl#AnnotationProperty" => {
-                ontology.add_axiom(Axiom::Declaration(DeclarationAxiom {
-                    id,
-                    entity: Entity::AnnotationProperty(IRI::new(subject)),
-                }));
-            }
-            "http://www.w3.org/2002/07/owl#Ontology" => {
-                ontology.set_iri(IRI::new(subject));
-            }
-            "http://www.w3.org/2002/07/owl#FunctionalProperty" => {
-                ontology.add_axiom(Axiom::FunctionalObjectProperty(
-                    FunctionalObjectPropertyAxiom {
-                        id,
-                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-                            iri: IRI::new(subject),
-                        }),
-                        annotations: vec![],
-                    },
-                ));
-            }
-            "http://www.w3.org/2002/07/owl#TransitiveProperty" => {
-                ontology.add_axiom(Axiom::TransitiveObjectProperty(
-                    TransitiveObjectPropertyAxiom {
-                        id,
-                        property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-                            iri: IRI::new(subject),
-                        }),
-                        annotations: vec![],
-                    },
-                ));
-            }
-            _ => {
-                let cid = ontology.next_axiom_id();
-                ontology.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
-                    id: cid,
-                    individual: Individual::Named(NamedIndividual {
-                        iri: IRI::new(subject),
-                    }),
-                    class: ClassExpression::Class(Class::new(IRI::new(object))),
-                    annotations: vec![],
-                }));
-            }
-        },
-        "http://www.w3.org/2000/01/rdf-schema#subClassOf" => {
-            ontology.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
-                id,
-                subclass: ClassExpression::Class(Class::new(IRI::new(subject))),
-                superclass: ClassExpression::Class(Class::new(IRI::new(object))),
-                annotations: vec![],
-            }));
-        }
-        "http://www.w3.org/2002/07/owl#equivalentClass" => {
-            ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
-                id,
-                classes: vec![
-                    ClassExpression::Class(Class::new(IRI::new(subject))),
-                    ClassExpression::Class(Class::new(IRI::new(object))),
-                ],
-                annotations: vec![],
-            }));
-        }
-        "http://www.w3.org/2002/07/owl#disjointWith" => {
-            ontology.add_axiom(Axiom::DisjointClasses(DisjointClassesAxiom {
-                id,
-                classes: vec![
-                    ClassExpression::Class(Class::new(IRI::new(subject))),
-                    ClassExpression::Class(Class::new(IRI::new(object))),
-                ],
-                annotations: vec![],
-            }));
-        }
-        _ => ontology.add_axiom(Axiom::ObjectPropertyAssertion(
-            ObjectPropertyAssertionAxiom {
-                id,
-                property: ObjectPropertyExpression::ObjectProperty(ObjectProperty {
-                    iri: IRI::new(predicate),
-                }),
-                source: Individual::Named(NamedIndividual {
-                    iri: IRI::new(subject),
-                }),
-                target: Individual::Named(NamedIndividual {
-                    iri: IRI::new(object),
-                }),
-                annotations: vec![],
-            },
-        )),
-    }
+) -> Result<()> {
+    super::rdf_to_owl::process_triple(ontology, subject, predicate, object)
 }
 
 /// Convert an OWL/RDF predicate IRI to a safe XML element name.

@@ -1,0 +1,14 @@
+{
+  "id": "diff_002_alc_disjoint_unsat",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff002#>)\nOntology(<http://example.org/diff002>\n  DisjointClasses(:A :B)\n  SubClassOf(:C :A)\n  SubClassOf(:C :B)\n)",
+  "base": "http://example.org/diff002#",
+  "axioms": { "min": 3 },
+  "expected": {
+    "consistent": true,
+    "satisfiable": { "A": true, "B": true, "C": false },
+    "subsumptions": [["C", "A"], ["C", "B"]],
+    "nonSubsumptions": [["A", "B"], ["B", "A"]]
+  },
+  "rationale": "DisjointClasses(A,B) makes A⊓B empty. C⊑A and C⊑B force C⊑A⊓B, so C is unsatisfiable (C⊑owl:Nothing). The ontology itself stays consistent because no individual is asserted to be in C; A and B are satisfiable (only constrained to be pairwise disjoint). Note C⊑owl:Nothing is also entailed (not asserted here to avoid relying on the bottom-subsumption path)."
+}

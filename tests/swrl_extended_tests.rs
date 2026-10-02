@@ -70,13 +70,13 @@ fn test_swrl_all_atom_types_roundtrip() {
     let df = df::DF::new();
 
     let var_x = SWRLVariable {
-        iri: IRI::new("urn:swrl#x"),
+        iri: IRI::new("urn:swrl:var#x"),
     };
     let var_y = SWRLVariable {
-        iri: IRI::new("urn:swrl#y"),
+        iri: IRI::new("urn:swrl:var#y"),
     };
     let var_z = SWRLVariable {
-        iri: IRI::new("urn:swrl#z"),
+        iri: IRI::new("urn:swrl:var#z"),
     };
 
     let body = vec![
@@ -132,17 +132,34 @@ fn test_swrl_all_atom_types_roundtrip() {
 
     let reparsed = parse_functional(&serialized).expect("reparse from functional");
 
-    let has_rule = reparsed
+    // Full roundtrip: the rule must survive serialization and re-parsing with
+    // structural equality (parse -> serialize -> parse -> equal). Axiom ids are
+    // minted fresh on re-parse, so compare the rule + annotations payloads.
+    let rules: Vec<&Axiom> = reparsed
         .axioms()
         .iter()
-        .any(|a| matches!(a, Axiom::Rule(_)));
-    // The functional serializer currently emits SWRL rules as a comment
-    // ("# SWRL Rule: ...") which is not re-parsed, so the roundtrip is lossy.
-    // Assert the documented current behaviour: reparse succeeds (above) but does
-    // not preserve the Rule axiom.
-    assert!(
-        !has_rule,
-        "Functional serializer does not yet roundtrip SWRL rules"
+        .filter(|a| matches!(a, Axiom::Rule(_)))
+        .collect();
+    assert_eq!(
+        rules.len(),
+        1,
+        "Functional serializer must roundtrip the SWRL Rule axiom"
+    );
+    let (orig_rule, orig_anns) = match &ont.axioms()[0] {
+        Axiom::Rule(r) => (&r.rule, &r.annotations),
+        _ => unreachable!(),
+    };
+    let (round_rule, round_anns) = match rules[0] {
+        Axiom::Rule(r) => (&r.rule, &r.annotations),
+        _ => unreachable!(),
+    };
+    assert_eq!(
+        orig_rule, round_rule,
+        "Roundtripped rule must be structurally equal"
+    );
+    assert_eq!(
+        orig_anns, round_anns,
+        "Roundtripped annotations must be equal"
     );
 }
 
@@ -192,12 +209,11 @@ fn test_swrl_alternate_namespace() {
         .iter()
         .filter(|a| matches!(a, Axiom::Rule(_)))
         .count();
-    // NOTE: Current functional serializer may not support SWRL rules.
-    // In that case, rule_count will be 0. This test documents expected behavior
-    // and will validate once serializer support is added.
-    assert!(
-        rule_count <= 1,
-        "At most 1 SWRL rule expected, found {}",
+    // The functional serializer emits parseable DLSafeRule(...) axioms, so the
+    // rule must survive the roundtrip.
+    assert_eq!(
+        rule_count, 1,
+        "Exactly 1 SWRL rule expected after roundtrip, found {}",
         rule_count
     );
 }

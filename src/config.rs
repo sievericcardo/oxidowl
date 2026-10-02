@@ -104,6 +104,11 @@ pub struct ReasoningConfig {
     pub clause_dump_file: Option<String>,
     /// Target OWL profile for optimization
     pub target_profile: OWLProfile,
+    /// Enable absorption + dependency-graph (Elgot-style) classification
+    /// (workstream A8).  When enabled, deterministic GCIs are discharged by
+    /// absorption + saturation + told subsumers and the tableau is invoked only
+    /// for genuinely non-deterministic concepts.
+    pub enable_absorption_classification: bool,
 }
 
 impl ReasoningConfig {
@@ -585,6 +590,7 @@ impl Default for ReasoningConfig {
             dump_clauses: false,
             clause_dump_file: None,
             target_profile: OWLProfile::Auto,
+            enable_absorption_classification: true,
         }
     }
 }
@@ -617,6 +623,7 @@ impl Default for ReasonerConfig {
                 dump_clauses: false,
                 clause_dump_file: None,
                 target_profile: OWLProfile::Auto,
+                enable_absorption_classification: true,
             },
             cache: CacheConfig {
                 features: cache_features,

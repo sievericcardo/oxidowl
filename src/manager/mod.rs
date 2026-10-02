@@ -20,7 +20,7 @@ mod tests;
 
 use crate::Result;
 use crate::factory::DataFactory;
-use crate::ontology::{IRI, Ontology, OntologyFormat, OntologyRef};
+use crate::ontology::{Annotation, IRI, Ontology, OntologyFormat, OntologyRef, axioms::Axiom};
 use crate::parsers;
 use changes::OntologyChange;
 use history::ChangeHistory;
@@ -585,7 +585,9 @@ impl OntologyManager {
             let mut guard = ont_ref
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            guard.axioms = snapshot.axioms;
+            // `set_axioms` (not a bare field assign) so the incremental
+            // axiom index stays in sync with the restored axiom set.
+            guard.set_axioms(snapshot.axioms);
             guard.annotations = snapshot.annotations;
             guard.imports = snapshot.imports;
             guard.id.version_iri = snapshot.version_iri;
@@ -605,6 +607,19 @@ impl OntologyManager {
     /// [`ChangeApplied::UnSuccessfully`] if any change fails, and
     /// [`ChangeApplied::Successfully`] when every change was applied.
     pub fn apply_changes(&mut self, changes: &[OntologyChange]) -> ChangeApplied {
+        self.apply_changes_inner(changes, true)
+    }
+
+    /// Apply a batch of changes, optionally recording them in the change
+    /// history.
+    ///
+    /// Undo/redo use `record_history = false` so the inverse/re-applied
+    /// changes mutate the ontology model without growing the history stack.
+    fn apply_changes_inner(
+        &mut self,
+        changes: &[OntologyChange],
+        record_history: bool,
+    ) -> ChangeApplied {
         if changes.is_empty() {
             return ChangeApplied::NoOperation;
         }
@@ -620,7 +635,7 @@ impl OntologyManager {
         self.refresh_imports_closure();
 
         // Phase 3: record in history
-        if let Some(ref mut history) = self.change_history {
+        if record_history && let Some(ref mut history) = self.change_history {
             history.record(changes.to_vec());
         }
 
@@ -669,6 +684,108 @@ impl OntologyManager {
             }
             ChangeApplied::NoOperation => ChangeApplied::NoOperation,
         }
+    }
+
+    // ── Axiom / Import / Annotation Convenience ──────────────────────────
+
+    /// Add an axiom to an ontology managed by this manager.
+    ///
+    /// Convenience wrapper around `apply_change(AddAxiom{..})`, mirroring
+    /// OWL API v5's `OWLOntologyManager.addAxiom(ontology, axiom)`.
+    /// Returns `ChangeApplied::UnSuccessfully` when the ontology is not
+    /// registered in this manager.
+    pub fn add_axiom(&mut self, ont_ref: &OntologyRef, axiom: Axiom) -> ChangeApplied {
+        let Some(iri) = ontology_iri(ont_ref) else {
+            return ChangeApplied::UnSuccessfully;
+        };
+        self.apply_change(OntologyChange::AddAxiom {
+            ontology_iri: iri,
+            axiom,
+        })
+    }
+
+    /// Remove an axiom from an ontology managed by this manager.
+    ///
+    /// Convenience wrapper around `apply_change(RemoveAxiom{..})`, mirroring
+    /// OWL API v5's `OWLOntologyManager.removeAxiom(ontology, axiom)`.
+    pub fn remove_axiom(&mut self, ont_ref: &OntologyRef, axiom: Axiom) -> ChangeApplied {
+        let Some(iri) = ontology_iri(ont_ref) else {
+            return ChangeApplied::UnSuccessfully;
+        };
+        self.apply_change(OntologyChange::RemoveAxiom {
+            ontology_iri: iri,
+            axiom,
+        })
+    }
+
+    /// Add an import declaration to an ontology managed by this manager.
+    ///
+    /// Convenience wrapper around `apply_change(AddImport{..})` which also
+    /// updates the imports closure graph.
+    pub fn add_import_declaration(
+        &mut self,
+        ont_ref: &OntologyRef,
+        import: crate::import::ImportDeclaration,
+    ) -> ChangeApplied {
+        let Some(iri) = ontology_iri(ont_ref) else {
+            return ChangeApplied::UnSuccessfully;
+        };
+        self.apply_change(OntologyChange::AddImport {
+            ontology_iri: iri,
+            import,
+        })
+    }
+
+    /// Remove an import declaration from an ontology managed by this manager.
+    ///
+    /// Convenience wrapper around `apply_change(RemoveImport{..})` which also
+    /// updates the imports closure graph.
+    pub fn remove_import_declaration(
+        &mut self,
+        ont_ref: &OntologyRef,
+        import: crate::import::ImportDeclaration,
+    ) -> ChangeApplied {
+        let Some(iri) = ontology_iri(ont_ref) else {
+            return ChangeApplied::UnSuccessfully;
+        };
+        self.apply_change(OntologyChange::RemoveImport {
+            ontology_iri: iri,
+            import,
+        })
+    }
+
+    /// Add an ontology-level annotation.
+    ///
+    /// Convenience wrapper around `apply_change(AddOntologyAnnotation{..})`.
+    pub fn add_annotation(
+        &mut self,
+        ont_ref: &OntologyRef,
+        annotation: Annotation,
+    ) -> ChangeApplied {
+        let Some(iri) = ontology_iri(ont_ref) else {
+            return ChangeApplied::UnSuccessfully;
+        };
+        self.apply_change(OntologyChange::AddOntologyAnnotation {
+            ontology_iri: iri,
+            annotation,
+        })
+    }
+
+    /// Remove an ontology-level annotation.
+    ///
+    /// Convenience wrapper around `apply_change(RemoveOntologyAnnotation{..})`.
+    pub fn remove_annotation(
+        &mut self,
+        ont_ref: &OntologyRef,
+        annotation: Annotation,
+    ) -> ChangeApplied {
+        let Some(iri) = ontology_iri(ont_ref) else {
+            return ChangeApplied::UnSuccessfully;
+        };
+        self.apply_change(OntologyChange::RemoveOntologyAnnotation {
+            ontology_iri: iri,
+            annotation,
+        })
     }
 
     /// Apply a single change to the data model.
@@ -827,7 +944,11 @@ impl OntologyManager {
         let mut new_ont = Ontology::new();
         new_ont.set_iri(effective_iri.clone());
         new_ont.set_version_iri(source_guard.id.version_iri.clone());
-        new_ont.axioms.clone_from(&source_guard.axioms);
+        // `set_axioms` (not a bare field assign) so the copied ontology's
+        // incremental axiom index is built — `is_subclass_of` and
+        // `get_types(direct)` answer from `axiom_index()` (CR-011 M1), so a
+        // stale/empty index would silently under-answer (re-review NR-1).
+        new_ont.set_axioms(source_guard.axioms.clone());
         new_ont.annotations.clone_from(&source_guard.annotations);
         new_ont.imports.clone_from(&source_guard.imports);
 
@@ -860,24 +981,39 @@ impl OntologyManager {
     // ── Undo / Redo ──────────────────────────────────────────────────────
 
     /// Undo the last `n` change batches.
+    ///
+    /// Matches OWLAPI `OWLOntologyManager.undo()` semantics: the inverse
+    /// changes are applied to the target ontologies immediately and returned
+    /// to the caller. The history position moves backwards so that a
+    /// subsequent [`redo`](Self::redo) re-applies them.
     pub fn undo(&mut self, n: usize) -> Result<Vec<OntologyChange>> {
-        let Some(ref mut history) = self.change_history else {
-            return Err(crate::Error::Unsupported {
-                message: "Change history is not enabled".to_string(),
-            });
+        let inverted = {
+            let Some(ref mut history) = self.change_history else {
+                return Err(crate::Error::Unsupported {
+                    message: "Change history is not enabled".to_string(),
+                });
+            };
+            history.undo(n)
         };
-        let inverted = history.undo(n);
+        self.apply_changes_inner(&inverted, false);
         Ok(inverted)
     }
 
     /// Redo the last undone change batches.
+    ///
+    /// Matches OWLAPI `OWLOntologyManager.redo()` semantics: the re-applied
+    /// changes are applied to the target ontologies immediately and returned
+    /// to the caller.
     pub fn redo(&mut self, n: usize) -> Result<Vec<OntologyChange>> {
-        let Some(ref mut history) = self.change_history else {
-            return Err(crate::Error::Unsupported {
-                message: "Change history is not enabled".to_string(),
-            });
+        let reapplied = {
+            let Some(ref mut history) = self.change_history else {
+                return Err(crate::Error::Unsupported {
+                    message: "Change history is not enabled".to_string(),
+                });
+            };
+            history.redo(n)
         };
-        let reapplied = history.redo(n);
+        self.apply_changes_inner(&reapplied, false);
         Ok(reapplied)
     }
 
@@ -909,4 +1045,13 @@ impl Default for OntologyManager {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Read the ontology IRI from a shared ontology reference.
+fn ontology_iri(ont_ref: &OntologyRef) -> Option<IRI> {
+    ont_ref
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_iri()
+        .cloned()
 }

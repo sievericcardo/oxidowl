@@ -1,0 +1,15 @@
+{
+  "id": "diff_012_datatypes_int_integer_facets",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff012#>)\nPrefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)\nOntology(<http://example.org/diff012>\n  EquivalentClasses(:Adult DataSomeValuesFrom(:age DatatypeRestriction(xsd:int xsd:minInclusive \"18\"^^xsd:int)))\n  EquivalentClasses(:IntRange DataSomeValuesFrom(:age xsd:integer))\n  DataPropertyAssertion(:age :alice \"30\"^^xsd:int)\n  DataPropertyAssertion(:age :bob \"12\"^^xsd:int)\n)",
+  "base": "http://example.org/diff012#",
+  "axioms": { "min": 4 },
+  "expected": {
+    "consistent": true,
+    "instances": { "Adult": ["alice"], "IntRange": ["alice", "bob"] },
+    "types": { "alice": ["Adult", "IntRange"], "bob": ["IntRange"] },
+    "entailed": ["ClassAssertion(:Adult :alice)", "ClassAssertion(:IntRange :bob)"],
+    "notEntailed": ["ClassAssertion(:Adult :bob)"]
+  },
+  "rationale": "Datatype reasoning: alice age 30 ≥ 18 satisfies Adult = ∃age.(int ⊓ [minInclusive 18]); bob age 12 does not. Both 30 and 12 are xsd:int literals, and int ⊑ integer, so both satisfy IntRange = ∃age.integer."
+}

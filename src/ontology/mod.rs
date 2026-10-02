@@ -143,7 +143,12 @@ impl std::fmt::Display for ObjectPropertyExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ObjectPropertyExpression::ObjectProperty(prop) => write!(f, "{}", prop.iri),
-            ObjectPropertyExpression::InverseObjectProperty(prop) => write!(f, "{}⁻", prop.iri),
+            // Canonical inverse-role string form: `inv(IRI)`. This is the form used by
+            // the DL-clause layer (dl_clauses/helpers.rs), by `RoleLabel` Display/parse,
+            // and by the tableau executor's `prop_to_role_name` (which uses Display).
+            // Keeping a single canonical form guarantees that role-successor keys, edge
+            // role labels and blocking signatures agree across all layers.
+            ObjectPropertyExpression::InverseObjectProperty(prop) => write!(f, "inv({})", prop.iri),
             ObjectPropertyExpression::PropertyChain(chain) => {
                 write!(f, "PropertyChain(")?;
                 for (i, prop) in chain.iter().enumerate() {
@@ -419,6 +424,10 @@ pub struct Signature {
     pub data_properties: Vec<DataProperty>,
     /// All individuals in the ontology
     pub individuals: Vec<individuals::Individual>,
+    /// All annotation properties in the ontology
+    pub annotation_properties: Vec<AnnotationProperty>,
+    /// All datatypes in the ontology
+    pub datatypes: Vec<Datatype>,
 }
 
 impl Signature {
@@ -539,6 +548,10 @@ pub struct Ontology {
     /// Cache layers compare their recorded version against this value
     /// to detect staleness instantly — no TTL wait required.
     version: u64,
+    /// Incremental axiom index, kept in sync with `add_axiom` / `remove_axiom`.
+    /// Rebuild from scratch with [`build_index`](Self::build_index) if the
+    /// axioms vector is mutated directly.
+    index: AxiomIndex,
     /// RDF graph for RDF-star and RDF 1.2 support
     /// Contains triples that may include quoted triples (RDF-star) or RDF 1.2 features
     pub rdf_graph: Option<crate::semantics::RdfGraph>,
@@ -556,6 +569,7 @@ impl Ontology {
             next_id: 1,
             version: 1,
             prefixes: std::collections::HashMap::new(),
+            index: indexes::AxiomIndex::default(),
             rdf_graph: None,
         }
     }
@@ -678,12 +692,14 @@ impl Ontology {
 
     /// Add an axiom to the ontology
     pub fn add_axiom(&mut self, axiom: axioms::Axiom) {
+        self.index.add_axiom(axiom.clone());
         self.axioms.push(axiom);
         self.bump_version();
     }
 
     /// Remove an axiom from the ontology
     pub fn remove_axiom(&mut self, axiom: &axioms::Axiom) {
+        self.index.remove_axiom(axiom);
         self.axioms.retain(|a| a != axiom);
         self.bump_version();
     }
@@ -692,6 +708,27 @@ impl Ontology {
     #[must_use]
     pub fn axioms(&self) -> &[axioms::Axiom] {
         &self.axioms
+    }
+
+    /// Replace the whole axiom set (snapshot restore, bulk loaders) and keep
+    /// the incremental [`axiom_index`](Self::axiom_index) in sync.
+    ///
+    /// Direct mutations of the public `axioms` field bypass the index and
+    /// would make index-backed queries (e.g. `is_subclass_of`) silently
+    /// stale — always go through here instead (CR-011 M1).
+    pub fn set_axioms(&mut self, axioms: Vec<axioms::Axiom>) {
+        self.axioms = axioms;
+        self.index = indexes::AxiomIndex::build(&self.axioms);
+    }
+
+    /// Access the incrementally-maintained axiom index.
+    ///
+    /// The index is updated on every `add_axiom` / `remove_axiom` call. If the
+    /// `axioms` vector was mutated directly, call [`build_index`](Self::build_index)
+    /// to rebuild a fresh snapshot instead.
+    #[must_use]
+    pub fn axiom_index(&self) -> &indexes::AxiomIndex {
+        &self.index
     }
 
     /// Build a bidirectional axiom index from the current axiom set.
@@ -1067,21 +1104,30 @@ impl Ontology {
         counts
     }
 
-    /// Get the signature of the ontology
+    /// Get the signature of the ontology.
+    ///
+    /// Covers **all** axiom types: classes, object/data/annotation properties,
+    /// named individuals and datatypes referenced anywhere in the axiom set,
+    /// matching OWL API v5 behaviour (e.g. built-in datatypes used in data
+    /// ranges are included, and `owl:topObjectProperty` / `owl:topDataProperty`
+    /// are included when the corresponding entity family is non-empty).
     pub fn signature(&self) -> Result<Signature> {
         let mut signature = Signature::new();
 
-        // Helper function to extract classes from class expressions
+        // ── Local extraction helpers ────────────────────────────────────────
+
+        fn push_class(classes: &mut Vec<concepts::Class>, class: concepts::Class) {
+            if !classes.iter().any(|c| c.iri == class.iri) {
+                classes.push(class);
+            }
+        }
+
         fn extract_classes_from_expression(
             expr: &concepts::ClassExpression,
             classes: &mut Vec<concepts::Class>,
         ) {
             match expr {
-                concepts::ClassExpression::Class(class) => {
-                    if !classes.iter().any(|c| c.iri == class.iri) {
-                        classes.push(class.clone());
-                    }
-                }
+                concepts::ClassExpression::Class(class) => push_class(classes, class.clone()),
                 concepts::ClassExpression::ObjectIntersectionOf(exprs)
                 | concepts::ClassExpression::ObjectUnionOf(exprs) => {
                     for expr in exprs {
@@ -1108,126 +1154,609 @@ impl Ontology {
                 | concepts::ClassExpression::DataMinCardinality { .. }
                 | concepts::ClassExpression::DataMaxCardinality { .. }
                 | concepts::ClassExpression::DataExactCardinality { .. }
-                | concepts::ClassExpression::DataHasValue { .. } => {
-                    // These don't contain nested class expressions
+                | concepts::ClassExpression::DataHasValue { .. } => {}
+            }
+        }
+
+        // Individuals can occur *inside* class expressions — `ObjectOneOf({a})`
+        // and `ObjectHasValue(r.{a})` are the nominal carriers — but the class
+        // extractor above deliberately skips them (it only collects classes).
+        // Without this pass, `A ≡ {a}` never surfaces `a` in
+        // `signature().individuals`, so `realize()`, `get_instances()` and the
+        // OWL API trait surface all miss nominal-only individuals
+        // (CR-008 MAJOR #2).
+        fn extract_individuals_from_expression(
+            expr: &concepts::ClassExpression,
+            inds: &mut Vec<individuals::Individual>,
+        ) {
+            match expr {
+                concepts::ClassExpression::ObjectOneOf(members) => {
+                    for member in members {
+                        extract_individual(member, inds);
+                    }
                 }
+                concepts::ClassExpression::ObjectHasValue { value, .. } => {
+                    extract_individual(value, inds);
+                }
+                concepts::ClassExpression::ObjectIntersectionOf(exprs)
+                | concepts::ClassExpression::ObjectUnionOf(exprs) => {
+                    for expr in exprs {
+                        extract_individuals_from_expression(expr, inds);
+                    }
+                }
+                concepts::ClassExpression::ObjectComplementOf(expr)
+                | concepts::ClassExpression::ObjectSomeValuesFrom { filler: expr, .. }
+                | concepts::ClassExpression::ObjectAllValuesFrom { filler: expr, .. }
+                | concepts::ClassExpression::ObjectMinCardinality { filler: expr, .. }
+                | concepts::ClassExpression::ObjectMaxCardinality { filler: expr, .. }
+                | concepts::ClassExpression::ObjectExactCardinality { filler: expr, .. } => {
+                    extract_individuals_from_expression(expr, inds);
+                }
+                concepts::ClassExpression::Class(_)
+                | concepts::ClassExpression::ObjectHasSelf { .. }
+                | concepts::ClassExpression::DataSomeValuesFrom { .. }
+                | concepts::ClassExpression::DataAllValuesFrom { .. }
+                | concepts::ClassExpression::DataMinCardinality { .. }
+                | concepts::ClassExpression::DataMaxCardinality { .. }
+                | concepts::ClassExpression::DataExactCardinality { .. }
+                | concepts::ClassExpression::DataHasValue { .. } => {}
+            }
+        }
+
+        /// Scan a class expression for *both* entity families it can carry:
+        /// classes (via [`extract_classes_from_expression`]) and nominals
+        /// (via [`extract_individuals_from_expression`]).  Every class
+        /// expression scanned by `signature()` must go through this helper so
+        /// nominal individuals are never dropped (CR-008 MAJOR #2).
+        fn extract_from_class_expression(
+            expr: &concepts::ClassExpression,
+            classes: &mut Vec<concepts::Class>,
+            inds: &mut Vec<individuals::Individual>,
+        ) {
+            extract_classes_from_expression(expr, classes);
+            extract_individuals_from_expression(expr, inds);
+        }
+
+        fn push_object_property(props: &mut Vec<ObjectProperty>, prop: ObjectProperty) {
+            if !props.iter().any(|p| p.iri == prop.iri) {
+                props.push(prop);
+            }
+        }
+
+        fn extract_object_property_expression(
+            expr: &ObjectPropertyExpression,
+            props: &mut Vec<ObjectProperty>,
+        ) {
+            match expr {
+                ObjectPropertyExpression::ObjectProperty(prop) => {
+                    push_object_property(props, prop.clone());
+                }
+                ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                    push_object_property(props, prop.clone());
+                }
+                ObjectPropertyExpression::PropertyChain(chain) => {
+                    for link in chain {
+                        extract_object_property_expression(link, props);
+                    }
+                }
+            }
+        }
+
+        fn push_data_property(props: &mut Vec<DataProperty>, prop: DataProperty) {
+            if !props.iter().any(|p| p.iri == prop.iri) {
+                props.push(prop);
+            }
+        }
+
+        fn extract_data_property_expression(
+            expr: &DataPropertyExpression,
+            props: &mut Vec<DataProperty>,
+        ) {
+            match expr {
+                DataPropertyExpression::DataProperty(prop) => {
+                    push_data_property(props, prop.clone())
+                }
+            }
+        }
+
+        fn extract_individual(
+            ind: &individuals::Individual,
+            inds: &mut Vec<individuals::Individual>,
+        ) {
+            if !inds.contains(ind) {
+                inds.push(ind.clone());
+            }
+        }
+
+        fn push_datatype(dts: &mut Vec<Datatype>, iri: &IRI) {
+            if !dts.iter().any(|d| d.iri == *iri) {
+                dts.push(Datatype { iri: iri.clone() });
+            }
+        }
+
+        fn extract_literal(lit: &Literal, dts: &mut Vec<Datatype>) {
+            if let Some(url) = &lit.datatype {
+                push_datatype(dts, &IRI::new(url.as_str()));
+            }
+        }
+
+        fn extract_data_range(range: &DataRange, dts: &mut Vec<Datatype>) {
+            match range {
+                DataRange::Datatype(iri) => push_datatype(dts, iri),
+                DataRange::DataIntersectionOf(ranges) | DataRange::DataUnionOf(ranges) => {
+                    for r in ranges {
+                        extract_data_range(r, dts);
+                    }
+                }
+                DataRange::DataComplementOf(inner) => extract_data_range(inner, dts),
+                DataRange::DataOneOf(literals) => {
+                    for lit in literals {
+                        extract_literal(lit, dts);
+                    }
+                }
+                DataRange::DatatypeRestriction {
+                    datatype,
+                    restrictions,
+                } => {
+                    push_datatype(dts, datatype);
+                    for fr in restrictions {
+                        extract_literal(&fr.value, dts);
+                    }
+                }
+            }
+        }
+
+        fn extract_swrl_atom(
+            atom: &axioms::SWRLAtom,
+            classes: &mut Vec<concepts::Class>,
+            obj_props: &mut Vec<ObjectProperty>,
+            data_props: &mut Vec<DataProperty>,
+            dts: &mut Vec<Datatype>,
+            inds: &mut Vec<individuals::Individual>,
+        ) {
+            match atom {
+                axioms::SWRLAtom::ClassAtom {
+                    predicate,
+                    argument,
+                } => {
+                    extract_from_class_expression(predicate, classes, inds);
+                    if let axioms::SWRLIArgument::Individual(ind) = argument {
+                        extract_individual(ind, inds);
+                    }
+                }
+                axioms::SWRLAtom::ObjectPropertyAtom {
+                    predicate,
+                    first_argument,
+                    second_argument,
+                } => {
+                    extract_object_property_expression(predicate, obj_props);
+                    if let axioms::SWRLIArgument::Individual(ind) = first_argument {
+                        extract_individual(ind, inds);
+                    }
+                    if let axioms::SWRLIArgument::Individual(ind) = second_argument {
+                        extract_individual(ind, inds);
+                    }
+                }
+                axioms::SWRLAtom::DataPropertyAtom {
+                    predicate,
+                    first_argument,
+                    second_argument,
+                } => {
+                    extract_data_property_expression(predicate, data_props);
+                    if let axioms::SWRLIArgument::Individual(ind) = first_argument {
+                        extract_individual(ind, inds);
+                    }
+                    if let axioms::SWRLDArgument::Literal(lit) = second_argument {
+                        extract_literal(lit, dts);
+                    }
+                }
+                axioms::SWRLAtom::DataRangeAtom { predicate, .. } => {
+                    extract_data_range(predicate, dts);
+                }
+                axioms::SWRLAtom::SameIndividualAtom {
+                    first_argument,
+                    second_argument,
+                }
+                | axioms::SWRLAtom::DifferentIndividualsAtom {
+                    first_argument,
+                    second_argument,
+                } => {
+                    if let axioms::SWRLIArgument::Individual(ind) = first_argument {
+                        extract_individual(ind, inds);
+                    }
+                    if let axioms::SWRLIArgument::Individual(ind) = second_argument {
+                        extract_individual(ind, inds);
+                    }
+                }
+                axioms::SWRLAtom::BuiltInAtom { arguments, .. } => {
+                    for arg in arguments {
+                        if let axioms::SWRLDArgument::Literal(lit) = arg {
+                            extract_literal(lit, dts);
+                        }
+                    }
+                }
+            }
+        }
+
+        fn push_annotation_property(props: &mut Vec<AnnotationProperty>, prop: AnnotationProperty) {
+            if !props.iter().any(|p| p.iri == prop.iri) {
+                props.push(prop);
             }
         }
 
         log::debug!("Computing signature from {} axioms", self.axioms.len());
 
-        // Extract entities from axioms
         for axiom in &self.axioms {
-            let discriminant = std::mem::discriminant(axiom);
-            log::debug!("Processing axiom discriminant: {discriminant:?}");
             match axiom {
-                axioms::Axiom::Declaration(decl) => {
-                    match &decl.entity {
-                        axioms::Entity::Class(iri) => {
-                            signature.classes.push(concepts::Class { iri: iri.clone() });
-                            log::debug!("Added class from declaration: {iri}");
-                        }
-                        axioms::Entity::ObjectProperty(iri) => {
-                            signature
-                                .object_properties
-                                .push(ObjectProperty { iri: iri.clone() });
-                        }
-                        axioms::Entity::DataProperty(iri) => {
-                            signature
-                                .data_properties
-                                .push(DataProperty { iri: iri.clone() });
-                        }
-                        axioms::Entity::NamedIndividual(iri) => {
-                            signature.individuals.push(individuals::Individual::Named(
-                                individuals::NamedIndividual { iri: iri.clone() },
-                            ));
-                        }
-                        axioms::Entity::AnnotationProperty(_prop) => {
-                            // Handle annotation property
-                        }
-                        axioms::Entity::Datatype(_datatype) => {
-                            // Handle datatype
-                        }
+                axioms::Axiom::Declaration(decl) => match &decl.entity {
+                    axioms::Entity::Class(iri) => {
+                        push_class(&mut signature.classes, concepts::Class { iri: iri.clone() });
                     }
-                }
+                    axioms::Entity::ObjectProperty(iri) => {
+                        push_object_property(
+                            &mut signature.object_properties,
+                            ObjectProperty { iri: iri.clone() },
+                        );
+                    }
+                    axioms::Entity::DataProperty(iri) => {
+                        push_data_property(
+                            &mut signature.data_properties,
+                            DataProperty { iri: iri.clone() },
+                        );
+                    }
+                    axioms::Entity::NamedIndividual(iri) => {
+                        extract_individual(
+                            &individuals::Individual::Named(individuals::NamedIndividual {
+                                iri: iri.clone(),
+                            }),
+                            &mut signature.individuals,
+                        );
+                    }
+                    axioms::Entity::AnnotationProperty(iri) => {
+                        push_annotation_property(
+                            &mut signature.annotation_properties,
+                            AnnotationProperty { iri: iri.clone() },
+                        );
+                    }
+                    axioms::Entity::Datatype(iri) => {
+                        push_datatype(&mut signature.datatypes, iri);
+                    }
+                },
                 axioms::Axiom::SubClassOf(axiom) => {
-                    log::debug!("Processing SubClassOf axiom");
-                    extract_classes_from_expression(&axiom.subclass, &mut signature.classes);
-                    extract_classes_from_expression(&axiom.superclass, &mut signature.classes);
+                    extract_from_class_expression(
+                        &axiom.subclass,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                    extract_from_class_expression(
+                        &axiom.superclass,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
                 }
                 axioms::Axiom::EquivalentClasses(axiom) => {
-                    log::debug!(
-                        "Processing EquivalentClasses axiom with {} classes",
-                        axiom.classes.len()
-                    );
                     for class_expr in &axiom.classes {
-                        extract_classes_from_expression(class_expr, &mut signature.classes);
-                    }
-                }
-                axioms::Axiom::ClassAssertion(axiom) => {
-                    log::debug!("Processing ClassAssertion axiom");
-                    extract_classes_from_expression(&axiom.class, &mut signature.classes);
-                    // Also add the individual
-                    if !signature.individuals.iter().any(|i| match i {
-                        individuals::Individual::Named(named) => {
-                            named.iri
-                                == match &axiom.individual {
-                                    individuals::Individual::Named(named) => named.iri.clone(),
-                                    _ => return false,
-                                }
-                        }
-                        _ => false,
-                    }) {
-                        signature.individuals.push(axiom.individual.clone());
-                    }
-                }
-                axioms::Axiom::DisjointUnion(axiom) => {
-                    log::debug!("Processing DisjointUnion axiom");
-                    extract_classes_from_expression(&axiom.class, &mut signature.classes);
-                    for disjoint_class in &axiom.disjoint_classes {
-                        extract_classes_from_expression(disjoint_class, &mut signature.classes);
+                        extract_from_class_expression(
+                            class_expr,
+                            &mut signature.classes,
+                            &mut signature.individuals,
+                        );
                     }
                 }
                 axioms::Axiom::DisjointClasses(axiom) => {
-                    log::debug!("Processing DisjointClasses axiom");
                     for class_expr in &axiom.classes {
-                        extract_classes_from_expression(class_expr, &mut signature.classes);
+                        extract_from_class_expression(
+                            class_expr,
+                            &mut signature.classes,
+                            &mut signature.individuals,
+                        );
                     }
+                }
+                axioms::Axiom::DisjointUnion(axiom) => {
+                    extract_from_class_expression(
+                        &axiom.class,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                    for disjoint_class in &axiom.disjoint_classes {
+                        extract_from_class_expression(
+                            disjoint_class,
+                            &mut signature.classes,
+                            &mut signature.individuals,
+                        );
+                    }
+                }
+                axioms::Axiom::ClassAssertion(axiom) => {
+                    extract_from_class_expression(
+                        &axiom.class,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                    extract_individual(&axiom.individual, &mut signature.individuals);
                 }
                 axioms::Axiom::ObjectPropertyAssertion(axiom) => {
-                    log::debug!("Processing ObjectPropertyAssertion axiom");
-                    // Add individuals but these don't typically contain classes
-                    if !signature.individuals.contains(&axiom.source) {
-                        signature.individuals.push(axiom.source.clone());
-                    }
-                    if !signature.individuals.contains(&axiom.target) {
-                        signature.individuals.push(axiom.target.clone());
-                    }
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                    extract_individual(&axiom.source, &mut signature.individuals);
+                    extract_individual(&axiom.target, &mut signature.individuals);
                 }
                 axioms::Axiom::DataPropertyAssertion(axiom) => {
-                    log::debug!("Processing DataPropertyAssertion axiom");
-                    if !signature.individuals.contains(&axiom.individual) {
-                        signature.individuals.push(axiom.individual.clone());
+                    extract_data_property_expression(
+                        &axiom.property,
+                        &mut signature.data_properties,
+                    );
+                    extract_individual(&axiom.individual, &mut signature.individuals);
+                    extract_literal(&axiom.value, &mut signature.datatypes);
+                }
+                axioms::Axiom::NegativeObjectPropertyAssertion(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                    extract_individual(&axiom.source, &mut signature.individuals);
+                    extract_individual(&axiom.target, &mut signature.individuals);
+                }
+                axioms::Axiom::NegativeDataPropertyAssertion(axiom) => {
+                    extract_data_property_expression(
+                        &axiom.property,
+                        &mut signature.data_properties,
+                    );
+                    extract_individual(&axiom.individual, &mut signature.individuals);
+                    extract_literal(&axiom.value, &mut signature.datatypes);
+                }
+                axioms::Axiom::SubObjectPropertyOf(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.sub_property,
+                        &mut signature.object_properties,
+                    );
+                    extract_object_property_expression(
+                        &axiom.super_property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::EquivalentObjectProperties(axiom) => {
+                    for prop in &axiom.properties {
+                        extract_object_property_expression(prop, &mut signature.object_properties);
                     }
                 }
-                // Handle other axiom types as needed
-                axiom => {
-                    log::debug!(
-                        "Processing other axiom type: {:?}",
-                        std::mem::discriminant(axiom)
+                axioms::Axiom::DisjointObjectProperties(axiom) => {
+                    for prop in &axiom.properties {
+                        extract_object_property_expression(prop, &mut signature.object_properties);
+                    }
+                }
+                axioms::Axiom::InverseObjectProperties(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property1,
+                        &mut signature.object_properties,
                     );
+                    extract_object_property_expression(
+                        &axiom.property2,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::ObjectPropertyDomain(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                    extract_from_class_expression(
+                        &axiom.domain,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                }
+                axioms::Axiom::ObjectPropertyRange(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                    extract_from_class_expression(
+                        &axiom.range,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                }
+                axioms::Axiom::FunctionalObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::InverseFunctionalObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::ReflexiveObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::IrreflexiveObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::SymmetricObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::AsymmetricObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::TransitiveObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::SubDataPropertyOf(axiom) => {
+                    extract_data_property_expression(
+                        &axiom.sub_property,
+                        &mut signature.data_properties,
+                    );
+                    extract_data_property_expression(
+                        &axiom.super_property,
+                        &mut signature.data_properties,
+                    );
+                }
+                axioms::Axiom::EquivalentDataProperties(axiom) => {
+                    for prop in &axiom.properties {
+                        extract_data_property_expression(prop, &mut signature.data_properties);
+                    }
+                }
+                axioms::Axiom::DisjointDataProperties(axiom) => {
+                    for prop in &axiom.properties {
+                        extract_data_property_expression(prop, &mut signature.data_properties);
+                    }
+                }
+                axioms::Axiom::DataPropertyDomain(axiom) => {
+                    extract_data_property_expression(
+                        &axiom.property,
+                        &mut signature.data_properties,
+                    );
+                    extract_from_class_expression(
+                        &axiom.domain,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                }
+                axioms::Axiom::DataPropertyRange(axiom) => {
+                    extract_data_property_expression(
+                        &axiom.property,
+                        &mut signature.data_properties,
+                    );
+                    extract_data_range(&axiom.range, &mut signature.datatypes);
+                }
+                axioms::Axiom::FunctionalDataProperty(axiom) => {
+                    extract_data_property_expression(
+                        &axiom.property,
+                        &mut signature.data_properties,
+                    );
+                }
+                axioms::Axiom::SameIndividual(axiom) => {
+                    for ind in &axiom.individuals {
+                        extract_individual(ind, &mut signature.individuals);
+                    }
+                }
+                axioms::Axiom::DifferentIndividuals(axiom) => {
+                    for ind in &axiom.individuals {
+                        extract_individual(ind, &mut signature.individuals);
+                    }
+                }
+                axioms::Axiom::HasKey(axiom) => {
+                    extract_from_class_expression(
+                        &axiom.class,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                    for obj_prop in &axiom.object_properties {
+                        extract_object_property_expression(
+                            obj_prop,
+                            &mut signature.object_properties,
+                        );
+                    }
+                    for data_prop in &axiom.data_properties {
+                        extract_data_property_expression(data_prop, &mut signature.data_properties);
+                    }
+                }
+                axioms::Axiom::DatatypeDefinition(axiom) => {
+                    push_datatype(&mut signature.datatypes, &axiom.datatype);
+                    extract_data_range(&axiom.data_range, &mut signature.datatypes);
+                }
+                axioms::Axiom::Rule(axiom) => {
+                    for atom in &axiom.rule.head {
+                        extract_swrl_atom(
+                            atom,
+                            &mut signature.classes,
+                            &mut signature.object_properties,
+                            &mut signature.data_properties,
+                            &mut signature.datatypes,
+                            &mut signature.individuals,
+                        );
+                    }
+                    for atom in &axiom.rule.body {
+                        extract_swrl_atom(
+                            atom,
+                            &mut signature.classes,
+                            &mut signature.object_properties,
+                            &mut signature.data_properties,
+                            &mut signature.datatypes,
+                            &mut signature.individuals,
+                        );
+                    }
+                }
+                axioms::Axiom::AnnotationAssertion(axiom) => {
+                    push_annotation_property(
+                        &mut signature.annotation_properties,
+                        axiom.property.clone(),
+                    );
+                    if let AnnotationValue::Literal(lit) = &axiom.value {
+                        extract_literal(lit, &mut signature.datatypes);
+                    }
+                }
+                axioms::Axiom::SubAnnotationPropertyOf(axiom) => {
+                    push_annotation_property(
+                        &mut signature.annotation_properties,
+                        axiom.sub_property.clone(),
+                    );
+                    push_annotation_property(
+                        &mut signature.annotation_properties,
+                        axiom.super_property.clone(),
+                    );
+                }
+                axioms::Axiom::AnnotationPropertyDomain(axiom) => {
+                    push_annotation_property(
+                        &mut signature.annotation_properties,
+                        axiom.property.clone(),
+                    );
+                    extract_from_class_expression(
+                        &axiom.domain,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                }
+                axioms::Axiom::AnnotationPropertyRange(axiom) => {
+                    push_annotation_property(
+                        &mut signature.annotation_properties,
+                        axiom.property.clone(),
+                    );
+                    extract_data_range(&axiom.range, &mut signature.datatypes);
                 }
             }
         }
 
+        // ── OWL API v5 compatibility extras ─────────────────────────────────
+        // `owl:topObjectProperty` is part of the object-property signature
+        // whenever the ontology uses any object property.
+        if !signature.object_properties.is_empty()
+            && !signature
+                .object_properties
+                .iter()
+                .any(|p| p.iri.as_str() == "http://www.w3.org/2002/07/owl#topObjectProperty")
+        {
+            signature.object_properties.push(ObjectProperty {
+                iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+            });
+        }
+
         log::debug!(
-            "Final signature: {} classes, {} individuals",
+            "Final signature: {} classes, {} object properties, {} data properties, {} individuals",
             signature.classes.len(),
+            signature.object_properties.len(),
+            signature.data_properties.len(),
             signature.individuals.len()
         );
-        for class in &signature.classes {
-            log::debug!("  Class: {}", class.iri);
-        }
 
         Ok(signature)
     }
@@ -1787,9 +2316,9 @@ impl OntologyFormat {
             "trig" => Some(OntologyFormat::TriG),
             "trix" => Some(OntologyFormat::TriX),
             "jsonld" | "json-ld" => Some(OntologyFormat::JsonLd),
-            "rj" | "rjson" => Some(OntologyFormat::RdfJson),
-            "html" | "xhtml" => Some(OntologyFormat::Rdfa),
-            "brdf" => Some(OntologyFormat::BinaryRdf),
+            "rj" | "rjson" | "rdfjson" => Some(OntologyFormat::RdfJson),
+            "rdfa" | "html" | "xhtml" => Some(OntologyFormat::Rdfa),
+            "brdf" | "binaryrdf" => Some(OntologyFormat::BinaryRdf),
             "hdt" => Some(OntologyFormat::Hdt),
             _ => None,
         }

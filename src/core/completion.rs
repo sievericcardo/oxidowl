@@ -41,6 +41,8 @@ pub enum CompletionRule {
     Nominal,
     /// Self rule (∃R.Self)
     Self_,
+    /// Has-value rule (∃R.{a} / ObjectHasValue) and data has-value
+    HasValue,
     /// Choose rule (disjunction)
     Choose,
     /// Datatype rule
@@ -89,6 +91,7 @@ impl Default for CompletionStrategy {
             CompletionRule::AtMost,
             CompletionRule::Nominal,
             CompletionRule::Self_,
+            CompletionRule::HasValue,
             CompletionRule::Choose,
             CompletionRule::Datatype,
             CompletionRule::Unfold,
@@ -435,6 +438,7 @@ impl CompletionRuleSet {
         // Existential expansion (normal priority)
         self.add_rule(CompletionRule::Some, RulePriority::Normal);
         self.add_rule(CompletionRule::Nominal, RulePriority::Normal);
+        self.add_rule(CompletionRule::HasValue, RulePriority::Normal);
 
         // Non-deterministic rules (low priority)
         self.add_rule(CompletionRule::Or, RulePriority::Low);
@@ -494,6 +498,7 @@ impl CompletionRuleSet {
             }
             CompletionRule::Nominal => matches!(concept, ClassExpression::ObjectOneOf(_)),
             CompletionRule::Self_ => matches!(concept, ClassExpression::ObjectHasSelf { .. }),
+            CompletionRule::HasValue => matches!(concept, ClassExpression::ObjectHasValue { .. }),
             CompletionRule::Choose => false, // Applied by strategy
             CompletionRule::Datatype => matches!(
                 concept,
@@ -523,6 +528,7 @@ impl CompletionRuleSet {
             CompletionRule::AtMost => self.apply_at_most_rule(&application),
             CompletionRule::Nominal => self.apply_nominal_rule(&application),
             CompletionRule::Self_ => self.apply_self_rule(&application),
+            CompletionRule::HasValue => self.apply_has_value_rule(&application),
             CompletionRule::Choose => self.apply_choose_rule(&application),
             CompletionRule::Datatype => self.apply_datatype_rule(&application),
             CompletionRule::Unfold => self.apply_unfold_rule(&application),
@@ -747,6 +753,30 @@ impl CompletionRuleSet {
                     .unwrap_or("unknown")
                     .to_string(),
                 Arc::clone(&application.dependencies),
+            ));
+        }
+
+        Ok(result)
+    }
+
+    /// Apply the has-value rule: ∃R.{a} → add role assertion R(x, a)
+    fn apply_has_value_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+
+        if let RuleContext::Concept {
+            concept: ClassExpression::ObjectHasValue { property, value },
+            dependencies,
+        } = &application.context
+        {
+            // The tableau executor performs the actual edge creation and nominal reuse
+            // (see `TableauExecutor::apply_has_value_rule`). Here we record the intended
+            // role assertion so higher-level callers that only consume `RuleResult` still
+            // see the has-value restriction's effect.
+            result.role_additions.push((
+                string_to_individual(application.node.clone()),
+                value.clone(),
+                property.clone(),
+                Arc::clone(dependencies),
             ));
         }
 
@@ -1811,6 +1841,7 @@ impl fmt::Display for CompletionRule {
             CompletionRule::AtMost => write!(f, "AtMost"),
             CompletionRule::Nominal => write!(f, "Nominal"),
             CompletionRule::Self_ => write!(f, "Self"),
+            CompletionRule::HasValue => write!(f, "HasValue"),
             CompletionRule::Choose => write!(f, "Choose"),
             CompletionRule::Datatype => write!(f, "Data"),
             CompletionRule::Unfold => write!(f, "Unfold"),

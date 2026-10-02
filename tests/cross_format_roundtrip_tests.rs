@@ -479,15 +479,11 @@ fn test_has_key_with_annotation_roundtrip() {
 
 #[test]
 fn test_datatype_definition_roundtrip() {
-    use horned_owl::model::{Build, DataRange as HornedDataRange, Datatype as HornedDataType};
-
     let df = DF::new();
-    let b = Build::new_string();
 
-    let custom_dt = b.iri("http://ex.org/customDT".to_string());
-    let integer_iri = b.iri("http://www.w3.org/2001/XMLSchema#integer".to_string());
-    let int_dr = HornedDataRange::Datatype(HornedDataType(integer_iri));
-    let complement_dr = HornedDataRange::DataComplementOf(Box::new(int_dr));
+    let custom_dt = IRI::new("http://ex.org/customDT");
+    let int_dr = DataRange::Datatype(IRI::new("http://www.w3.org/2001/XMLSchema#integer"));
+    let complement_dr = DataRange::DataComplementOf(Box::new(int_dr));
 
     let dt_def = DatatypeDefinitionAxiom {
         id: df.next_id(),
@@ -517,6 +513,20 @@ fn test_datatype_definition_roundtrip() {
             .iter()
             .any(|ax| matches!(ax, Axiom::DatatypeDefinition(_))),
         "DatatypeDefinition axiom must be present in constructed ontology"
+    );
+
+    // The DatatypeDefinition axiom must survive a Functional Syntax roundtrip
+    // with the data range reconstructed natively.
+    let mut tb = TestBase::new();
+    let reloaded = tb
+        .round_trip(&ont, OntologyFormat::Functional)
+        .unwrap_or_else(|e| panic!("Functional roundtrip of DatatypeDefinition failed: {e}"));
+    assert!(
+        reloaded
+            .axioms()
+            .iter()
+            .any(|ax| matches!(ax, Axiom::DatatypeDefinition(_))),
+        "DatatypeDefinition axiom must survive Functional Syntax roundtrip"
     );
 }
 
@@ -630,4 +640,43 @@ fn test_many_different_individuals_roundtrip() {
 
     rt_and_compare(&ont, OntologyFormat::Functional);
     rt_min_count(&ont, OntologyFormat::Turtle, 1);
+}
+
+/// CR-011 M2 — the Turtle writer must not silently drop SWRL rules or
+/// IRI-less ontology annotations: both go out under the shared
+/// `urn:oxidowl:` preservation vocabulary and decode back through
+/// `rdf_to_owl::process_triple`.
+#[test]
+fn test_swrl_rule_and_iri_less_annotations_survive_turtle_roundtrip() {
+    let source = "@prefix ex: <http://example.org/> .\n\
+                  { ?x a ex:A } => { ?x a ex:B } .\n\
+                  { ex:k ex:q ex:v } .\n";
+    let ont = parse_str(source, OntologyFormat::N3).expect("N3 fixture must parse");
+    assert!(ont.get_iri().is_none(), "fixture must be IRI-less");
+
+    let ttl = save_to_string(&ont, OntologyFormat::Turtle).expect("Turtle serialize");
+    assert!(
+        ttl.contains("urn:oxidowl:swrlRule"),
+        "rule must be visible in the Turtle output:\n{ttl}"
+    );
+
+    let back = parse_str(&ttl, OntologyFormat::Turtle).expect("Turtle reparse");
+    let rule = |o: &Ontology| {
+        o.axioms()
+            .iter()
+            .find_map(|a| match a {
+                Axiom::Rule(r) => Some(r.rule.clone()),
+                _ => None,
+            })
+            .expect("ontology must carry the SWRL rule")
+    };
+    assert_eq!(
+        rule(&back),
+        rule(&ont),
+        "the SWRL rule must round-trip through Turtle unchanged"
+    );
+    assert_eq!(
+        back.annotations, ont.annotations,
+        "IRI-less ontology annotations must round-trip through Turtle unchanged"
+    );
 }

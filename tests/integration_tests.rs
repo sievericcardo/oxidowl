@@ -523,7 +523,7 @@ fn phase6_rio_trix_and_rdfa() {
     let tr = TriXRenderer::new();
     assert!(tr.serialize(&o).is_ok());
 
-    let parser = RDFaParser::new();
+    let parser = RdfaParser::new();
     let html = r#"<div typeof="http://ex.org/A" about="http://ex.org/ind"></div>"#;
     assert!(parser.parse(html).is_ok());
 }

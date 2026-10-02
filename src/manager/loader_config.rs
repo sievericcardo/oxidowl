@@ -19,6 +19,9 @@ pub struct LoaderConfig {
     pub accept_compression: bool,
     pub missing_import_strategy: MissingImportStrategy,
     pub max_import_depth: usize,
+    /// Whether `OntologyLoader` should recursively resolve and register the
+    /// `owl:imports` closure of a loaded ontology (mirroring `ImportManager`).
+    pub resolve_imports: bool,
 }
 
 impl Default for LoaderConfig {
@@ -33,6 +36,7 @@ impl Default for LoaderConfig {
             accept_compression: true,
             missing_import_strategy: MissingImportStrategy::Silent,
             max_import_depth: 20,
+            resolve_imports: false,
         }
     }
 }

@@ -109,8 +109,12 @@ impl SaturationNode {
     /// Add a saturated concept to this node
     pub fn add_saturated_concept(&mut self, concept: ClassExpression) -> bool {
         if !self.saturated_concepts.contains(&concept) {
+            let hash = crate::core::fast_hashing::hash_concept(&concept);
             self.saturated_concepts = self.saturated_concepts.update(concept);
-            self.signature = Self::compute_signature(&self.saturated_concepts);
+            // Incremental XOR-fold signature: O(1) instead of re-sorting the
+            // whole set (keeps building dense subsumer sets O(m) per node
+            // rather than O(m²) — workstream A8).
+            self.signature ^= hash;
             true
         } else {
             false
@@ -119,15 +123,12 @@ impl SaturationNode {
 
     /// Add multiple saturated concepts
     pub fn add_saturated_concepts(&mut self, concepts: impl IntoIterator<Item = ClassExpression>) {
-        let mut changed = false;
         for concept in concepts {
             if !self.saturated_concepts.contains(&concept) {
+                let hash = crate::core::fast_hashing::hash_concept(&concept);
                 self.saturated_concepts = self.saturated_concepts.update(concept);
-                changed = true;
+                self.signature ^= hash;
             }
-        }
-        if changed {
-            self.signature = Self::compute_signature(&self.saturated_concepts);
         }
     }
 
@@ -197,9 +198,17 @@ impl SaturationNode {
         self.subsumption_cache.insert(concept, result);
     }
 
-    /// Compute a hash signature for a set of concepts
+    /// Compute a hash signature for a set of concepts.
+    ///
+    /// Uses an XOR-fold over per-element hashes so the result is commutative
+    /// (order-independent) and consistent with the incremental updates applied
+    /// by [`Self::add_saturated_concept`].
     fn compute_signature(concepts: &ConceptSet) -> u64 {
-        crate::core::fast_hashing::compute_fast_signature(concepts)
+        let mut combined: u64 = 0;
+        for concept in concepts.iter() {
+            combined ^= crate::core::fast_hashing::hash_concept(concept);
+        }
+        combined
     }
 
     /// Get the signature hash

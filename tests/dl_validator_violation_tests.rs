@@ -55,12 +55,14 @@ fn test_dl_non_simple_property_in_self() {
     let validator = OWL2ProfileValidator::new();
     let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
-    // NOTE: HasSelf on non-simple property check is a known gap in the current
-    // DL validator. This test documents the expected violation.
+    // HasSelf on a non-simple property is rejected by the DL validator
+    // (OWL 2 Section 11.1: ObjectHasSelf requires a simple property).
     assert!(
-        report.is_valid(),
-        "Current DL validator does not yet reject HasSelf on non-simple property"
+        !report.is_valid(),
+        "DL validator should reject HasSelf on non-simple (transitive) property: {:?}",
+        report.violations
     );
+    assert!(!report.violations.is_empty(), "Should have violations");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -82,12 +84,14 @@ fn test_dl_non_simple_property_in_disjoint() {
     let validator = OWL2ProfileValidator::new();
     let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
-    // NOTE: DisjointObjectProperties with non-simple property check is a known
-    // gap in the current DL validator. This test documents the expected violation.
+    // DisjointObjectProperties with a non-simple property is rejected by the DL
+    // validator (OWL 2 Section 11.1: disjoint properties must be simple).
     assert!(
-        report.is_valid(),
-        "Current DL validator does not yet reject DisjointObjectProperties with non-simple property"
+        !report.is_valid(),
+        "DL validator should reject DisjointObjectProperties with non-simple property: {:?}",
+        report.violations
     );
+    assert!(!report.violations.is_empty(), "Should have violations");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -119,12 +123,14 @@ fn test_dl_illegal_punning_class_datatype() {
     let validator = OWL2ProfileValidator::new();
     let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
-    // NOTE: Illegal punning (class + datatype same IRI) check is a known gap
-    // in the current DL validator. This test documents the expected violation.
+    // Illegal punning (same IRI as both class and datatype) is rejected by the
+    // DL validator (OWL 2 Section 11.1: class/datatype punning is disallowed).
     assert!(
-        report.is_valid(),
-        "Current DL validator does not yet reject illegal punning (class + datatype same IRI)"
+        !report.is_valid(),
+        "DL validator should reject illegal punning (class + datatype same IRI): {:?}",
+        report.violations
     );
+    assert!(!report.violations.is_empty(), "Should have violations");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -148,12 +154,15 @@ fn test_dl_non_simple_property_in_chain() {
     let validator = OWL2ProfileValidator::new();
     let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
-    // NOTE: Property chain with non-simple super-property check is a known gap
-    // in the current DL validator. This test documents the expected violation.
+    // A property chain whose super-property is non-simple is rejected by the DL
+    // validator (OWL 2 Section 11.1: the super-property of a complex role
+    // inclusion must be simple).
     assert!(
-        report.is_valid(),
-        "Current DL validator does not yet reject property chain with non-simple super-property"
+        !report.is_valid(),
+        "DL validator should reject property chain with non-simple super-property: {:?}",
+        report.violations
     );
+    assert!(!report.violations.is_empty(), "Should have violations");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -174,12 +183,14 @@ fn test_dl_asymmetric_on_non_simple() {
     let validator = OWL2ProfileValidator::new();
     let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
-    // NOTE: Asymmetric on non-simple property check is a known gap in the
-    // current DL validator. This test documents the expected violation.
+    // AsymmetricObjectProperty on a non-simple property is rejected by the DL
+    // validator (OWL 2 Section 11.1: asymmetric properties must be simple).
     assert!(
-        report.is_valid(),
-        "Current DL validator does not yet reject asymmetric on non-simple property"
+        !report.is_valid(),
+        "DL validator should reject asymmetric on non-simple property: {:?}",
+        report.violations
     );
+    assert!(!report.violations.is_empty(), "Should have violations");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -191,29 +202,65 @@ fn test_dl_property_simplicity_rules() {
     let df = df::DF::new();
 
     let r = df.obj_prop("http://ex.org/R");
-    let s = df.obj_prop("http://ex.org/S");
     let t = df.obj_prop("http://ex.org/T");
+
+    // R is transitive; T is a super-property of R, so T has a transitive
+    // sub-property and is therefore non-simple (OWL 2 Section 11.1).
+    let trans_r = df.transitive_object_property(r.clone());
+    let sub_r_t = df.sub_object_property_of(r.clone(), t.clone());
+
+    let a = df.class_ce("http://ex.org/A");
+    let card_on_t = df.min_cardinality(2, t, a.clone());
+    let c = df.class_ce("http://ex.org/C");
+    let ax = df.sub_class_of(c, card_on_t);
+
+    let mut ont = df.build_ontology(vec![trans_r, sub_r_t, ax]);
+    df.auto_declare(&mut ont);
+
+    let validator = OWL2ProfileValidator::new();
+    let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
+
+    // Transitively-derived non-simple property (T has transitive sub-property R)
+    // used in a cardinality restriction must be detected.
+    assert!(
+        !report.is_valid(),
+        "DL validator should detect transitively-derived non-simple property in cardinality: {:?}",
+        report.violations
+    );
+    assert!(!report.violations.is_empty(), "Should have violations");
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Valid: Sub-Property of Transitive is Simple
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_dl_sub_property_of_transitive_is_simple() {
+    let df = df::DF::new();
+
+    let r = df.obj_prop("http://ex.org/R");
+    let s = df.obj_prop("http://ex.org/S");
 
     let trans_r = df.transitive_object_property(r.clone());
     let sub_s_r = df.sub_object_property_of(s.clone(), r.clone());
-    let func_t = df.functional_object_property(t.clone());
 
     let a = df.class_ce("http://ex.org/A");
     let card_on_s = df.min_cardinality(2, s, a.clone());
     let c = df.class_ce("http://ex.org/C");
     let ax = df.sub_class_of(c, card_on_s);
 
-    let mut ont = df.build_ontology(vec![trans_r, sub_s_r, func_t, ax]);
+    let mut ont = df.build_ontology(vec![trans_r, sub_s_r, ax]);
     df.auto_declare(&mut ont);
 
     let validator = OWL2ProfileValidator::new();
     let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
-    // NOTE: Transitively-derived non-simple property (S sub-of transitive R)
-    // check is a known gap. This test documents the expected violation.
+    // Non-simplicity propagates UP the hierarchy: a sub-property of a
+    // transitive property is itself simple, so the cardinality is legal.
     assert!(
         report.is_valid(),
-        "Current DL validator does not yet detect transitively-derived non-simple property in cardinality"
+        "S ⊑ transitive R does not make S non-simple; cardinality on S should be valid: {:?}",
+        report.violations
     );
 }
 
@@ -295,12 +342,14 @@ fn test_dl_non_simple_property_from_chain() {
     let validator = OWL2ProfileValidator::new();
     let report = validator.validate_profile(&ont, OWL2Profile::DL).unwrap();
 
-    // NOTE: Property in a chain becoming non-simple is a known gap in the
-    // current DL validator. This test documents the expected violation.
+    // A property that occurs in the body of a property chain becomes non-simple,
+    // so using it in a cardinality restriction is rejected by the DL validator.
     assert!(
-        report.is_valid(),
-        "Current DL validator does not yet detect property in chain as non-simple for cardinality"
+        !report.is_valid(),
+        "DL validator should detect property in chain as non-simple for cardinality: {:?}",
+        report.violations
     );
+    assert!(!report.violations.is_empty(), "Should have violations");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

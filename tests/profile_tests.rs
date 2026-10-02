@@ -196,8 +196,10 @@ fn punning_class_and_datatype_not_allowed_in_el() {
         df.declaration_axiom(Entity::Datatype(iri.clone())),
     ];
     // Punning class+datatype is NOT allowed in EL per spec
-    // (Known validator limitation: currently allows this)
-    let _valid = validate_el(&axioms);
+    assert!(
+        !validate_el(&axioms),
+        "Class+datatype punning should NOT pass EL"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -222,8 +224,7 @@ fn profile_rl_has_key_violation() {
     let dp = df.data_prop("http://ex.org/dp");
     let axioms = vec![df.has_key(c, vec![p], vec![dp])];
     // HasKey is not allowed in RL per spec
-    // (Known validator limitation: currently allows this)
-    let _valid = validate_rl(&axioms);
+    assert!(!validate_rl(&axioms), "HasKey should NOT pass RL");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

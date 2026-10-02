@@ -32,6 +32,53 @@ pub struct ClassificationResult {
     pub object_properties: Vec<String>,
     /// Data properties present in the ontology (local name)
     pub data_properties: Vec<String>,
+    /// Inverse of `hierarchy`: superclass → set of subclasses (for O(1)
+    /// subclass queries after classification).
+    pub subsumees: HashMap<ClassExpression, HashSet<ClassExpression>>,
+    /// Classes mutually subsuming each other (equivalence classes).
+    pub equivalents: HashMap<ClassExpression, HashSet<ClassExpression>>,
+    /// Named classes equivalent to `owl:Nothing` (unsatisfiable).
+    pub unsat: HashSet<ClassExpression>,
+    /// Absorption / dependency-graph counters describing how the result was
+    /// produced (how many classes avoided the tableau, …).
+    pub counters: ClassificationCounters,
+}
+
+/// Counters describing how a classification result was produced.
+#[derive(Debug, Clone, Default)]
+pub struct ClassificationCounters {
+    /// Number of told-subsumer edges extracted in phase 1.
+    pub told_subsumers: usize,
+    /// Named classes processed by saturation (phase 2).
+    pub saturation_concepts: usize,
+    /// Classes saturation classified as fully deterministic.
+    pub saturation_complete: usize,
+    /// Classes saturation flagged for the tableau.
+    pub saturation_tableau_required: usize,
+    /// GCIs absorbed into deterministic clauses.
+    pub absorbed_gcis: usize,
+    /// GCIs that could not be absorbed.
+    pub remaining_gcis: usize,
+    /// Role-successor clauses (`A ⊑ ∃R.C`) absorbed.
+    pub role_successor_clauses: usize,
+    /// Role-domain clauses (`∃R.⊤ ⊑ D`) absorbed.
+    pub role_domain_clauses: usize,
+    /// Role-range clauses (`⊤ ⊑ ∀R.C`) absorbed.
+    pub role_range_clauses: usize,
+    /// Dependency-graph edges over named classes.
+    pub dependency_edges: usize,
+    /// Strongly-connected components in the dependency condensation.
+    pub dependency_sccs: usize,
+    /// Fixpoint rounds spent by the Elgot-style traversal.
+    pub propagation_rounds: usize,
+    /// Classes fully classified without the tableau.
+    pub classes_avoiding_tableau: usize,
+    /// Classes that required the tableau fallback.
+    pub classes_needing_tableau: usize,
+    /// Total pair checks performed in the tableau expansion phase.
+    pub tableau_checks: usize,
+    /// Of the above, how many actually invoked a full tableau.
+    pub real_tableau_checks: usize,
 }
 
 impl ClassificationResult {
@@ -42,6 +89,10 @@ impl ClassificationResult {
             ontology_iri: None,
             object_properties: Vec::new(),
             data_properties: Vec::new(),
+            subsumees: HashMap::new(),
+            equivalents: HashMap::new(),
+            unsat: HashSet::new(),
+            counters: ClassificationCounters::default(),
         }
     }
 
@@ -55,6 +106,32 @@ impl ClassificationResult {
             ontology_iri,
             object_properties: Vec::new(),
             data_properties: Vec::new(),
+            subsumees: HashMap::new(),
+            equivalents: HashMap::new(),
+            unsat: HashSet::new(),
+            counters: ClassificationCounters::default(),
+        }
+    }
+
+    /// Check whether `subclass ⊑ superclass` according to this classification.
+    #[must_use]
+    pub fn is_subsumed(&self, subclass: &ClassExpression, superclass: &ClassExpression) -> bool {
+        self.hierarchy
+            .get(subclass)
+            .is_some_and(|sups| sups.contains(superclass))
+    }
+
+    /// Rebuild the inverse `subsumees` index from `hierarchy`.
+    pub fn rebuild_subsumees(&mut self) {
+        self.subsumees.clear();
+        self.subsumees.reserve(self.hierarchy.len());
+        for (sub, sups) in &self.hierarchy {
+            for sup in sups {
+                self.subsumees
+                    .entry(sup.clone())
+                    .or_default()
+                    .insert(sub.clone());
+            }
         }
     }
 

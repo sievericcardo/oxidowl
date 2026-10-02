@@ -262,6 +262,34 @@ impl DF {
         DataRange::Datatype(IRI::new("http://www.w3.org/2000/01/rdf-schema#Literal"))
     }
 
+    pub fn data_range_intersection_of(&self, ranges: Vec<DataRange>) -> DataRange {
+        DataRange::DataIntersectionOf(ranges)
+    }
+
+    pub fn data_range_union_of(&self, ranges: Vec<DataRange>) -> DataRange {
+        DataRange::DataUnionOf(ranges)
+    }
+
+    pub fn data_range_complement_of(&self, range: DataRange) -> DataRange {
+        DataRange::DataComplementOf(Box::new(range))
+    }
+
+    pub fn data_range_one_of(&self, literals: Vec<Literal>) -> DataRange {
+        DataRange::DataOneOf(literals)
+    }
+
+    /// `DatatypeRestriction(datatype, [facets])` where each facet is
+    /// `(facet_iri, facet_value_literal)`.
+    pub fn data_range_restriction(&self, datatype: &IRI, facets: Vec<(IRI, Literal)>) -> DataRange {
+        DataRange::DatatypeRestriction {
+            datatype: datatype.clone(),
+            restrictions: facets
+                .into_iter()
+                .map(|(facet, value)| FacetRestriction { facet, value })
+                .collect(),
+        }
+    }
+
     // ── Annotation helpers ──────────────────────────────────────────────────
 
     pub fn ann<S: AsRef<str>>(&self, property_iri: S, value_text: S) -> Annotation {

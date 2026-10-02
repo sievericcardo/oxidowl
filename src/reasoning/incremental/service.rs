@@ -3,6 +3,33 @@
 //! This module provides the main service interface for incremental reasoning,
 //! integrating change tracking, delta computation, and cache management
 //! with the existing reasoning infrastructure.
+//!
+//! # Status (workstream A9 — user decision)
+//!
+//! Incremental reasoning is **OPT-IN** and **off by default**
+//! (`ReasonerConfig::default().reasoning.incremental_reasoning == false`);
+//! full recompute is the default reasoning path. When enabled, this service
+//! exposes `add_axiom_incrementally` / `remove_axiom_incrementally`, but for
+//! correctness the changes are currently propagated into the base reasoning
+//! service, which performs a version-stamped **full recompute** (cache clear +
+//! A8 `ClassificationResult` invalidation). The delta/selective-invalidation
+//! machinery here is retained for statistics and as the substrate for a future
+//! real incremental implementation, but it is **not** yet used to drive
+//! selective re-saturation.
+//!
+//! # A8 dependency-graph integration (deliberately conservative)
+//!
+//! The A8 substrate (`core::saturation::dependency_graph`, versioned
+//! `ClassificationResult` cache) offers a future selective path: on an
+//! axiom-add, recompute only the affected SCCs via
+//! `SaturationEngine::update_incremental` / `DeltaComputer::compute_saturation_delta`,
+//! then hand the updated result to
+//! `ClassificationService::store_classification`. This is **not** wired in yet:
+//! incremental axiom-adds currently take the *full* invalidation branch
+//! (`add_axiom` → `invalidate_classification_cache` + `cache_manager.clear_all`),
+//! which is correct by construction and does not destabilise the A8
+//! classification delivered in that workstream. The selective SCC path is the
+//! recommended next step for a real <10ms incremental implementation.
 
 #![allow(dead_code)]
 
@@ -127,6 +154,16 @@ impl IncrementalReasoningService {
             ontology.add_axiom(axiom.clone());
         }
 
+        // Propagate the change into the base reasoning service so that every
+        // query/classification reflects the updated ontology. The base actor's
+        // axiom-add performs a version-stamped full recompute (cache clear +
+        // A8 `ClassificationResult` invalidation), which guarantees the
+        // incremental API returns results *identical* to a full recompute of
+        // the updated ontology. True selective re-saturation (recomputing only
+        // affected SCCs via `SaturationEngine::update_incremental`) is a
+        // documented follow-up; until then correctness is traded for speed.
+        self.base_service.add_axioms(vec![axiom.clone()]).await?;
+
         // Compute and apply reasoning delta
         let delta = self
             .delta_computer
@@ -175,6 +212,12 @@ impl IncrementalReasoningService {
             let mut ontology = self.ontology.write().await;
             ontology.remove_axiom(axiom);
         }
+
+        // Propagate the change into the base reasoning service (see
+        // `add_axiom_incrementally`): the base actor performs the version-
+        // stamped full recompute so incremental results stay identical to a
+        // full recompute of the updated ontology.
+        self.base_service.remove_axioms(vec![axiom.clone()]).await?;
 
         // Compute and apply reasoning delta
         let delta = self
@@ -230,6 +273,10 @@ impl IncrementalReasoningService {
             // ontology.add_class_assertion(individual.clone(), class.clone());
             // For now, we'll just track the change
         }
+        // NOTE (A9): unlike the TBox paths, this ABox path only *tracks* the
+        // change — the class assertion is NOT propagated into the base service
+        // or the shared ontology, so subsequent queries do NOT reflect it.
+        // This is a documented limitation of the opt-in incremental module.
 
         // Compute and apply reasoning delta
         let delta = self

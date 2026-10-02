@@ -437,9 +437,15 @@ impl ImportManager {
         Ok(results)
     }
 
-    /// Extract import declarations from ontology annotations
+    /// Extract import declarations from ontology annotations and the structured
+    /// `imports` field (populated by the functional-syntax parser for `Import(...)`).
     fn extract_import_declarations(&self, ontology: &Ontology) -> Vec<ImportDeclaration> {
         let mut imports = Vec::new();
+
+        // Structured import declarations recorded by parsers (e.g. functional syntax).
+        for import in &ontology.imports {
+            imports.push(ImportDeclaration::new(import.imported_ontology_iri.clone()));
+        }
 
         // Look for import annotations
         for annotation in &ontology.annotations {

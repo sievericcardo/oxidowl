@@ -12,6 +12,7 @@ pub mod manchester_renderer;
 pub mod ntriples;
 pub mod obo;
 pub mod owl_xml;
+pub mod rdf_to_owl;
 pub mod rdf_xml;
 pub mod rio;
 pub mod turtle;
@@ -351,6 +352,41 @@ fn detect_rdf_version_from_content(content: &str) -> RdfCompatibilityMode {
     RdfCompatibilityMode::Auto
 }
 
+/// Unambiguous file extension → format table, shared by [`parse_file_auto`]
+/// and the content-detection entry points ([`detect_format_from_content_public`]
+/// / [`detect_format_from_bytes`]).
+///
+/// Every auto-detecting entry point — including
+/// `OntologyLoader::load_file` — consults this table first, so a file whose
+/// extension is unambiguous always parses the way `parse_file_auto` routes
+/// it (CR-011 F-3: an XML-shaped HTML fragment in `page.html` used to be
+/// content-sniffed as OWL/XML and silently yielded 0 axioms; it now parses
+/// as RDFa, exactly as `parse_file_auto` does).
+///
+/// Returns `None` for extensions that must fall through to content
+/// sniffing: `owl`, `owx`, `xml`, `txt`, and unknown/absent extensions.
+pub fn format_from_extension(extension: &str) -> Option<OntologyFormat> {
+    match extension.to_lowercase().as_str() {
+        "rdf" => Some(OntologyFormat::RdfXml),
+        "ttl" => Some(OntologyFormat::Turtle),
+        "nt" => Some(OntologyFormat::NTriples),
+        "ofn" => Some(OntologyFormat::Functional),
+        "omn" | "man" => Some(OntologyFormat::Manchester),
+        "swrl" => Some(OntologyFormat::Functional), // SWRL uses functional-like syntax
+        // ── B5 formats (format registry) ────────────────────────────────
+        "jsonld" | "json-ld" => Some(OntologyFormat::JsonLd), // only `.jsonld`, not generic `.json`
+        "n3" => Some(OntologyFormat::N3),
+        "nq" | "nquads" => Some(OntologyFormat::NQuads),
+        "trig" => Some(OntologyFormat::TriG),
+        "trix" => Some(OntologyFormat::TriX),
+        "rdfa" | "html" | "xhtml" => Some(OntologyFormat::Rdfa),
+        "brdf" | "binaryrdf" => Some(OntologyFormat::BinaryRdf),
+        "hdt" => Some(OntologyFormat::Hdt),
+        "rj" | "rdfjson" | "rjson" => Some(OntologyFormat::RdfJson),
+        _ => None,
+    }
+}
+
 /// Auto-detect format and parse file
 pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     let path = path.as_ref();
@@ -358,32 +394,44 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 
     let format = match extension.to_lowercase().as_str() {
         // .owl files can be OWL/XML, OWL Functional Syntax, or RDF/XML — detect from content
-        "owl" | "owx" => detect_format_from_content(path)?,
-        "rdf" => OntologyFormat::RdfXml,
-        "xml" => detect_format_from_content(path)?, // XML could be OWL/XML or RDF/XML
-        "ttl" => OntologyFormat::Turtle,
-        "nt" => OntologyFormat::NTriples,
-        "ofn" => OntologyFormat::Functional,
-        "omn" => OntologyFormat::Manchester,
-        "man" => OntologyFormat::Manchester,
-        "swrl" => OntologyFormat::Functional, // SWRL uses functional-like syntax
-        "txt" => detect_format_from_content(path)?, // Could be any format
-        _ => OntologyFormat::OwlXml,          // Default fallback
+        "owl" | "owx" | "xml" | "txt" => detect_format_from_content(path)?,
+        // Unambiguous extensions come from the shared table (so detection
+        // and parse_file_auto cannot disagree); unknown extensions keep the
+        // historical OWL/XML fallback.
+        other => format_from_extension(other).unwrap_or(OntologyFormat::OwlXml),
     };
+
+    // Binary formats carry non-UTF-8 bytes (BinaryRDF varints ≥ 0x80, HDT
+    // binary payloads) — reading them with `read_to_string` would fail, so
+    // they get a byte-oriented path.
+    if matches!(format, OntologyFormat::BinaryRdf | OntologyFormat::Hdt) {
+        let bytes =
+            std::fs::read(path).map_err(|e| Error::io(format!("Failed to read file: {e}")))?;
+        return parse_bytes(&bytes, format);
+    }
 
     // Read the file content
     let content = std::fs::read_to_string(path)
         .map_err(|e| Error::io(format!("Failed to read file: {e}")))?;
 
+    parse_str(&content, format)
+}
+
+/// Parse a UTF-8 ontology document in the given (already resolved) format.
+///
+/// Handles CrossSyntax section extraction and RDF-version sniffing before
+/// dispatching to the format's parser.  Shared by [`parse_file_auto`],
+/// [`parse_bytes`] and the [`ParserFactory`] bridge.
+pub fn parse_str(content: &str, format: OntologyFormat) -> Result<Ontology> {
     // Check if this is a CrossSyntax file and extract first section
     let parsed_content = if content.trim().starts_with("###") {
-        extract_first_crosssyntax_section(&content)
+        extract_first_crosssyntax_section(content)
     } else {
-        content.clone()
+        content.to_string()
     };
 
     // Detect RDF version for RDF-based formats
-    let rdf_version = detect_rdf_version_from_content(&content);
+    let rdf_version = detect_rdf_version_from_content(content);
 
     match format {
         OntologyFormat::OwlXml => {
@@ -481,6 +529,9 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
         OntologyFormat::RdfJson => rio::rdf_json::parse(&parsed_content),
         OntologyFormat::Rdfa => rio::rdfa::parse(&parsed_content),
         OntologyFormat::BinaryRdf => rio::binary_rdf::parse(&parsed_content),
+        // Binary formats reached through the text entry point: the string's
+        // *bytes* are the file payload.  Real HDT/BinaryRDF files are rarely
+        // valid UTF-8 — `parse_bytes` is the supported path for them.
         OntologyFormat::Hdt => rio::hdt::parse(&parsed_content),
         OntologyFormat::Auto => Err(Error::ontology_parsing(
             "Auto format should have been resolved",
@@ -488,13 +539,80 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
     }
 }
 
+/// Parse raw bytes in the given format.
+///
+/// `BinaryRdf` and `Hdt` are consumed as bytes and never go through a UTF-8
+/// decode (their payloads are genuinely binary: BinaryRDF varints ≥ 0x80,
+/// HDT control/dictionary/bitmap sections).  Every other format must be
+/// valid UTF-8 and is parsed from its decoded text via [`parse_str`].
+pub fn parse_bytes(bytes: &[u8], format: OntologyFormat) -> Result<Ontology> {
+    match format {
+        OntologyFormat::BinaryRdf => rio::binary_rdf::BinaryRdfParser::new().parse(bytes),
+        OntologyFormat::Hdt => rio::hdt::HdtParser::new().parse_bytes(bytes),
+        _ => {
+            let text = std::str::from_utf8(bytes)
+                .map_err(|e| Error::io(format!("Ontology content is not valid UTF-8: {e}")))?;
+            parse_str(text, format)
+        }
+    }
+}
+
 /// Public wrapper for format detection from content and path hint.
 /// Used by the OntologyLoader and other consumers.
+///
+/// The path is no longer a mere hint: unambiguous extensions are resolved
+/// through the shared [`format_from_extension`] table first — exactly what
+/// [`parse_file_auto`] does — and only ambiguous/unknown extensions fall
+/// through to the content heuristics (CR-011 F-3).
 pub fn detect_format_from_content_public(
-    _path: &std::path::Path,
+    path: &std::path::Path,
     content: &str,
 ) -> crate::Result<OntologyFormat> {
+    // ── Extension first (CR-011 F-3): trust unambiguous extensions the
+    //    same way `parse_file_auto` does, so `OntologyLoader::load_file`
+    //    and friends cannot disagree with it.  Binary magic below still
+    //    wins for `.brdf`/`.hdt` payloads routed through
+    //    `detect_format_from_bytes` first; for text content the extension
+    //    table agrees with the magic checks (`brdf`/`hdt`/`rdfa`…).
+    if let Some(ext) = path.extension().and_then(std::ffi::OsStr::to_str)
+        && let Some(format) = format_from_extension(ext)
+    {
+        return Ok(format);
+    }
+
     let trimmed = content.trim();
+
+    // ── B5 magic / structure detection (checked first — these are unambiguous
+    //    byte patterns that must win over the generic text heuristics below) ──
+
+    // HDT: `$HDT` magic — real binary HDT files start with these 4 bytes
+    // (byte-exact detection uses `detect_format_from_bytes`); a UTF-8 view
+    // that begins with `$HDT` is detected here as well.
+    if trimmed.starts_with("$HDT") {
+        return Ok(OntologyFormat::Hdt);
+    }
+    // Binary RDF: `BRDF` magic header (ASCII, so it survives a UTF-8 decode
+    // of the leading bytes; byte-exact detection uses `detect_format_from_bytes`).
+    if trimmed.starts_with("BRDF") {
+        return Ok(OntologyFormat::BinaryRdf);
+    }
+    // HTML / XHTML → RDFa (before the generic `<…>` → OWL/XML fallback).
+    {
+        let head: String = trimmed
+            .chars()
+            .take(64)
+            .collect::<String>()
+            .to_ascii_lowercase();
+        if head.starts_with("<!doctype html") || head.starts_with("<html") {
+            return Ok(OntologyFormat::Rdfa);
+        }
+    }
+    // JSON-LD: a JSON object carrying `@context` / `@graph` structure.
+    if trimmed.starts_with('{')
+        && (content.contains("\"@context\"") || content.contains("\"@graph\""))
+    {
+        return Ok(OntologyFormat::JsonLd);
+    }
 
     if trimmed.starts_with("###") || content.contains("\n###") {
         for line in trimmed.lines() {
@@ -545,6 +663,13 @@ pub fn detect_format_from_content_public(
         if content.contains("rdf:RDF") || content.contains("<rdf:RDF") || content.contains("<RDF") {
             return Ok(OntologyFormat::RdfXml);
         }
+        // XHTML: an XML declaration in front of an HTML document → RDFa.
+        if content.contains("<!DOCTYPE html")
+            || content.contains("<html")
+            || content.contains("<HTML")
+        {
+            return Ok(OntologyFormat::Rdfa);
+        }
         return Ok(OntologyFormat::OwlXml);
     }
     if trimmed.starts_with("@prefix")
@@ -585,6 +710,29 @@ pub fn detect_format_from_content_public(
     Ok(OntologyFormat::Functional)
 }
 
+/// Detect the format of a document from its raw bytes.
+///
+/// Binary magic bytes are checked first (`BRDF`, `$HDT`); otherwise the
+/// content must be valid UTF-8 and is delegated to
+/// [`detect_format_from_content_public`].
+pub fn detect_format_from_bytes(
+    path: &std::path::Path,
+    bytes: &[u8],
+) -> crate::Result<OntologyFormat> {
+    if bytes.starts_with(b"BRDF") {
+        return Ok(OntologyFormat::BinaryRdf);
+    }
+    if bytes.starts_with(b"$HDT") {
+        return Ok(OntologyFormat::Hdt);
+    }
+    match std::str::from_utf8(bytes) {
+        Ok(text) => detect_format_from_content_public(path, text),
+        Err(e) => Err(Error::io(format!(
+            "Cannot detect format: content is neither a known binary format nor valid UTF-8 ({e})"
+        ))),
+    }
+}
+
 /// Save ontology to a string using the specified format
 pub fn save_to_string(ontology: &Ontology, format: OntologyFormat) -> Result<String> {
     match format {
@@ -611,16 +759,44 @@ pub fn save_to_string(ontology: &Ontology, format: OntologyFormat) -> Result<Str
         OntologyFormat::TriX => rio::trix::TriXRenderer.serialize(ontology),
         OntologyFormat::JsonLd => rio::jsonld::JsonLdRenderer.serialize(ontology),
         OntologyFormat::RdfJson => rio::rdf_json::RdfJsonRenderer.serialize(ontology),
-        OntologyFormat::Rdfa => rio::rdfa::RDFaRenderer.serialize(ontology),
+        OntologyFormat::Rdfa => rio::rdfa::RdfaRenderer.serialize(ontology),
         OntologyFormat::BinaryRdf => {
-            let bytes = rio::binary_rdf::BinaryRdfRenderer.serialize(ontology);
-            String::from_utf8(bytes)
-                .map_err(|e| Error::ontology_parsing(format!("Binary RDF serialization: {e}")))
+            // Binary RDF's varint stream is not valid UTF-8 (bytes ≥ 0x80), so a
+            // `String` cannot represent it losslessly — refuse instead of
+            // corrupting the payload.  Use `save_to_bytes` / `save_file` for
+            // this format (CR-008 / B5 binary-safe I/O).
+            Err(Error::ontology_parsing(
+                "Binary RDF cannot be represented as a String — use save_to_bytes() or save_file()",
+            ))
         }
-        OntologyFormat::Hdt => rio::hdt::HDTRenderer.serialize(ontology),
+        OntologyFormat::Hdt => {
+            // HDT is a binary format (B5 Slice 5): `$HDT` control chunks +
+            // dictionary + bitmap sections are not valid UTF-8 in general.
+            // Same contract as BinaryRDF: refuse, use `save_to_bytes` /
+            // `save_file`.
+            Err(Error::ontology_parsing(
+                "HDT cannot be represented as a String — use save_to_bytes() or save_file()",
+            ))
+        }
         OntologyFormat::Auto => Err(Error::ontology_parsing(
             "Auto format must be resolved to a specific format for string serialization",
         )),
+    }
+}
+
+/// Serialize an ontology to raw bytes in the given format.
+///
+/// This is the byte-oriented counterpart of [`save_to_string`] and the
+/// correct path for binary formats: `BinaryRdf` emits its `BRDF` record
+/// stream directly (never routed through a `String`, which would fail on
+/// varint bytes ≥ 0x80) and `Hdt` builds a real binary HDT file (control
+/// information + dictionary + bitmap triples); text formats are encoded as
+/// UTF-8.
+pub fn save_to_bytes(ontology: &Ontology, format: OntologyFormat) -> Result<Vec<u8>> {
+    match format {
+        OntologyFormat::BinaryRdf => rio::binary_rdf::BinaryRdfRenderer::new().serialize(ontology),
+        OntologyFormat::Hdt => rio::hdt::HdtRenderer::new().serialize_to_bytes(ontology),
+        other => Ok(save_to_string(ontology, other)?.into_bytes()),
     }
 }
 
@@ -695,11 +871,12 @@ pub fn save_file_gzip<P: AsRef<Path>>(
     path: P,
     format: OntologyFormat,
 ) -> Result<()> {
-    let content = save_to_string(ontology, format)?;
+    // Byte path: binary formats (BinaryRDF) must not be routed through a String.
+    let content = save_to_bytes(ontology, format)?;
     let file = std::fs::File::create(path.as_ref())
         .map_err(|e| Error::io(format!("Failed to create gzip file: {e}")))?;
     let mut encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
-    std::io::Write::write_all(&mut encoder, content.as_bytes())
+    std::io::Write::write_all(&mut encoder, &content)
         .map_err(|e| Error::io(format!("Failed to write gzip content: {e}")))?;
     encoder
         .finish()
@@ -707,20 +884,58 @@ pub fn save_file_gzip<P: AsRef<Path>>(
     Ok(())
 }
 
-/// Save ontology to an xz-compressed file using the specified format
+/// Serialize an ontology to an xz-compressed byte buffer using the given format.
+pub fn save_to_string_xz(ontology: &Ontology, format: OntologyFormat) -> Result<Vec<u8>> {
+    // Byte path: binary formats (BinaryRDF) must not be routed through a String.
+    let content = save_to_bytes(ontology, format)?;
+    let mut encoder = xz2::write::XzEncoder::new(Vec::new(), 6);
+    std::io::Write::write_all(&mut encoder, &content)
+        .map_err(|e| Error::io(format!("Failed to write xz content: {e}")))?;
+    encoder
+        .finish()
+        .map_err(|e| Error::io(format!("Failed to finalize xz compression: {e}")))
+}
+
+/// Save ontology to an xz-compressed file using the specified format.
 ///
-/// This is a stub that returns `Error::Unsupported` until the `xz2` crate is added.
+/// The file content is the given format compressed with `.xz` (LZMA2).
 pub fn save_file_xz<P: AsRef<Path>>(
     ontology: &Ontology,
     path: P,
     format: OntologyFormat,
 ) -> Result<()> {
-    let _ = ontology;
-    let _ = path;
-    let _ = format;
-    Err(Error::Unsupported {
-        message: "XZ compression requires the 'xz2' crate. Install xz2 and enable xz-compression feature.".to_string(),
-    })
+    let bytes = save_to_string_xz(ontology, format)?;
+    std::fs::write(path.as_ref(), bytes)
+        .map_err(|e| Error::io(format!("Failed to write xz file: {e}")))?;
+    Ok(())
+}
+
+/// Load an ontology from an xz-compressed file, auto-detecting the format.
+pub fn load_xz<P: AsRef<Path>>(path: P) -> Result<Ontology> {
+    let path = path.as_ref();
+    let compressed =
+        std::fs::read(path).map_err(|e| Error::io(format!("Failed to read xz file: {e}")))?;
+    let mut decoder = xz2::read::XzDecoder::new(&compressed[..]);
+    let mut content = String::new();
+    std::io::Read::read_to_string(&mut decoder, &mut content)
+        .map_err(|e| Error::io(format!("Failed to decompress xz: {e}")))?;
+
+    let format =
+        detect_format_from_content_public(path, &content).unwrap_or(OntologyFormat::Functional);
+    let parser = ParserFactory::create_parser(format)?;
+    parser.parse(&content)
+}
+
+/// Load the decompressed text of an xz-compressed ontology document.
+pub fn load_xz_to_string<P: AsRef<Path>>(path: P) -> Result<String> {
+    let path = path.as_ref();
+    let compressed =
+        std::fs::read(path).map_err(|e| Error::io(format!("Failed to read xz file: {e}")))?;
+    let mut decoder = xz2::read::XzDecoder::new(&compressed[..]);
+    let mut content = String::new();
+    std::io::Read::read_to_string(&mut decoder, &mut content)
+        .map_err(|e| Error::io(format!("Failed to decompress xz: {e}")))?;
+    Ok(content)
 }
 
 /// Factory for creating parsers based on format
@@ -805,8 +1020,12 @@ impl ParserFactory {
             OntologyFormat::Manchester => Ok(Box::new(ManchesterParser::new(
                 ManchesterParserConfig::default(),
             ))),
-            OntologyFormat::Latex
-            | OntologyFormat::DL
+            // Formats without a dedicated parser *struct* are bridged through
+            // `FormatParser`, which dispatches to the format's free `parse`
+            // function (the RIO formats, DL/KRSS/OBO).  This makes them
+            // reachable from `ParserFactory`, `OntologyLoader::load_from_string`
+            // and any other `Box<dyn Parser>` consumer.
+            OntologyFormat::DL
             | OntologyFormat::Krss
             | OntologyFormat::Krss2
             | OntologyFormat::Obo
@@ -818,7 +1037,8 @@ impl ParserFactory {
             | OntologyFormat::RdfJson
             | OntologyFormat::Rdfa
             | OntologyFormat::BinaryRdf
-            | OntologyFormat::Hdt => Err(Error::ontology_parsing(
+            | OntologyFormat::Hdt => Ok(Box::new(FormatParser { format })),
+            OntologyFormat::Latex => Err(Error::ontology_parsing(
                 "Format does not support Parser trait",
             )),
             OntologyFormat::Auto => Err(Error::ontology_parsing(
@@ -942,6 +1162,29 @@ impl Parser for KRSSParser {
     }
 }
 
+/// Type-erased [`Parser`] bound to an explicit [`OntologyFormat`].
+///
+/// Bridges formats that have no dedicated parser struct (the RIO formats plus
+/// DL/KRSS/OBO) into the `Parser` trait.  `parse_file` reads **bytes** so
+/// binary formats (`BinaryRdf`) are never forced through a UTF-8 decode.
+#[derive(Debug, Clone, Copy)]
+pub struct FormatParser {
+    /// The format this parser is bound to.
+    pub format: OntologyFormat,
+}
+
+impl Parser for FormatParser {
+    fn parse(&self, input: &str) -> Result<Ontology> {
+        parse_str(input, self.format)
+    }
+
+    fn parse_file(&self, path: &std::path::Path) -> Result<Ontology> {
+        let bytes = std::fs::read(path)
+            .map_err(|e| Error::io(format!("Failed to read {}: {e}", path.display())))?;
+        parse_bytes(&bytes, self.format)
+    }
+}
+
 // ── WriterConfig / OntologyStorer ────────────────────────────────────────────
 
 /// Configuration for ontology serialization/writing.
@@ -996,9 +1239,10 @@ where
                 message: format!("Format {format:?} is not supported by this storer"),
             });
         }
-        let content = crate::parsers::save_to_string(ontology, format)?;
+        // Byte path so binary formats (BinaryRDF) are written losslessly.
+        let content = crate::parsers::save_to_bytes(ontology, format)?;
         writer
-            .write_all(content.as_bytes())
+            .write_all(&content)
             .map_err(|e| Error::io(format!("Failed to write serialized ontology: {e}")))
     }
 }
