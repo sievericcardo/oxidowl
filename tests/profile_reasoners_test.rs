@@ -8,6 +8,16 @@ use oxidowl::ontology::individuals::Individual;
 use oxidowl::ontology::{Class, ClassExpression, IRI, ObjectPropertyExpression, Ontology};
 use oxidowl::profiles::{ELReasoner, RLReasoner};
 
+#[path = "helpers/mod.rs"]
+mod helpers;
+
+use helpers::df::DF;
+use oxidowl::ELValidator;
+use oxidowl::config::{OWLProfile, ReasoningConfig};
+use oxidowl::core::reasoner::{ClassificationResult, Reasoner};
+use oxidowl::profiles::ProfileValidator;
+use std::collections::{BTreeMap, BTreeSet};
+
 #[test]
 fn test_el_reasoner_basic() -> Result<()> {
     // Create simple EL ontology
@@ -274,5 +284,142 @@ fn test_rl_reasoner_hierarchy_correctness() -> Result<()> {
         "Dog should be subclass of itself (reflexivity)"
     );
 
+    Ok(())
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ORE benchmark regression: EL fast-path routing + fallback
+// (`Reasoner::classify` used to propagate `Error::unsupported` for nominals,
+//  exiting 1 on an EL-detected ontology containing `ObjectOneOf`.)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Canonical classification hierarchy: subclass → sorted superclasses.
+fn canonical_hierarchy(result: &ClassificationResult) -> BTreeMap<String, BTreeSet<String>> {
+    result
+        .hierarchy
+        .iter()
+        .map(|(sub, sups)| {
+            (
+                format!("{sub:?}"),
+                sups.iter().map(|s| format!("{s:?}")).collect(),
+            )
+        })
+        .collect()
+}
+
+/// A `Reasoner` configured for a specific `target_profile`.
+fn reasoner_with_profile(profile: OWLProfile) -> Reasoner {
+    Reasoner::new(oxidowl::config::ReasonerConfig {
+        reasoning: ReasoningConfig {
+            target_profile: profile,
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .expect("reasoner")
+}
+
+/// Ontology containing a **single-individual `ObjectOneOf`** — the exact
+/// construct that crashed `classify()` with exit 1 on the ORE benchmark
+/// (`Unsupported operation: Not supported in EL: ObjectOneOf([...])`).
+fn nominal_ontology() -> Ontology {
+    let df = DF::new();
+    let mut onto = df.new_ontology();
+    onto.add_axiom(df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.class_ce("http://ex.org/B"),
+    ));
+    onto.add_axiom(df.sub_class_of(
+        df.class_ce("http://ex.org/B"),
+        df.class_ce("http://ex.org/C"),
+    ));
+    // A ⊑ {i} — single-individual nominal
+    onto.add_axiom(df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.one_of(vec![df.named("http://ex.org/i")]),
+    ));
+    onto.add_axiom(df.class_assertion(df.class_ce("http://ex.org/A"), df.named("http://ex.org/i")));
+    df.auto_declare(&mut onto);
+    onto
+}
+
+/// EL-conforming ontology whose `DataSomeValuesFrom` the `ELReasoner`
+/// normal form cannot translate (so `ELReasoner::initialize` fails).  The
+/// ClassAssertion keeps `el_covered_by_absorption` false, i.e. it bypasses the
+/// A8 sub-path and forces the EL fast path — which must fall back instead of
+/// propagating the error.
+fn el_but_untranslatable_ontology() -> Ontology {
+    let df = DF::new();
+    let mut onto = df.new_ontology();
+    onto.add_axiom(df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.class_ce("http://ex.org/B"),
+    ));
+    onto.add_axiom(df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.data_some_values_from(
+            df.data_prop("http://ex.org/dp"),
+            df.data_range_dt("http://www.w3.org/2001/XMLSchema#string"),
+        ),
+    ));
+    onto.add_axiom(df.class_assertion(df.class_ce("http://ex.org/A"), df.named("http://ex.org/i")));
+    df.auto_declare(&mut onto);
+    onto
+}
+
+fn classify_with(profile: OWLProfile, ontology: Ontology) -> Result<ClassificationResult> {
+    let mut reasoner = reasoner_with_profile(profile);
+    reasoner.load_ontology(ontology)?;
+    reasoner.classify()
+}
+
+#[test]
+fn test_classify_nominal_ontology_does_not_error() -> Result<()> {
+    // (a) classify() on an ontology containing a single-individual
+    // ObjectOneOf must succeed (it used to exit 1 on the ORE benchmark).
+    let result = classify_with(OWLProfile::Auto, nominal_ontology())?;
+    assert!(
+        !result.hierarchy.is_empty(),
+        "classification of the nominal ontology should produce a hierarchy"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_classify_nominal_ontology_matches_dl_path() -> Result<()> {
+    // (b) the Auto-profile result must equal the general DL-path result.
+    let auto = classify_with(OWLProfile::Auto, nominal_ontology())?;
+    let dl = classify_with(OWLProfile::DL, nominal_ontology())?;
+
+    assert_eq!(
+        canonical_hierarchy(&auto),
+        canonical_hierarchy(&dl),
+        "classify() under target_profile=Auto must agree with target_profile=DL \
+         on an ontology containing a single-individual ObjectOneOf"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_classify_falls_back_when_el_fast_path_unsupported() -> Result<()> {
+    // The fixture must be EL-conforming, otherwise this test would never
+    // enter the EL branch.
+    let report = ELValidator::new().validate(&el_but_untranslatable_ontology())?;
+    assert!(
+        report.conforms,
+        "fixture must conform to OWL 2 EL to exercise the EL fast path"
+    );
+
+    // classify() must not propagate the EL fast path's `Error::unsupported`.
+    let auto = classify_with(OWLProfile::Auto, el_but_untranslatable_ontology())?;
+    assert!(!auto.hierarchy.is_empty(), "fallback must classify");
+
+    // ...and the fallback result must equal the general DL path.
+    let dl = classify_with(OWLProfile::DL, el_but_untranslatable_ontology())?;
+    assert_eq!(
+        canonical_hierarchy(&auto),
+        canonical_hierarchy(&dl),
+        "EL fast-path fallback must produce the same hierarchy as the DL path"
+    );
     Ok(())
 }

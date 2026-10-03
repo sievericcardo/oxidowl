@@ -225,6 +225,21 @@ oxidowl swrl -i ontology-with-rules.owl --strategy forward
 oxidowl benchmark -i ontology.owl --algorithm all
 ```
 
+#### Resource caps (`--timeout`, `--max-memory-mb`)
+
+| Flag | Config key | Semantics |
+|------|------------|-----------|
+| `--timeout <SECONDS>` | `reasoning.timeout` | Abort reasoning after N seconds (default: no timeout) |
+| `--max-memory-mb <MB>` | `reasoning.max_memory_mb` | Abort with `Memory limit exceeded: …` (exit 1) once process RSS exceeds MB. `0` (or an absent config key) = **unlimited**; config default = 4096 |
+
+The memory cap is enforced in-process by an interval-gated RSS guard inside the
+tableau expansion loop, the classification / saturation loops and the EL
+completion worklist, so a pathological ontology fails gracefully instead of
+being OOM-killed by the OS. The ORE benchmark harness
+(`benchmark_oxidowl_only.py`) adds an outer Linux-only `RLIMIT_AS` safety net
+with `--mem-limit-mb` (default 4096, `0` = off) so a runaway child cannot take
+down the host even if the in-process guard is bypassed.
+
 ### Library Usage
 
 ```rust

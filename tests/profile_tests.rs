@@ -94,6 +94,73 @@ fn profile_el_complement_violation() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Profile: OWL 2 EL — nominals vs HasValue (ORE benchmark regression)
+// ══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn profile_el_single_individual_nominal_violation() {
+    // A *single*-individual `ObjectOneOf` must NOT conform to OWL 2 EL: the
+    // EL fast path has no normal form for nominals, so accepting them routed
+    // nominal-using ontologies into an `ELReasoner` that then errored
+    // (ORE benchmark exit 1).
+    let df = DF::new();
+    let a = df.class_ce("http://ex.org/A");
+    let i = df.named("http://ex.org/i");
+    let nominal = df.one_of(vec![i]);
+    let axioms = vec![df.sub_class_of(a, nominal)];
+    assert!(
+        !validate_el(&axioms),
+        "ObjectOneOf (nominal) should NOT conform to OWL 2 EL"
+    );
+}
+
+#[test]
+fn profile_el_multi_individual_nominal_violation() {
+    let df = DF::new();
+    let a = df.class_ce("http://ex.org/A");
+    let nominal = df.one_of(vec![
+        df.named("http://ex.org/i"),
+        df.named("http://ex.org/j"),
+    ]);
+    let axioms = vec![df.sub_class_of(a, nominal)];
+    assert!(
+        !validate_el(&axioms),
+        "Multi-individual ObjectOneOf should NOT conform to OWL 2 EL"
+    );
+}
+
+#[test]
+fn profile_el_object_has_value_valid() {
+    // `ObjectHasValue` is part of the OWL 2 EL grammar (existential
+    // quantification to an individual).
+    let df = DF::new();
+    let a = df.class_ce("http://ex.org/A");
+    let p = df.obj_prop("http://ex.org/P");
+    let hv = df.has_value(p, df.named("http://ex.org/i"));
+    assert!(
+        validate_el(&[df.sub_class_of(a, hv)]),
+        "ObjectHasValue should conform to OWL 2 EL"
+    );
+}
+
+#[test]
+fn profile_el_data_has_value_valid() {
+    // `DataHasValue` is part of the OWL 2 EL grammar (existential
+    // quantification to a literal).
+    let df = DF::new();
+    let a = df.class_ce("http://ex.org/A");
+    let dp = df.data_prop("http://ex.org/dp");
+    let hv = df.data_has_value(
+        dp,
+        df.typed_literal("42", "http://www.w3.org/2001/XMLSchema#integer"),
+    );
+    assert!(
+        validate_el(&[df.sub_class_of(a, hv)]),
+        "DataHasValue should conform to OWL 2 EL"
+    );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Profile: OWL 2 QL
 // ══════════════════════════════════════════════════════════════════════════════
 

@@ -54,11 +54,15 @@ impl ELReasoner {
             None
         };
 
+        // Enforce `reasoning.max_memory_mb` in the completion worklist loop.
+        let mut completion_engine = CompletionEngine::new();
+        completion_engine.set_memory_limit_mb(config.reasoning.max_memory_mb);
+
         Self {
             normalized_axioms: Vec::new(),
             concept_hierarchy: ConceptHierarchy::new(),
             role_hierarchy: RoleHierarchy::new(),
-            completion_engine: CompletionEngine::new(),
+            completion_engine,
             config,
             explanation_service,
             statistics: ELStatistics::default(),
@@ -765,6 +769,9 @@ pub struct CompletionEngine {
     queued: HashSet<(ELConcept, ELConcept)>,
     /// Statistics
     completion_steps: usize,
+    /// RSS cap from `reasoning.max_memory_mb` (`None`/`Some(0)` = unlimited),
+    /// enforced by the guard inside `run_to_completion`.
+    max_memory_mb: Option<u64>,
 }
 
 impl Default for CompletionEngine {
@@ -788,7 +795,14 @@ impl CompletionEngine {
             queue: VecDeque::new(),
             queued: HashSet::new(),
             completion_steps: 0,
+            max_memory_mb: None,
         }
+    }
+
+    /// Enforce `reasoning.max_memory_mb` in `run_to_completion`.
+    /// `None`/`Some(0)` = unlimited.
+    pub fn set_memory_limit_mb(&mut self, max_memory_mb: Option<u64>) {
+        self.max_memory_mb = max_memory_mb;
     }
 
     /// Initialize with axioms and role hierarchy
@@ -812,7 +826,14 @@ impl CompletionEngine {
 
     /// Run completion to fixpoint
     pub fn run_to_completion(&mut self) -> Result<()> {
+        // RSS guard for the worklist loop: interval-gated sampling, so the
+        // per-inference cost is a single `Instant::elapsed()` between samples.
+        // `None`/`Some(0)` (`reasoning.max_memory_mb` unset or 0) = unlimited.
+        let mut memory_guard =
+            crate::performance::MemoryGuard::from_max_memory_mb(self.max_memory_mb);
+
         while let Some(inference) = self.queue.pop_front() {
+            memory_guard.check()?;
             self.completion_steps += 1;
 
             for rule in &self.rules {

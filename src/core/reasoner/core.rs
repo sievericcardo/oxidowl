@@ -161,6 +161,9 @@ impl Reasoner {
         classification_service.set_performance_config(config.performance.clone());
         classification_service
             .set_absorption_enabled(config.reasoning.enable_absorption_classification);
+        // Enforce `reasoning.max_memory_mb` (RSS guard) in the classification,
+        // saturation and tableau loops.  `None`/`0` = unlimited.
+        classification_service.set_max_memory_mb(config.reasoning.max_memory_mb);
 
         Ok(Self {
             ontology: None,
@@ -1068,18 +1071,30 @@ impl Reasoner {
 
     /// Classify the ontology (compute class hierarchy).
     ///
-    /// When the ontology conforms to the OWL 2 EL profile the faster
+    /// When the ontology conforms to the OWL 2 EL profile **and** the
+    /// configured `target_profile` permits it (`Auto` or `EL`), the faster
     /// `ELReasoner` is used automatically, giving up to 100× speedup over the
     /// full tableau algorithm.  Falls back to the general classification
-    /// service for non-EL ontologies.
+    /// service when the profile is not EL, when an explicit `DL`/`QL`/`RL`
+    /// target profile is configured, or whenever the EL fast path fails for
+    /// any reason (never propagates an EL-only error).
     pub fn classify(&mut self) -> Result<ClassificationResult> {
         if let Some(ontology) = self.ontology.clone() {
             let mut statistics = ReasoningStatistics::new();
 
             // ── EL profile short-circuit ─────────────────────────────────────
+            // Only honour the EL fast path when the configured target profile
+            // allows it: an explicit DL/QL/RL target must always run the
+            // general classification service.  `Auto`/`EL` keep the EL
+            // detection below.
+            let profile_allows_el = matches!(
+                self.config.reasoning.target_profile,
+                crate::config::OWLProfile::Auto | crate::config::OWLProfile::EL
+            );
+
             // Detect the profile with a read-lock and avoid a full tableau run
             // when the ontology is EL-conforming.
-            let is_el = {
+            let is_el = profile_allows_el && {
                 let ont = read_lock(&ontology, "classify: EL profile detection")?;
                 let validator = crate::profiles::el::ELValidator::new();
                 use crate::profiles::ProfileValidator;
@@ -1112,20 +1127,53 @@ impl Reasoner {
                         &mut self.cache_manager,
                     );
                 }
+
                 log::info!("EL profile detected: using ELReasoner (100x speedup)");
-                let ont = read_lock(&ontology, "classify: EL")?;
-                let mut el_reasoner =
-                    crate::profiles::el_reasoner::ELReasoner::new(self.config.clone());
-                el_reasoner.initialize(&ont)?;
-                let result = el_reasoner.classify()?;
-                // Store for future use, cache the result, and make the query
-                // fast-paths reuse it.
-                self.el_reasoner = Some(Box::new(el_reasoner));
-                self.classification_service
-                    .store_classification(result.clone());
-                self.cache_manager
-                    .store_classification_result(&ontology, result.clone());
-                return Ok(result);
+                // Run the EL fast path in a small scope: the read-lock on the
+                // ontology is released before `self` is mutated, and the
+                // reasoner is only handed back to `self` on success — a
+                // failure can never leave a half-initialised reasoner cached.
+                let el_attempt = {
+                    let ont = read_lock(&ontology, "classify: EL")?;
+                    let mut el_reasoner =
+                        crate::profiles::el_reasoner::ELReasoner::new(self.config.clone());
+                    let outcome = match el_reasoner.initialize(&ont) {
+                        Ok(()) => el_reasoner.classify(),
+                        Err(err) => Err(err),
+                    };
+                    outcome.map(|result| (el_reasoner, result))
+                };
+
+                match el_attempt {
+                    Ok((el_reasoner, result)) => {
+                        // Store for future use, cache the result, and make the
+                        // query fast-paths reuse it.
+                        self.el_reasoner = Some(Box::new(el_reasoner));
+                        self.classification_service
+                            .store_classification(result.clone());
+                        self.cache_manager
+                            .store_classification_result(&ontology, result.clone());
+                        return Ok(result);
+                    }
+                    Err(err) => {
+                        // The memory guard abort is NOT an EL-translation
+                        // problem: retrying the (heavier) general path under
+                        // memory pressure would only make things worse, so it
+                        // propagates instead of falling back.
+                        if err.is_memory_limit() {
+                            return Err(err);
+                        }
+                        // The EL profile validator and the EL reasoner's
+                        // normal form are not in lock-step (e.g. constructs the
+                        // profile admits that `ELReasoner` cannot translate).
+                        // Never propagate: log, clear any cached EL reasoner,
+                        // and fall through to the general tableau path below.
+                        log::warn!(
+                            "EL fast path failed ({err}); falling back to general classification"
+                        );
+                        self.el_reasoner = None;
+                    }
+                }
             }
 
             // ── General tableau classification ───────────────────────────────

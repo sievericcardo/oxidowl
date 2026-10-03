@@ -51,6 +51,11 @@ struct Cli {
     #[arg(long, value_name = "SECONDS")]
     timeout: Option<u64>,
 
+    /// Memory cap for reasoning tasks in MB (0 = unlimited; overrides
+    /// `reasoning.max_memory_mb` from the config file)
+    #[arg(long, value_name = "MB")]
+    max_memory_mb: Option<u64>,
+
     /// Verbose output
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
@@ -685,6 +690,16 @@ async fn run_with_tokio() -> Result<()> {
     // Apply CLI timeout override
     if let Some(timeout_secs) = cli.timeout {
         config.reasoning.timeout = Some(Duration::from_secs(timeout_secs));
+    }
+
+    // Apply CLI memory-cap override: `--max-memory-mb 0` = unlimited (None),
+    // any positive value overrides `reasoning.max_memory_mb` from the config.
+    if let Some(max_memory_mb) = cli.max_memory_mb {
+        config.reasoning.max_memory_mb = if max_memory_mb == 0 {
+            None
+        } else {
+            Some(max_memory_mb)
+        };
     }
 
     // If server is enabled, run in server mode

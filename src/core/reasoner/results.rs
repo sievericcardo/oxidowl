@@ -284,9 +284,17 @@ impl ClassificationResult {
             }
 
             // Direct superclasses = all_superclasses minus those reachable indirectly.
+            //
+            // `sc != subclass` drops reflexive entries (A ∈ super(A)): a class
+            // is never its own direct superclass.  Without this, a reflexive
+            // hierarchy entry makes `children_index[A]` contain `A` itself and
+            // the tree-building DFS below would descend forever (observed as a
+            // ~15 GiB memory balloon + SIGKILL when printing ORE EL corpora,
+            // e.g. `ore_ont_304.owl`, whose classified hierarchy carries 18
+            // reflexive entries).
             let direct_superclasses: HashSet<ClassExpression> = all_superclasses
                 .iter()
-                .filter(|sc| !indirect.contains(sc))
+                .filter(|sc| *sc != subclass && !indirect.contains(sc))
                 .cloned()
                 .collect();
 
@@ -338,28 +346,47 @@ impl ClassificationResult {
                 vec![(start_iri, start_name, 0, Vec::new())];
 
             loop {
-                let top = stack.last_mut().unwrap();
-                let num_children = children_index.get(&top.0).map_or(0, std::vec::Vec::len);
-
-                if top.2 < num_children {
-                    // Push the next unvisited child onto the stack.
-                    let (child_iri, child_name) = children_index[&top.0][top.2].clone();
-                    top.2 += 1;
-                    stack.push((child_iri, child_name, 0, Vec::new()));
-                } else {
-                    // All children of this node have been processed: pop and assemble.
-                    let (iri, name, _, built) = stack.pop().unwrap();
-                    // Children are already in pre-sorted order from the index.
-                    let node = ClassNode {
-                        name,
-                        iri,
-                        children: built,
-                    };
-                    if let Some(parent_frame) = stack.last_mut() {
-                        parent_frame.3.push(node);
+                // Work out the next step without holding a borrow on `stack`
+                // so the cycle guard below can inspect the whole path.
+                let next_child = {
+                    let top = stack.last_mut().unwrap();
+                    let num_children = children_index.get(&top.0).map_or(0, std::vec::Vec::len);
+                    if top.2 < num_children {
+                        let child = children_index[&top.0][top.2].clone();
+                        top.2 += 1;
+                        Some(child)
                     } else {
-                        output.push(node);
-                        break;
+                        None
+                    }
+                };
+
+                match next_child {
+                    Some((child_iri, child_name)) => {
+                        // Cycle guard: never re-enter a node that is already
+                        // on the current path.  Reflexive entries (A ⊑ A) and
+                        // equivalent-class cycles (A ⊑ B ⊑ A) would otherwise
+                        // make this DFS descend forever and exhaust memory
+                        // (SIGKILL while printing the HermiT-style hierarchy).
+                        if stack.iter().any(|(iri, _, _, _)| *iri == child_iri) {
+                            continue;
+                        }
+                        stack.push((child_iri, child_name, 0, Vec::new()));
+                    }
+                    None => {
+                        // All children of this node have been processed: pop and assemble.
+                        let (iri, name, _, built) = stack.pop().unwrap();
+                        // Children are already in pre-sorted order from the index.
+                        let node = ClassNode {
+                            name,
+                            iri,
+                            children: built,
+                        };
+                        if let Some(parent_frame) = stack.last_mut() {
+                            parent_frame.3.push(node);
+                        } else {
+                            output.push(node);
+                            break;
+                        }
                     }
                 }
             }
@@ -578,5 +605,88 @@ impl RealisationResult {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ontology::{Class, IRI};
+
+    fn class(iri: &str) -> ClassExpression {
+        ClassExpression::Class(Class::new(IRI::new(iri)))
+    }
+
+    fn result_with(
+        hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>>,
+    ) -> ClassificationResult {
+        ClassificationResult {
+            hierarchy,
+            ontology_iri: Some("http://example.org/test".to_string()),
+            object_properties: Vec::new(),
+            data_properties: Vec::new(),
+            subsumees: HashMap::new(),
+            equivalents: HashMap::new(),
+            unsat: HashSet::new(),
+            counters: ClassificationCounters::default(),
+        }
+    }
+
+    /// Regression: a reflexive subsumption entry (A ∈ super(A), as produced
+    /// for some ORE EL-corpus ontologies, e.g. `ore_ont_304.owl` with 18 such
+    /// entries) used to make `build_children_for_iri_direct` descend forever:
+    /// the CLI ballooned to ~15 GiB and was SIGKILLed (exit 137) *after* a
+    /// successful classification while printing the HermiT-style hierarchy.
+    #[test]
+    fn hermit_style_print_terminates_with_reflexive_subsumer_entries() {
+        let thing = class("http://www.w3.org/2002/07/owl#Thing");
+        let a = class("http://example.org/A");
+
+        // A ⊑ A, A ⊑ Thing, Thing ⊑ Thing (reflexive entries).
+        let mut hierarchy = HashMap::new();
+        hierarchy.insert(thing.clone(), HashSet::from([thing.clone()]));
+        hierarchy.insert(a.clone(), HashSet::from([a.clone(), thing.clone()]));
+
+        let result = result_with(hierarchy);
+        let mut out = Vec::new();
+        result
+            .write_hermit_style_hierarchy(&mut out)
+            .expect("printing a hierarchy with reflexive entries must terminate");
+        let text = String::from_utf8_lossy(&out);
+        assert!(
+            text.contains("example.org/A"),
+            "class A must appear in the output:\n{text}"
+        );
+    }
+
+    /// Regression: an equivalent-class cycle (A ⊑ B, B ⊑ A) reachable from a
+    /// root must not make the tree-building DFS loop forever.
+    #[test]
+    fn hermit_style_print_terminates_with_mutual_subsumption_cycle() {
+        let thing = class("http://www.w3.org/2002/07/owl#Thing");
+        let x = class("http://example.org/X");
+        let a = class("http://example.org/A");
+        let b = class("http://example.org/B");
+
+        // X ⊑ Thing; A ⊑ X, A ⊑ B; B ⊑ A (cycle below root X).
+        let mut hierarchy = HashMap::new();
+        hierarchy.insert(x.clone(), HashSet::from([thing.clone()]));
+        hierarchy.insert(a.clone(), HashSet::from([x.clone(), b.clone()]));
+        hierarchy.insert(b.clone(), HashSet::from([a.clone()]));
+
+        let result = result_with(hierarchy);
+        let mut out = Vec::new();
+        result
+            .write_hermit_style_hierarchy(&mut out)
+            .expect("printing a cyclic hierarchy must terminate");
+        let text = String::from_utf8_lossy(&out);
+        assert!(
+            text.contains("example.org/X"),
+            "X must appear in the output:\n{text}"
+        );
+        assert!(
+            text.contains("example.org/B"),
+            "B must appear in the output:\n{text}"
+        );
     }
 }

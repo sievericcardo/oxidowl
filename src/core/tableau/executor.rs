@@ -117,6 +117,13 @@ impl TableauExecutor {
             tableau.blocking_strategy
         );
 
+        // RSS guard for this expansion run.  Owned by the loop (no shared
+        // state): samples at most once per ~300 ms, so calling `check()` on
+        // every iteration costs a single `Instant::elapsed()` between samples.
+        // `None`/`0` (`reasoning.max_memory_mb` unset or 0) = unlimited.
+        let mut memory_guard =
+            crate::performance::MemoryGuard::from_max_memory_mb(tableau.config.max_memory_mb);
+
         // Main expansion loop
         loop {
             if tableau.state != TableauState::Unknown {
@@ -148,6 +155,11 @@ impl TableauExecutor {
                 tableau.state = TableauState::Unknown;
                 break;
             }
+
+            // Check for memory limit (interval-gated RSS sampling).  Aborts
+            // with `Err` instead of letting the OS OOM-kill the process —
+            // a pathological ontology can never deplete the host.
+            memory_guard.check()?;
 
             // Workstream A5: RBox role-rule pass (transitivity, symmetry, reflexivity,
             // role inclusions, property chains, domain/range, functional/inverse-functional

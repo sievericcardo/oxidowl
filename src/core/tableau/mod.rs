@@ -287,6 +287,7 @@ impl Tableau {
             config: TableauConfig {
                 max_depth: config.max_expansion_depth,
                 timeout: config.timeout,
+                max_memory_mb: config.max_memory_mb,
                 blocking_enabled: true,
                 optimization_enabled: true,
                 rdf11_mode: false,                // RDF-star enabled by default

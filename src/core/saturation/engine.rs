@@ -140,6 +140,11 @@ pub struct SaturationEngine {
 
     /// Concept index for fast IRI lookups
     concept_index: Arc<RwLock<ConceptIndex>>,
+
+    /// RSS cap from `reasoning.max_memory_mb` (`None`/`Some(0)` = unlimited),
+    /// enforced by a [`crate::performance::MemoryGuard`] owned by the
+    /// saturation loops.
+    max_memory_mb: Option<u64>,
 }
 
 impl SaturationEngine {
@@ -153,7 +158,14 @@ impl SaturationEngine {
             completion_cache: Arc::new(CompletionGraphCache::new()),
             incremental: Arc::new(IncrementalClassifier::new()),
             concept_index: Arc::new(RwLock::new(ConceptIndex::new())),
+            max_memory_mb: None,
         }
+    }
+
+    /// Enforce `reasoning.max_memory_mb` in the saturation loops.
+    /// `None`/`Some(0)` = unlimited.
+    pub fn set_max_memory_mb(&mut self, max_memory_mb: Option<u64>) {
+        self.max_memory_mb = max_memory_mb;
     }
 
     /// Get completion graph cache
@@ -261,7 +273,12 @@ impl SaturationEngine {
         let mut nodes: HashMap<ClassExpression, SaturationNode> =
             HashMap::with_capacity(concepts.len());
 
+        // RSS guard for the per-concept loop (interval-gated sampling).
+        let mut memory_guard =
+            crate::performance::MemoryGuard::from_max_memory_mb(self.max_memory_mb);
+
         for (i, concept) in concepts.iter().enumerate() {
+            memory_guard.check()?;
             if i % 500 == 0 && i > 0 {
                 debug!("Saturation progress: {}/{}", i, concepts.len());
             }
@@ -377,10 +394,14 @@ impl SaturationEngine {
 
         let mut node = SaturationNode::new(concept.clone());
         let mut iteration = 0;
+        // RSS guard for the rule-fixpoint loop (interval-gated sampling).
+        let mut memory_guard =
+            crate::performance::MemoryGuard::from_max_memory_mb(self.max_memory_mb);
 
         debug!("Saturating concept: {concept:?}");
 
         loop {
+            memory_guard.check()?;
             iteration += 1;
             node.iteration_count = iteration;
 

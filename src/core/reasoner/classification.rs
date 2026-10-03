@@ -45,6 +45,10 @@ pub struct ClassificationService {
     classification_cache: Option<ClassificationResult>,
     /// Enable absorption + dependency-graph (Elgot-style) classification.
     absorption_enabled: bool,
+    /// RSS cap from `reasoning.max_memory_mb` (`None`/`Some(0)` = unlimited).
+    /// Enforced by a [`crate::performance::MemoryGuard`] owned by the
+    /// `classify` loops (see `set_max_memory_mb`).
+    max_memory_mb: Option<u64>,
     /// Maximum number of full-tableau checks in the phase-3 fallback.
     max_real_tableau_checks: usize,
     /// Total time budget for full-tableau checks in the phase-3 fallback.
@@ -61,6 +65,7 @@ impl ClassificationService {
             performance_config: PerformanceConfig::from_env(),
             classification_cache: None,
             absorption_enabled: true,
+            max_memory_mb: None,
             max_real_tableau_checks: 512,
             max_real_tableau_time: std::time::Duration::from_millis(250),
         }
@@ -78,6 +83,7 @@ impl ClassificationService {
             performance_config: PerformanceConfig::from_env(),
             classification_cache: None,
             absorption_enabled: true,
+            max_memory_mb: None,
             max_real_tableau_checks: 512,
             max_real_tableau_time: std::time::Duration::from_millis(250),
         }
@@ -86,6 +92,14 @@ impl ClassificationService {
     /// Set the performance configuration
     pub fn set_performance_config(&mut self, config: PerformanceConfig) {
         self.performance_config = config;
+    }
+
+    /// Enforce `reasoning.max_memory_mb` in the classification loops
+    /// (per-class phase-3 loop + A8 phase boundaries) and forward the cap to
+    /// the saturation engine.  `None`/`Some(0)` = unlimited.
+    pub fn set_max_memory_mb(&mut self, max_memory_mb: Option<u64>) {
+        self.max_memory_mb = max_memory_mb;
+        self.saturation_engine.set_max_memory_mb(max_memory_mb);
     }
 
     /// Enable or disable the absorption + dependency-graph classification path.
@@ -162,6 +176,12 @@ impl ClassificationService {
             return Ok(cached_result);
         }
 
+        // RSS guard for the loops below.  Owned by `classify` (the loops live
+        // here): samples at most once per ~300 ms, and `None`/`Some(0)`
+        // (`reasoning.max_memory_mb` unset or 0) never samples at all.
+        let mut memory_guard =
+            crate::performance::MemoryGuard::from_max_memory_mb(self.max_memory_mb);
+
         let ontology_guard = read_lock(ontology, "classification: reading ontology for classify")?;
 
         // Get all named classes from the ontology.  The signature is reused at
@@ -203,6 +223,7 @@ impl ClassificationService {
         // role-range propagation) so we skip the (heavier) saturation engine
         // entirely.  The saturation engine remains the fallback when the
         // absorption path is disabled.
+        memory_guard.check()?; // before the A8 absorb + dependency classify
         let phase2_start = Instant::now();
         let mut may_need_tableau: HashSet<ClassExpression> = HashSet::new();
         let mut absorption_opt: Option<crate::core::saturation::AbsorptionResult> = None;
@@ -269,6 +290,7 @@ impl ClassificationService {
         );
 
         // === PHASE 3: Tableau expansion for genuinely non-deterministic classes ===
+        memory_guard.check()?; // after A8 / saturation, before the pairwise loop
         let phase3_start = Instant::now();
         let mut tableau_checks = 0usize;
         let mut real_tableau_checks = 0usize;
@@ -296,6 +318,8 @@ impl ClassificationService {
         ));
 
         for subclass in &classes {
+            // Per-class memory check (interval-gated; aborts a runaway phase 3).
+            memory_guard.check()?;
             if !needs_tableau(subclass, &may_need_tableau) {
                 continue;
             }
@@ -460,6 +484,8 @@ impl ClassificationService {
                 tableau_checks += 1;
                 if tableau_checks % 1000 == 0 {
                     debug!("Tableau checks progress: {tableau_checks}");
+                    // Per-iteration memory check for long pairwise runs.
+                    memory_guard.check()?;
                 }
             }
         }
