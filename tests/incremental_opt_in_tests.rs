@@ -90,9 +90,11 @@ async fn default_full_recompute_path_is_unaffected() -> Result<()> {
     assert!(superclasses.contains(&class("B")));
     assert!(superclasses.contains(&class("C")));
 
-    assert!(service
-        .is_instance_of(&individual("i"), &class("C"))
-        .await?);
+    assert!(
+        service
+            .is_instance_of(&individual("i"), &class("C"))
+            .await?
+    );
 
     Ok(())
 }
@@ -121,10 +123,7 @@ async fn incremental_add_axiom_matches_full_recompute() -> Result<()> {
     let (incremental_service, base_service) = {
         let base = Arc::new(ReasoningService::new(Ontology::new(), config)?);
         let ontology_arc = Arc::new(tokio::sync::RwLock::new(Ontology::new()));
-        let incremental = base
-            .clone()
-            .into_incremental(ontology_arc, None)
-            .await?;
+        let incremental = base.clone().into_incremental(ontology_arc, None).await?;
 
         incremental
             .add_axiom_incrementally(sub("A", "B", 1))
@@ -143,7 +142,11 @@ async fn incremental_add_axiom_matches_full_recompute() -> Result<()> {
 
         (incremental, base)
     };
-    assert_eq!(built.axioms().len(), 3, "sanity: final ontology has 3 axioms");
+    assert_eq!(
+        built.axioms().len(),
+        3,
+        "sanity: final ontology has 3 axioms"
+    );
 
     // Full recompute over the same final axiom set (default config).
     let full = ReasoningService::new(small_ontology(), ReasonerConfig::default())?;
@@ -177,13 +180,12 @@ async fn incremental_add_axiom_matches_full_recompute() -> Result<()> {
 
     // Classification (superclass sets) must agree.
     for c in ["A", "B", "C"] {
-        let incremental_sups: std::collections::HashSet<String> =
-            incremental_service
-                .get_superclasses(&class(c))
-                .await?
-                .into_iter()
-                .map(|c| c.iri.to_string())
-                .collect();
+        let incremental_sups: std::collections::HashSet<String> = incremental_service
+            .get_superclasses(&class(c))
+            .await?
+            .into_iter()
+            .map(|c| c.iri.to_string())
+            .collect();
         let full_sups: std::collections::HashSet<String> = full
             .get_superclasses(&class(c), false)
             .await?

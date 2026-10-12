@@ -82,7 +82,10 @@ fn bugfix_union_soundness() -> Result<()> {
     let c_cls = df.class_ce(&format!("{EX}C"));
     let a = df.named(&format!("{EX}a"));
     let mut ont = df.build_ontology(vec![
-        df.sub_class_of(a_cls.clone(), df.union_of(vec![b_cls.clone(), c_cls.clone()])),
+        df.sub_class_of(
+            a_cls.clone(),
+            df.union_of(vec![b_cls.clone(), c_cls.clone()]),
+        ),
         df.sub_class_of(a_cls.clone(), df.complement_of(b_cls)),
         df.class_assertion(a_cls, a.clone()),
     ]);
@@ -190,7 +193,11 @@ fn bugfix_data_property_domain() -> Result<()> {
     let a = df.named(&format!("{EX}a"));
     let mut ont = df.build_ontology(vec![
         df.data_property_domain(dp.clone(), c_cls.clone()),
-        df.data_property_assertion(dp, a.clone(), df.typed_literal("x", &format!("{XSD}string"))),
+        df.data_property_assertion(
+            dp,
+            a.clone(),
+            df.typed_literal("x", &format!("{XSD}string")),
+        ),
     ]);
     df.auto_declare(&mut ont);
 
@@ -214,7 +221,11 @@ fn bugfix_data_property_range() -> Result<()> {
 
     let mut ok_ont = df.build_ontology(vec![
         df.data_property_range(dp.clone(), df.data_range_integer()),
-        df.data_property_assertion(dp.clone(), a.clone(), df.typed_literal("5", &format!("{XSD}int"))),
+        df.data_property_assertion(
+            dp.clone(),
+            a.clone(),
+            df.typed_literal("5", &format!("{XSD}int")),
+        ),
     ]);
     df.auto_declare(&mut ok_ont);
     let r = reasoner_for(ok_ont)?;

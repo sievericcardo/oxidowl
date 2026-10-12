@@ -217,5 +217,9 @@ fn turtle_predicate_a_shorthand_in_semicolon_list() {
         }
         _ => false,
     });
-    assert!(sub, "rdfs:subClassOf must still produce SubClassOf; axioms: {:?}", ont.axioms());
+    assert!(
+        sub,
+        "rdfs:subClassOf must still produce SubClassOf; axioms: {:?}",
+        ont.axioms()
+    );
 }
