@@ -1,7 +1,10 @@
-//! SatisfiabilityConverter — converts entailment checks to consistency checks.
+//! `SatisfiabilityConverter` — converts entailment checks to consistency checks.
 
 use crate::manager::changes::OntologyChange;
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::{
+    Axiom, ClassAssertionAxiom, DifferentIndividualsAxiom, NegativeObjectPropertyAssertionAxiom,
+    ObjectPropertyAssertionAxiom, SameIndividualAxiom,
+};
 use crate::ontology::{ClassExpression, IRI, Individual, OntologyRef};
 
 /// Converts "O entails α" queries into "O ∪ {¬α} is inconsistent" queries.
@@ -10,7 +13,7 @@ pub struct SatisfiabilityConverter;
 
 impl SatisfiabilityConverter {
     /// Convert an entailment check to a satisfiability test.
-    /// Returns (temp_ontology, cleanup_changes) where temp_ontology = O ∪ {¬α}.
+    /// Returns (`temp_ontology`, `cleanup_changes`) where `temp_ontology` = O ∪ {¬α}.
     pub fn convert(
         ontology: &OntologyRef,
         entailment: &Axiom,

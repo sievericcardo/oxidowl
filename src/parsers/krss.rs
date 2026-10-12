@@ -750,7 +750,7 @@ impl KRSSRenderer {
             ObjectPropertyExpression::InverseObjectProperty(p) => {
                 format!("(inv {})", self.name(&p.iri.to_string()))
             }
-            _ => self.name("role"),
+            ObjectPropertyExpression::PropertyChain(_) => self.name("role"),
         }
     }
 

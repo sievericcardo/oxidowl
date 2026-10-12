@@ -108,7 +108,9 @@ impl SaturationNode {
 
     /// Add a saturated concept to this node
     pub fn add_saturated_concept(&mut self, concept: ClassExpression) -> bool {
-        if !self.saturated_concepts.contains(&concept) {
+        if self.saturated_concepts.contains(&concept) {
+            false
+        } else {
             let hash = crate::core::fast_hashing::hash_concept(&concept);
             self.saturated_concepts = self.saturated_concepts.update(concept);
             // Incremental XOR-fold signature: O(1) instead of re-sorting the
@@ -116,8 +118,6 @@ impl SaturationNode {
             // rather than O(m²) — workstream A8).
             self.signature ^= hash;
             true
-        } else {
-            false
         }
     }
 

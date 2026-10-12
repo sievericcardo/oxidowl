@@ -14,7 +14,12 @@ use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::Ontology,
-    semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple, vocabulary::*},
+    semantics::{
+        IriValidationMode, RdfTerm, Triple as RdfTriple,
+        vocabulary::{
+            RDF_OBJECT, RDF_PREDICATE, RDF_REIFIES, RDF_STATEMENT, RDF_SUBJECT, RDF_TYPE,
+        },
+    },
 };
 
 /// RDF version mode for RDF/XML parsing
@@ -992,6 +997,9 @@ impl Default for RdfXmlSerializer {
 
 impl OntologySerializer for RdfXmlSerializer {
     fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
+        use crate::semantics::RdfTerm;
+        use crate::semantics::owl_rdf_mapping::{BlankNodeCounter, axiom_to_triples};
+
         let mut result = String::new();
 
         // XML header and RDF root
@@ -1074,8 +1082,6 @@ impl OntologySerializer for RdfXmlSerializer {
         }
 
         // ── Axiom serialization via shared OWL-to-RDF mapping ──────────
-        use crate::semantics::RdfTerm;
-        use crate::semantics::owl_rdf_mapping::{BlankNodeCounter, axiom_to_triples};
         let mut counter = BlankNodeCounter::new();
         for axiom in ontology.axioms() {
             let triples = axiom_to_triples(axiom, &mut counter);

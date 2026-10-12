@@ -1,4 +1,4 @@
-//! DateTime Value Space Handler (xsd:dateTime, xsd:date, xsd:time, xsd:duration)
+//! `DateTime` Value Space Handler (xsd:dateTime, xsd:date, xsd:time, xsd:duration)
 
 use super::ValueSpaceHandler;
 use crate::error::Error;
@@ -17,7 +17,7 @@ pub struct DateValueSpace;
 pub struct TimeValueSpace;
 
 impl ValueSpaceHandler for DateTimeValueSpace {
-    fn datatype_iri(&self) -> &str {
+    fn datatype_iri(&self) -> &'static str {
         "http://www.w3.org/2001/XMLSchema#dateTime"
     }
 
@@ -26,9 +26,7 @@ impl ValueSpaceHandler for DateTimeValueSpace {
     }
 
     fn normalise(&self, value: &str) -> String {
-        parse_datetime(value)
-            .map(|dt| dt.to_rfc3339())
-            .unwrap_or_else(|_| value.to_string())
+        parse_datetime(value).map_or_else(|_| value.to_string(), |dt| dt.to_rfc3339())
     }
 
     fn are_equal(&self, a: &str, b: &str) -> Result<bool, Error> {
@@ -64,7 +62,7 @@ impl ValueSpaceHandler for DateTimeValueSpace {
 }
 
 impl ValueSpaceHandler for DateValueSpace {
-    fn datatype_iri(&self) -> &str {
+    fn datatype_iri(&self) -> &'static str {
         "http://www.w3.org/2001/XMLSchema#date"
     }
 
@@ -74,8 +72,7 @@ impl ValueSpaceHandler for DateValueSpace {
 
     fn normalise(&self, value: &str) -> String {
         NaiveDate::parse_from_str(value, "%Y-%m-%d")
-            .map(|d| d.to_string())
-            .unwrap_or_else(|_| value.to_string())
+            .map_or_else(|_| value.to_string(), |d| d.to_string())
     }
 
     fn are_equal(&self, a: &str, b: &str) -> Result<bool, Error> {
@@ -117,7 +114,7 @@ impl ValueSpaceHandler for DateValueSpace {
 }
 
 impl ValueSpaceHandler for TimeValueSpace {
-    fn datatype_iri(&self) -> &str {
+    fn datatype_iri(&self) -> &'static str {
         "http://www.w3.org/2001/XMLSchema#time"
     }
 
@@ -129,8 +126,7 @@ impl ValueSpaceHandler for TimeValueSpace {
     fn normalise(&self, value: &str) -> String {
         NaiveTime::parse_from_str(value, "%H:%M:%S%.f")
             .or_else(|_| NaiveTime::parse_from_str(value, "%H:%M:%S"))
-            .map(|t| t.to_string())
-            .unwrap_or_else(|_| value.to_string())
+            .map_or_else(|_| value.to_string(), |t| t.to_string())
     }
 
     fn are_equal(&self, a: &str, b: &str) -> Result<bool, Error> {

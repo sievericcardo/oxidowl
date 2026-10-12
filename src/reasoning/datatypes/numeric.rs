@@ -8,7 +8,7 @@ use crate::error::Error;
 pub struct IntegerValueSpace;
 
 impl ValueSpaceHandler for IntegerValueSpace {
-    fn datatype_iri(&self) -> &str {
+    fn datatype_iri(&self) -> &'static str {
         "http://www.w3.org/2001/XMLSchema#integer"
     }
 
@@ -19,8 +19,7 @@ impl ValueSpaceHandler for IntegerValueSpace {
     fn normalise(&self, value: &str) -> String {
         value
             .parse::<i128>()
-            .map(|n| n.to_string())
-            .unwrap_or_else(|_| value.to_string())
+            .map_or_else(|_| value.to_string(), |n| n.to_string())
     }
 
     fn are_equal(&self, a: &str, b: &str) -> Result<bool, Error> {
@@ -57,7 +56,7 @@ impl ValueSpaceHandler for IntegerValueSpace {
 pub struct DecimalValueSpace;
 
 impl ValueSpaceHandler for DecimalValueSpace {
-    fn datatype_iri(&self) -> &str {
+    fn datatype_iri(&self) -> &'static str {
         "http://www.w3.org/2001/XMLSchema#decimal"
     }
 
@@ -68,8 +67,7 @@ impl ValueSpaceHandler for DecimalValueSpace {
     fn normalise(&self, value: &str) -> String {
         value
             .parse::<f64>()
-            .map(|f| format!("{f}"))
-            .unwrap_or_else(|_| value.to_string())
+            .map_or_else(|_| value.to_string(), |f| format!("{f}"))
     }
 
     fn are_equal(&self, a: &str, b: &str) -> Result<bool, Error> {
@@ -135,8 +133,7 @@ impl ValueSpaceHandler for FloatValueSpace {
             "NaN" => "NaN".to_string(),
             other => other
                 .parse::<f64>()
-                .map(|f| format!("{f:.10e}"))
-                .unwrap_or_else(|_| other.to_string()),
+                .map_or_else(|_| other.to_string(), |f| format!("{f:.10e}")),
         }
     }
 
@@ -146,7 +143,7 @@ impl ValueSpaceHandler for FloatValueSpace {
         }
         let pa = parse_f64(a)?;
         let pb = parse_f64(b)?;
-        #[allow(clippy::float_cmp)]
+        #[allow(clippy::float_cmp)] // XSD numeric equality is exact by specification
         Ok(pa == pb)
     }
 

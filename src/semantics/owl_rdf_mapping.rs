@@ -7,9 +7,19 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::vocabulary::*;
+use super::vocabulary::{
+    OWL_ASYMMETRIC_PROPERTY, OWL_CLASS, OWL_DATA_PROPERTY, OWL_DIFFERENT_FROM, OWL_DISJOINT_WITH,
+    OWL_EQUIVALENT_CLASS, OWL_EQUIVALENT_PROPERTY, OWL_FUNCTIONAL_PROPERTY,
+    OWL_INVERSE_FUNCTIONAL_PROPERTY, OWL_INVERSE_OF, OWL_IRREFLEXIVE_PROPERTY, OWL_OBJECT_PROPERTY,
+    OWL_REFLEXIVE_PROPERTY, OWL_SAME_AS, OWL_SYMMETRIC_PROPERTY, OWL_TRANSITIVE_PROPERTY,
+    RDF_FIRST, RDF_NIL, RDF_REST, RDF_TYPE, RDFS_DATATYPE, RDFS_DOMAIN, RDFS_RANGE,
+    RDFS_SUBCLASS_OF, RDFS_SUBPROPERTY_OF,
+};
 use super::{RdfTerm, Triple};
-use crate::ontology::*;
+use crate::ontology::{
+    AnnotationSubject, AnnotationValue, Axiom, ClassExpression, DataPropertyExpression, DataRange,
+    Entity, Individual, Literal, ObjectPropertyExpression, Ontology,
+};
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Blank Node Counter
@@ -20,6 +30,7 @@ pub struct BlankNodeCounter {
 }
 
 impl BlankNodeCounter {
+    #[must_use]
     pub fn new() -> Self {
         BlankNodeCounter {
             next: AtomicU64::new(0),
@@ -436,7 +447,7 @@ pub fn ontology_preservation_triples(ontology: &Ontology) -> crate::Result<Vec<T
 ///    ontology has no IRI),
 /// 4. the triples of every axiom via [`axiom_to_triples`].
 ///
-/// The BinaryRDF and HDT writers use this so every RDF-based writer agrees
+/// The `BinaryRDF` and HDT writers use this so every RDF-based writer agrees
 /// on one canonical triple set — the same emission the JSON-LD / N3 /
 /// Turtle renderers perform inline — and the result round-trips through the
 /// shared RDF→OWL mapping ([`crate::parsers::rdf_to_owl::map_rdf_triples`]).
@@ -525,9 +536,10 @@ fn iri_term_from_url(url: url::Url) -> RdfTerm {
 }
 
 fn iri_term_from_str(s: &str) -> RdfTerm {
-    url::Url::parse(s)
-        .map(RdfTerm::Iri)
-        .unwrap_or_else(|_| RdfTerm::Iri(url::Url::parse("http://example.org/error").unwrap()))
+    url::Url::parse(s).map_or_else(
+        |_| RdfTerm::Iri(url::Url::parse("http://example.org/error").unwrap()),
+        RdfTerm::Iri,
+    )
 }
 
 fn url_from_iri_str(s: &str) -> url::Url {

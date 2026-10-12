@@ -352,6 +352,7 @@ impl LatexRenderer {
         }
     }
 
+    #[must_use]
     pub fn render_ce(&self, expr: &ClassExpression) -> String {
         match expr {
             ClassExpression::Class(cls) => self.escape_iri(&cls.iri.to_string()),

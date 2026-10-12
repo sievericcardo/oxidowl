@@ -47,7 +47,7 @@ impl std::fmt::Debug for ConceptIndex {
                 "total_concepts",
                 &self.total_concepts.load(Ordering::Relaxed),
             )
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

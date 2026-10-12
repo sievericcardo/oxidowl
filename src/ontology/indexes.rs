@@ -6,7 +6,7 @@
 //!
 //! The index covers **all** logical OWL 2 axiom types — class axioms, object
 //! and data property axioms (including property chains and the eight property
-//! characteristics), individual axioms (SameIndividual, DifferentIndividuals,
+//! characteristics), individual axioms (`SameIndividual`, `DifferentIndividuals`,
 //! positive and negative assertions), `HasKey`, `DatatypeDefinition` and SWRL
 //! rules — plus a general per-type store so every axiom remains retrievable.
 
@@ -27,112 +27,112 @@ use std::collections::{HashMap, HashSet};
 /// [`remove_axiom`](Self::remove_axiom).
 #[derive(Debug, Default, Clone)]
 pub struct AxiomIndex {
-    /// SubClassOf axioms indexed by subclass — maps sub → list of supers
+    /// `SubClassOf` axioms indexed by subclass — maps sub → list of supers
     pub subclass_by_sub: HashMap<ClassExpression, Vec<ClassExpression>>,
 
-    /// SubClassOf axioms indexed by superclass — maps super → list of subs
+    /// `SubClassOf` axioms indexed by superclass — maps super → list of subs
     pub subclass_by_super: HashMap<ClassExpression, Vec<ClassExpression>>,
 
-    /// EquivalentClasses axioms — maps each class → the other equivalent classes
+    /// `EquivalentClasses` axioms — maps each class → the other equivalent classes
     pub equivalent_by_class: HashMap<ClassExpression, Vec<ClassExpression>>,
 
-    /// ClassAssertion axioms indexed by class — maps class → list of individuals
+    /// `ClassAssertion` axioms indexed by class — maps class → list of individuals
     pub class_assertion_by_class: HashMap<ClassExpression, Vec<Individual>>,
 
-    /// ClassAssertion axioms indexed by individual — maps individual → list of classes
+    /// `ClassAssertion` axioms indexed by individual — maps individual → list of classes
     pub class_assertion_by_ind: HashMap<Individual, Vec<ClassExpression>>,
 
-    /// ObjectPropertyDomain axioms indexed by property
+    /// `ObjectPropertyDomain` axioms indexed by property
     pub domain_by_prop: HashMap<ObjectPropertyExpression, Vec<ClassExpression>>,
 
-    /// ObjectPropertyRange axioms indexed by property
+    /// `ObjectPropertyRange` axioms indexed by property
     pub range_by_prop: HashMap<ObjectPropertyExpression, Vec<ClassExpression>>,
 
-    /// DisjointClasses axioms — maps each class → the classes disjoint with it
+    /// `DisjointClasses` axioms — maps each class → the classes disjoint with it
     pub disjoint_by_class: HashMap<ClassExpression, Vec<ClassExpression>>,
 
-    /// SubObjectPropertyOf axioms indexed by sub-property (incl. property chains)
+    /// `SubObjectPropertyOf` axioms indexed by sub-property (incl. property chains)
     pub sub_object_property_by_sub:
         HashMap<ObjectPropertyExpression, Vec<ObjectPropertyExpression>>,
 
-    /// SubObjectPropertyOf axioms indexed by super-property
+    /// `SubObjectPropertyOf` axioms indexed by super-property
     pub sub_object_property_by_super:
         HashMap<ObjectPropertyExpression, Vec<ObjectPropertyExpression>>,
 
-    /// EquivalentObjectProperties — maps each property → the other equivalent properties
+    /// `EquivalentObjectProperties` — maps each property → the other equivalent properties
     pub equivalent_object_properties_by_prop:
         HashMap<ObjectPropertyExpression, Vec<ObjectPropertyExpression>>,
 
-    /// DisjointObjectProperties — maps each property → the disjoint properties
+    /// `DisjointObjectProperties` — maps each property → the disjoint properties
     pub disjoint_object_properties_by_prop:
         HashMap<ObjectPropertyExpression, Vec<ObjectPropertyExpression>>,
 
-    /// InverseObjectProperties — maps each property → its inverse properties
+    /// `InverseObjectProperties` — maps each property → its inverse properties
     pub inverse_object_properties_by_prop:
         HashMap<ObjectPropertyExpression, Vec<ObjectPropertyExpression>>,
 
-    /// SubDataPropertyOf axioms indexed by sub-property
+    /// `SubDataPropertyOf` axioms indexed by sub-property
     pub sub_data_property_by_sub: HashMap<DataPropertyExpression, Vec<DataPropertyExpression>>,
 
-    /// SubDataPropertyOf axioms indexed by super-property
+    /// `SubDataPropertyOf` axioms indexed by super-property
     pub sub_data_property_by_super: HashMap<DataPropertyExpression, Vec<DataPropertyExpression>>,
 
-    /// EquivalentDataProperties — maps each property → the other equivalent properties
+    /// `EquivalentDataProperties` — maps each property → the other equivalent properties
     pub equivalent_data_properties_by_prop:
         HashMap<DataPropertyExpression, Vec<DataPropertyExpression>>,
 
-    /// DisjointDataProperties — maps each property → the disjoint properties
+    /// `DisjointDataProperties` — maps each property → the disjoint properties
     pub disjoint_data_properties_by_prop:
         HashMap<DataPropertyExpression, Vec<DataPropertyExpression>>,
 
-    /// DataPropertyDomain axioms indexed by property
+    /// `DataPropertyDomain` axioms indexed by property
     pub data_property_domain_by_prop: HashMap<DataPropertyExpression, Vec<ClassExpression>>,
 
-    /// DataPropertyRange axioms indexed by property
+    /// `DataPropertyRange` axioms indexed by property
     pub data_property_range_by_prop: HashMap<DataPropertyExpression, Vec<DataRange>>,
 
-    /// Properties declared FunctionalObjectProperty
+    /// Properties declared `FunctionalObjectProperty`
     pub functional_object_properties: HashSet<ObjectPropertyExpression>,
 
-    /// Properties declared InverseFunctionalObjectProperty
+    /// Properties declared `InverseFunctionalObjectProperty`
     pub inverse_functional_object_properties: HashSet<ObjectPropertyExpression>,
 
-    /// Properties declared ReflexiveObjectProperty
+    /// Properties declared `ReflexiveObjectProperty`
     pub reflexive_object_properties: HashSet<ObjectPropertyExpression>,
 
-    /// Properties declared IrreflexiveObjectProperty
+    /// Properties declared `IrreflexiveObjectProperty`
     pub irreflexive_object_properties: HashSet<ObjectPropertyExpression>,
 
-    /// Properties declared SymmetricObjectProperty
+    /// Properties declared `SymmetricObjectProperty`
     pub symmetric_object_properties: HashSet<ObjectPropertyExpression>,
 
-    /// Properties declared AsymmetricObjectProperty
+    /// Properties declared `AsymmetricObjectProperty`
     pub asymmetric_object_properties: HashSet<ObjectPropertyExpression>,
 
-    /// Properties declared TransitiveObjectProperty
+    /// Properties declared `TransitiveObjectProperty`
     pub transitive_object_properties: HashSet<ObjectPropertyExpression>,
 
-    /// Data properties declared FunctionalDataProperty
+    /// Data properties declared `FunctionalDataProperty`
     pub functional_data_properties: HashSet<DataPropertyExpression>,
 
-    /// SameIndividual axioms indexed by individual — maps ind → other same individuals
+    /// `SameIndividual` axioms indexed by individual — maps ind → other same individuals
     pub same_individual_by_ind: HashMap<Individual, Vec<Individual>>,
 
-    /// DifferentIndividuals axioms indexed by individual — maps ind → other different individuals
+    /// `DifferentIndividuals` axioms indexed by individual — maps ind → other different individuals
     pub different_individuals_by_ind: HashMap<Individual, Vec<Individual>>,
 
-    /// NegativeObjectPropertyAssertion axioms indexed by source individual
+    /// `NegativeObjectPropertyAssertion` axioms indexed by source individual
     pub negative_object_assertions_by_source:
         HashMap<Individual, Vec<NegativeObjectPropertyAssertionAxiom>>,
 
-    /// NegativeDataPropertyAssertion axioms indexed by individual
+    /// `NegativeDataPropertyAssertion` axioms indexed by individual
     pub negative_data_assertions_by_ind:
         HashMap<Individual, Vec<NegativeDataPropertyAssertionAxiom>>,
 
-    /// HasKey axioms indexed by class
+    /// `HasKey` axioms indexed by class
     pub haskey_by_class: HashMap<ClassExpression, Vec<HasKeyAxiom>>,
 
-    /// DatatypeDefinition axioms indexed by the IRI of the defined datatype
+    /// `DatatypeDefinition` axioms indexed by the IRI of the defined datatype
     pub datatype_definition_by_datatype: HashMap<IRI, Vec<DatatypeDefinitionAxiom>>,
 
     /// All SWRL rules
@@ -527,8 +527,7 @@ impl AxiomIndex {
     pub fn get(&self, axiom_type: AxiomType) -> &[Axiom] {
         self.axioms_by_type
             .get(&axiom_type)
-            .map(std::vec::Vec::as_slice)
-            .unwrap_or(&[])
+            .map_or(&[], std::vec::Vec::as_slice)
     }
 
     /// Return every indexed axiom, grouped by type.
@@ -702,8 +701,7 @@ impl AxiomIndex {
     pub fn direct_superclasses(&self, class: &ClassExpression) -> &[ClassExpression] {
         self.subclass_by_sub
             .get(class)
-            .map(std::vec::Vec::as_slice)
-            .unwrap_or(&[])
+            .map_or(&[], std::vec::Vec::as_slice)
     }
 
     /// Look up all direct subclasses of a class expression.
@@ -711,8 +709,7 @@ impl AxiomIndex {
     pub fn direct_subclasses(&self, class: &ClassExpression) -> &[ClassExpression] {
         self.subclass_by_super
             .get(class)
-            .map(std::vec::Vec::as_slice)
-            .unwrap_or(&[])
+            .map_or(&[], std::vec::Vec::as_slice)
     }
 
     /// Look up all equivalent classes.
@@ -720,8 +717,7 @@ impl AxiomIndex {
     pub fn equivalent_classes(&self, class: &ClassExpression) -> &[ClassExpression] {
         self.equivalent_by_class
             .get(class)
-            .map(std::vec::Vec::as_slice)
-            .unwrap_or(&[])
+            .map_or(&[], std::vec::Vec::as_slice)
     }
 }
 
@@ -747,8 +743,8 @@ where
     }
 }
 
-/// For a symmetric axiom (EquivalentClasses, DisjointClasses, SameIndividual,
-/// DifferentIndividuals, Equivalent/DisjointObjectProperties, ...) add each
+/// For a symmetric axiom (`EquivalentClasses`, `DisjointClasses`, `SameIndividual`,
+/// `DifferentIndividuals`, Equivalent/DisjointObjectProperties, ...) add each
 /// element as a key pointing at every *other* element.
 fn add_all_pairs<K>(map: &mut HashMap<K, Vec<K>>, values: &[K])
 where

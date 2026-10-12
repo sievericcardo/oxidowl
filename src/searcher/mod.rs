@@ -4,7 +4,7 @@
 //! provides filtering methods for every axiom type.
 
 use crate::ontology::axioms::AxiomTrait;
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::{Axiom, AxiomId, Entity};
 use crate::ontology::{
     AnnotationProperty, ClassExpression, DataPropertyExpression, EntityType, IRI, Individual,
     ObjectPropertyExpression, Ontology,
@@ -53,11 +53,13 @@ impl EntityIndex {
     }
 
     /// Get the axiom by ID.
+    #[must_use]
     pub fn get_axiom(&self, id: AxiomId) -> Option<&Arc<Axiom>> {
         self.axioms.get(&id)
     }
 
     /// Get all axiom IDs mentioning an entity IRI.
+    #[must_use]
     pub fn ids_for_entity(&self, iri: &IRI) -> HashSet<AxiomId> {
         self.by_entity.get(iri).cloned().unwrap_or_default()
     }
@@ -235,7 +237,7 @@ fn axiom_extract_iris(axiom: &Axiom, out: &mut Vec<IRI>) {
             }
         }
         Axiom::DatatypeDefinition(_) => {}
-        _ => {}
+        Axiom::Rule(_) => {}
     }
 }
 
@@ -349,6 +351,7 @@ impl<'a> EntitySearcher<'a> {
 
     // ── Class Axioms ────────────────────────────────────────────────────
 
+    #[must_use]
     pub fn get_sub_class_axioms_for_lhs(&self, class: &ClassExpression) -> Vec<Arc<Axiom>> {
         self.filter_axioms(class, |a| {
             matches!(
@@ -358,6 +361,7 @@ impl<'a> EntitySearcher<'a> {
         })
     }
 
+    #[must_use]
     pub fn get_sub_class_axioms_for_rhs(&self, class: &ClassExpression) -> Vec<Arc<Axiom>> {
         self.filter_axioms(
             class,
@@ -365,6 +369,7 @@ impl<'a> EntitySearcher<'a> {
         )
     }
 
+    #[must_use]
     pub fn get_equivalent_classes_axioms(&self, class: &ClassExpression) -> Vec<Arc<Axiom>> {
         self.filter_axioms(class, |a| {
             matches!(
@@ -374,20 +379,24 @@ impl<'a> EntitySearcher<'a> {
         })
     }
 
+    #[must_use]
     pub fn get_disjoint_classes_axioms(&self, class: &ClassExpression) -> Vec<Arc<Axiom>> {
         self.filter_axioms(class, |a| matches!(a, Axiom::DisjointClasses(_)))
     }
 
+    #[must_use]
     pub fn get_disjoint_union_axioms(&self, class: &ClassExpression) -> Vec<Arc<Axiom>> {
         self.filter_axioms(class, |a| matches!(a, Axiom::DisjointUnion(_)))
     }
 
+    #[must_use]
     pub fn get_has_key_axioms(&self, class: &ClassExpression) -> Vec<Arc<Axiom>> {
         self.filter_axioms(class, |a| matches!(a, Axiom::HasKey(_)))
     }
 
     // ── Object Property Axioms ──────────────────────────────────────────
 
+    #[must_use]
     pub fn get_object_property_domain_axioms(
         &self,
         prop: &ObjectPropertyExpression,
@@ -395,6 +404,7 @@ impl<'a> EntitySearcher<'a> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::ObjectPropertyDomain(_)))
     }
 
+    #[must_use]
     pub fn get_object_property_range_axioms(
         &self,
         prop: &ObjectPropertyExpression,
@@ -402,6 +412,7 @@ impl<'a> EntitySearcher<'a> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::ObjectPropertyRange(_)))
     }
 
+    #[must_use]
     pub fn get_sub_object_property_axioms(
         &self,
         prop: &ObjectPropertyExpression,
@@ -409,6 +420,7 @@ impl<'a> EntitySearcher<'a> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::SubObjectPropertyOf(_)))
     }
 
+    #[must_use]
     pub fn get_equivalent_object_properties_axioms(
         &self,
         prop: &ObjectPropertyExpression,
@@ -416,6 +428,7 @@ impl<'a> EntitySearcher<'a> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::EquivalentObjectProperties(_)))
     }
 
+    #[must_use]
     pub fn get_disjoint_object_properties_axioms(
         &self,
         prop: &ObjectPropertyExpression,
@@ -423,6 +436,7 @@ impl<'a> EntitySearcher<'a> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::DisjointObjectProperties(_)))
     }
 
+    #[must_use]
     pub fn get_inverse_object_properties_axioms(
         &self,
         prop: &ObjectPropertyExpression,
@@ -430,6 +444,7 @@ impl<'a> EntitySearcher<'a> {
         self.filter_axioms_ope(prop, |a| matches!(a, Axiom::InverseObjectProperties(_)))
     }
 
+    #[must_use]
     pub fn get_object_property_characteristic_axioms(
         &self,
         prop: &ObjectPropertyExpression,
@@ -450,6 +465,7 @@ impl<'a> EntitySearcher<'a> {
 
     // ── Data Property Axioms ────────────────────────────────────────────
 
+    #[must_use]
     pub fn get_data_property_domain_axioms(
         &self,
         prop: &DataPropertyExpression,
@@ -457,14 +473,17 @@ impl<'a> EntitySearcher<'a> {
         self.filter_axioms_dpe(prop, |a| matches!(a, Axiom::DataPropertyDomain(_)))
     }
 
+    #[must_use]
     pub fn get_data_property_range_axioms(&self, prop: &DataPropertyExpression) -> Vec<Arc<Axiom>> {
         self.filter_axioms_dpe(prop, |a| matches!(a, Axiom::DataPropertyRange(_)))
     }
 
+    #[must_use]
     pub fn get_sub_data_property_axioms(&self, prop: &DataPropertyExpression) -> Vec<Arc<Axiom>> {
         self.filter_axioms_dpe(prop, |a| matches!(a, Axiom::SubDataPropertyOf(_)))
     }
 
+    #[must_use]
     pub fn get_equivalent_data_properties_axioms(
         &self,
         prop: &DataPropertyExpression,
@@ -472,6 +491,7 @@ impl<'a> EntitySearcher<'a> {
         self.filter_axioms_dpe(prop, |a| matches!(a, Axiom::EquivalentDataProperties(_)))
     }
 
+    #[must_use]
     pub fn get_disjoint_data_properties_axioms(
         &self,
         prop: &DataPropertyExpression,
@@ -481,20 +501,24 @@ impl<'a> EntitySearcher<'a> {
 
     // ── Individual Axioms ───────────────────────────────────────────────
 
+    #[must_use]
     pub fn get_class_assertion_axioms(&self, individual: &Individual) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ind(individual, |a| matches!(a, Axiom::ClassAssertion(_)))
     }
 
+    #[must_use]
     pub fn get_object_property_assertion_axioms(&self, individual: &Individual) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ind(individual, |a| {
             matches!(a, Axiom::ObjectPropertyAssertion(_))
         })
     }
 
+    #[must_use]
     pub fn get_data_property_assertion_axioms(&self, individual: &Individual) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ind(individual, |a| matches!(a, Axiom::DataPropertyAssertion(_)))
     }
 
+    #[must_use]
     pub fn get_negative_object_property_assertion_axioms(
         &self,
         individual: &Individual,
@@ -504,6 +528,7 @@ impl<'a> EntitySearcher<'a> {
         })
     }
 
+    #[must_use]
     pub fn get_negative_data_property_assertion_axioms(
         &self,
         individual: &Individual,
@@ -513,24 +538,29 @@ impl<'a> EntitySearcher<'a> {
         })
     }
 
+    #[must_use]
     pub fn get_different_individual_axioms(&self, individual: &Individual) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ind(individual, |a| matches!(a, Axiom::DifferentIndividuals(_)))
     }
 
+    #[must_use]
     pub fn get_same_individual_axioms(&self, individual: &Individual) -> Vec<Arc<Axiom>> {
         self.filter_axioms_ind(individual, |a| matches!(a, Axiom::SameIndividual(_)))
     }
 
     // ── Annotation Axioms ───────────────────────────────────────────────
 
+    #[must_use]
     pub fn get_annotation_assertion_axioms(&self, subject_iri: &IRI) -> Vec<Arc<Axiom>> {
         self.filter_axioms_by_iri(subject_iri, |a| matches!(a, Axiom::AnnotationAssertion(_)))
     }
 
+    #[must_use]
     pub fn get_sub_annotation_property_axioms(&self, prop_iri: &IRI) -> Vec<Arc<Axiom>> {
         self.filter_axioms_by_iri(prop_iri, |a| matches!(a, Axiom::SubAnnotationPropertyOf(_)))
     }
 
+    #[must_use]
     pub fn get_annotation_property_domain_axioms(
         &self,
         prop: &AnnotationProperty,
@@ -540,6 +570,7 @@ impl<'a> EntitySearcher<'a> {
         })
     }
 
+    #[must_use]
     pub fn get_annotation_property_range_axioms(
         &self,
         prop: &AnnotationProperty,
@@ -549,10 +580,12 @@ impl<'a> EntitySearcher<'a> {
         })
     }
 
+    #[must_use]
     pub fn get_datatype_definition_axioms(&self, datatype: &IRI) -> Vec<Arc<Axiom>> {
         self.filter_axioms_by_iri(datatype, |a| matches!(a, Axiom::DatatypeDefinition(_)))
     }
 
+    #[must_use]
     pub fn get_declaration_axioms_by_type(&self, entity_type: &EntityType) -> Vec<Arc<Axiom>> {
         let mut result = Vec::new();
         let mut seen = std::collections::HashSet::new();
@@ -593,6 +626,7 @@ impl<'a> EntitySearcher<'a> {
 
     // ── Declaration ─────────────────────────────────────────────────────
 
+    #[must_use]
     pub fn get_declaration_axioms(&self, entity: &Entity) -> Vec<Arc<Axiom>> {
         if let Some(iri) = entity_iri(entity) {
             self.filter_axioms_by_iri(&iri, |a| matches!(a, Axiom::Declaration(_)))

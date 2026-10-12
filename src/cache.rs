@@ -243,9 +243,7 @@ impl ConceptSatisfiabilityCache {
         if self.cache.is_empty() {
             0.0
         } else {
-            #[allow(clippy::cast_precision_loss)]
-            let rate = total_hits as f64 / self.cache.len() as f64;
-            rate
+            total_hits as f64 / self.cache.len() as f64
         }
     }
 }
@@ -718,7 +716,6 @@ impl CacheManager {
         let total_accesses = metrics.hits + metrics.misses;
         // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
         // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
-        #[allow(clippy::cast_precision_loss)]
         let hit_rate = if total_accesses > 0 {
             metrics.hits as f64 / total_accesses as f64
         } else {
@@ -727,7 +724,6 @@ impl CacheManager {
 
         let graph_metrics = self.completion_graph_cache.get_metrics();
         let graph_total_accesses = graph_metrics.hits + graph_metrics.misses;
-        #[allow(clippy::cast_precision_loss)]
         let graph_hit_rate = if graph_total_accesses > 0 {
             graph_metrics.hits as f64 / graph_total_accesses as f64
         } else {

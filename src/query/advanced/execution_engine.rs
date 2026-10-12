@@ -10,7 +10,7 @@
 
 use super::actors::{MLStrategyHandle, MonitorHandle, OptimizerHandle, TaskCoordinatorHandle};
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
-use super::cost_optimizer::CostBasedOptimizer;
+use super::cost_optimizer::{CostBasedOptimizer, CostBasedOptimizerConfig};
 use super::execution::{AdvancedQueryError, ConjunctiveQueryResult};
 use super::ml_core::{
     MLHeuristicsConfig as MLConfig, MLHeuristicsEngine as MLEngine, StrategyRecommendation,
@@ -36,7 +36,7 @@ pub struct AdvancedExecutionEngine {
     /// Actor that owns `CostBasedOptimizer` + `ExecutionStrategySelector`.
     optimizer: OptimizerHandle,
 
-    /// Query result cache (tokio async RwLock — no blocking).
+    /// Query result cache (tokio async `RwLock` — no blocking).
     result_cache: Arc<AsyncRwLock<QueryResultCache>>,
 
     /// Actor that owns the ML strategy engine.
@@ -871,7 +871,7 @@ impl AdvancedExecutionEngine {
         let optimizer_inner = CostBasedOptimizer::new(
             ontology.clone(),
             reasoning_service.clone(),
-            Default::default(),
+            CostBasedOptimizerConfig::default(),
         );
         let strategy_selector = ExecutionStrategySelector::new();
         let optimizer = OptimizerHandle::spawn(
@@ -2107,7 +2107,7 @@ impl ExecutionPerformanceMonitor {
         // Complete execution tracking
         if let Some(trace) = self.active_executions.remove(execution_id) {
             let total_duration = trace.start_time.elapsed();
-            let result_size = result.as_ref().map(|r| r.bindings.len()).unwrap_or(0);
+            let result_size = result.as_ref().map_or(0, |r| r.bindings.len());
 
             // Record detailed timing in profiler
             let timing = QueryTiming::new(

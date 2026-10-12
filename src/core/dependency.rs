@@ -332,7 +332,7 @@ pub struct DependencySetFactory {
 }
 
 /// Cache key for the `DependencySetFactory`.  Uses `SortedSet<T>` for the
-/// same reasons as `DependencySet`: BTreeSet in production, sorted Vec under Kani.
+/// same reasons as `DependencySet`: `BTreeSet` in production, sorted Vec under Kani.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DependencySetKey {
     branching_points: SortedSet<BranchingPoint>,

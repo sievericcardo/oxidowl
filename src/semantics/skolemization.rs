@@ -39,6 +39,7 @@ pub const SKOLEM_PREFIX: &str = "http://oxidowl.example/.well-known/genid/";
 /// ```text
 /// http://oxidowl.example/.well-known/genid/<label>
 /// ```
+#[must_use]
 pub fn skolemize(graph: &RdfGraph) -> (RdfGraph, HashMap<String, String>) {
     let mut mapping: HashMap<String, String> = HashMap::new();
     let mut skolemized = RdfGraph::new();
@@ -68,6 +69,7 @@ pub fn skolemize(graph: &RdfGraph) -> (RdfGraph, HashMap<String, String>) {
 ///
 /// Only IRIs that start with [`SKOLEM_PREFIX`] are deskolemized; all other
 /// terms are kept unchanged.
+#[must_use]
 pub fn deskolemize(graph: &RdfGraph) -> RdfGraph {
     let mut result = RdfGraph::new();
 
@@ -105,9 +107,7 @@ fn apply_skolem(term: &RdfTerm, mapping: &HashMap<String, String>) -> RdfTerm {
     match term {
         RdfTerm::BlankNode(id) => {
             if let Some(iri_str) = mapping.get(id) {
-                Url::parse(iri_str)
-                    .map(RdfTerm::Iri)
-                    .unwrap_or_else(|_| term.clone())
+                Url::parse(iri_str).map_or_else(|_| term.clone(), RdfTerm::Iri)
             } else {
                 term.clone()
             }

@@ -358,7 +358,14 @@ impl ClauseChecker {
                 })
                 .collect();
 
-            if !predicates.is_empty() {
+            if predicates.is_empty() {
+                // No atomic concepts, but still check clauses with empty bodies
+                index
+                    .deterministic_clauses()
+                    .iter()
+                    .filter(|c| c.body.is_empty())
+                    .collect()
+            } else {
                 let mut candidates = index.get_candidate_clause_refs(&predicates);
 
                 // IMPORTANT: Also include clauses with empty bodies (they always apply!)
@@ -372,13 +379,6 @@ impl ClauseChecker {
                 }
 
                 candidates
-            } else {
-                // No atomic concepts, but still check clauses with empty bodies
-                index
-                    .deterministic_clauses()
-                    .iter()
-                    .filter(|c| c.body.is_empty())
-                    .collect()
             }
         } else {
             // No index - check all clauses (O(n) approach)
@@ -522,6 +522,9 @@ impl ClauseChecker {
         node: &TableauNode,
         fingerprint: Option<NodeFingerprint>,
     ) -> Option<ClauseViolation> {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
         // If no cache or no fingerprint, fall back to regular checking
         if self.check_cache.is_none() || fingerprint.is_none() {
             return self.check_deterministic_clauses(node);
@@ -542,7 +545,14 @@ impl ClauseChecker {
                 })
                 .collect();
 
-            if !predicates.is_empty() {
+            if predicates.is_empty() {
+                index
+                    .deterministic_clauses()
+                    .iter()
+                    .filter(|c| c.body.is_empty())
+                    .cloned()
+                    .collect()
+            } else {
                 let mut candidates = index
                     .get_candidate_clause_refs(&predicates)
                     .into_iter()
@@ -560,22 +570,12 @@ impl ClauseChecker {
                 }
 
                 candidates
-            } else {
-                index
-                    .deterministic_clauses()
-                    .iter()
-                    .filter(|c| c.body.is_empty())
-                    .cloned()
-                    .collect()
             }
         } else {
             self.clauses.deterministic_clauses.clone()
         };
 
         // Get clause ID to usize mapping (use hash of clause id string)
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
         for clause in &clauses_to_check {
             // Skip empty heads
             if clause.head.is_empty() {
@@ -697,6 +697,9 @@ impl ClauseChecker {
         node: &TableauNode,
         fingerprint: Option<NodeFingerprint>,
     ) -> Option<ClauseViolation> {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
         // If no cache or no fingerprint, fall back to regular checking
         if self.check_cache.is_none() || fingerprint.is_none() {
             return self.check_negative_clauses(node);
@@ -717,9 +720,6 @@ impl ClauseChecker {
                 .cloned()
                 .collect()
         };
-
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
 
         for clause in &negative_clauses {
             // Workstream A5: role-atom constraint clauses are checked at the tableau level.
@@ -936,6 +936,7 @@ impl ClauseChecker {
 
     /// The deterministic clauses that act as role-level constraints: empty head (a
     /// contradiction) and a body containing at least one binary (role) atom.
+    #[must_use]
     pub fn role_constraint_clauses(&self) -> Vec<&DLClause> {
         self.clauses
             .deterministic_clauses
@@ -948,6 +949,7 @@ impl ClauseChecker {
     /// including head-bearing rules (transitivity, symmetry, role inclusions, …). These are
     /// the clauses that the per-node checker cannot evaluate and that the executor applies
     /// via [`crate::core::tableau::executor::TableauExecutor::apply_role_rules`].
+    #[must_use]
     pub fn role_body_clauses(&self) -> Vec<&DLClause> {
         self.clauses
             .deterministic_clauses
@@ -968,7 +970,8 @@ impl ClauseChecker {
     ///
     /// Returns the first violation found (a body satisfied with an empty head ⇒ ⊥), or
     /// `None`. Head-bearing role clauses are *not* checked here: they derive new facts and
-    /// are applied by the executor's RBox rule pass.
+    /// are applied by the executor's `RBox` rule pass.
+    #[must_use]
     pub fn check_role_constraint_clauses(
         &self,
         tableau: &super::Tableau,
@@ -1038,7 +1041,7 @@ impl ClauseChecker {
                         clause
                             .body
                             .iter()
-                            .map(|a| a.to_string())
+                            .map(std::string::ToString::to_string)
                             .collect::<Vec<_>>()
                             .join(", ")
                     ),
@@ -1227,13 +1230,12 @@ fn resolve_constant(tableau: &super::Tableau, name: &str) -> Option<NodeId> {
     }
     for (i, n) in tableau.nodes.iter().enumerate() {
         for c in &n.concepts {
-            if let ConceptLabel::Nominal(nom) = c {
-                if nom == name
+            if let ConceptLabel::Nominal(nom) = c
+                && (nom == name
                     || nom.ends_with(&format!("/{name}"))
-                    || nom.ends_with(&format!("#{name}"))
-                {
-                    return Some(i);
-                }
+                    || nom.ends_with(&format!("#{name}")))
+            {
+                return Some(i);
             }
         }
     }
@@ -1364,18 +1366,10 @@ fn role_body_at_index(
         } else {
             resolve_constant(tableau, &right)
         };
-        if let (Some(l), Some(r)) = (left_node, right_node) {
-            if l == r {
-                return role_body_at_index(
-                    tableau,
-                    edges,
-                    node_atomics,
-                    supers,
-                    body,
-                    idx + 1,
-                    subst,
-                );
-            }
+        if let (Some(l), Some(r)) = (left_node, right_node)
+            && l == r
+        {
+            return role_body_at_index(tableau, edges, node_atomics, supers, body, idx + 1, subst);
         }
         // The operands may not be bound yet in this branch — try binding via unification.
         return false;

@@ -9,7 +9,10 @@ use crate::validation::shacl::{
     model::{ShaclMessage, ShaclNodeKind, ShaclSeverity},
     paths::term_to_sparql,
     report::ShaclValidationResult,
-    vocabulary::*,
+    vocabulary::{
+        SH_CLASS_CONSTRAINT_COMPONENT, SH_DATATYPE_CONSTRAINT_COMPONENT,
+        SH_NODE_KIND_CONSTRAINT_COMPONENT, XSD_STRING,
+    },
 };
 
 /// Evaluate `sh:class <class>` on each value node.
@@ -67,6 +70,7 @@ pub fn evaluate_class(
 ///
 /// A value node conforms iff it is a literal whose datatype IRI exactly matches
 /// `datatype` and is a valid lexical representation for that datatype.
+#[must_use]
 pub fn evaluate_datatype(
     values: &[RdfTerm],
     datatype_iri: &str,
@@ -106,6 +110,7 @@ pub fn evaluate_datatype(
 }
 
 /// Evaluate `sh:nodeKind <kind>`.
+#[must_use]
 pub fn evaluate_node_kind(
     values: &[RdfTerm],
     kind: &ShaclNodeKind,

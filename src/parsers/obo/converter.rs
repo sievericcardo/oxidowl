@@ -4,7 +4,11 @@
 //! `Owl2Obo` converts OWL axioms back to OBO stanzas.
 
 use crate::Result;
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::{
+    AnnotationAssertionAxiom, Axiom, ClassAssertionAxiom, DeclarationAxiom, DisjointClassesAxiom,
+    Entity, EquivalentClassesAxiom, ReflexiveObjectPropertyAxiom, SubClassOfAxiom,
+    SubObjectPropertyOfAxiom, SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
+};
 use crate::ontology::{
     AnnotationProperty, AnnotationValue, Class, ClassExpression, IRI, Individual, ObjectProperty,
     ObjectPropertyExpression, Ontology,
@@ -334,6 +338,7 @@ impl Owl2Obo {
     }
 
     /// Serialize an ontology to OBO format string.
+    #[must_use]
     pub fn serialize(&self, ontology: &Ontology) -> String {
         let mut buf = String::new();
         buf.push_str("format-version: 1.4\n");

@@ -79,7 +79,7 @@ impl SWRLBuiltIn for ResolveUriBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#resolveURI"
     }
 
@@ -118,7 +118,7 @@ impl SWRLBuiltIn for AnyUriBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#anyURI"
     }
 

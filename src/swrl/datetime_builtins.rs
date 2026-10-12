@@ -368,7 +368,7 @@ impl SWRLBuiltIn for DateTimeEqualBuiltIn {
         Ok(SWRLValue::Boolean(dt1 == dt2))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#dateTimeEqual"
     }
 
@@ -412,7 +412,7 @@ impl SWRLBuiltIn for YearFromDateTimeBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#yearFromDateTime"
     }
 
@@ -455,7 +455,7 @@ impl SWRLBuiltIn for AddDayTimeDurationToDateTimeBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#addDayTimeDurationToDateTime"
     }
 
@@ -486,7 +486,7 @@ impl SWRLBuiltIn for DateTimeLessThanBuiltIn {
         Ok(SWRLValue::Boolean(dt1 < dt2))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#dateTimeLessThan"
     }
 
@@ -515,7 +515,7 @@ impl SWRLBuiltIn for DateTimeLessThanOrEqualBuiltIn {
         Ok(SWRLValue::Boolean(dt1 <= dt2))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#dateTimeLessThanOrEqual"
     }
 
@@ -544,7 +544,7 @@ impl SWRLBuiltIn for DateTimeGreaterThanBuiltIn {
         Ok(SWRLValue::Boolean(dt1 > dt2))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#dateTimeGreaterThan"
     }
 
@@ -573,7 +573,7 @@ impl SWRLBuiltIn for DateTimeGreaterThanOrEqualBuiltIn {
         Ok(SWRLValue::Boolean(dt1 >= dt2))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#dateTimeGreaterThanOrEqual"
     }
 
@@ -615,7 +615,7 @@ impl SWRLBuiltIn for MonthFromDateTimeBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#monthFromDateTime"
     }
 
@@ -655,7 +655,7 @@ impl SWRLBuiltIn for DayFromDateTimeBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#dayFromDateTime"
     }
 
@@ -695,7 +695,7 @@ impl SWRLBuiltIn for HourFromDateTimeBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#hourFromDateTime"
     }
 
@@ -737,7 +737,7 @@ impl SWRLBuiltIn for MinuteFromDateTimeBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#minuteFromDateTime"
     }
 
@@ -779,7 +779,7 @@ impl SWRLBuiltIn for SecondFromDateTimeBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#secondFromDateTime"
     }
 
@@ -813,7 +813,7 @@ impl SWRLBuiltIn for DateEqualBuiltIn {
         Ok(SWRLValue::Boolean(dates_equal))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#dateEqual"
     }
 
@@ -853,7 +853,7 @@ impl SWRLBuiltIn for DateLessThanBuiltIn {
         Ok(SWRLValue::Boolean(date_less))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#dateLessThan"
     }
 
@@ -885,7 +885,7 @@ impl SWRLBuiltIn for TimeEqualBuiltIn {
         Ok(SWRLValue::Boolean(times_equal))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#timeEqual"
     }
 
@@ -925,7 +925,7 @@ impl SWRLBuiltIn for TimeLessThanBuiltIn {
         Ok(SWRLValue::Boolean(time_less))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#timeLessThan"
     }
 
@@ -970,7 +970,7 @@ impl SWRLBuiltIn for SubtractDatesYieldingDayTimeDurationBuiltIn {
         ))))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractDatesYieldingDayTimeDuration"
     }
 
@@ -1011,7 +1011,7 @@ impl SWRLBuiltIn for SubtractTimesYieldingDayTimeDurationBuiltIn {
         ))))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractTimesYieldingDayTimeDuration"
     }
 
@@ -1050,7 +1050,7 @@ impl SWRLBuiltIn for SubtractDayTimeDurationsBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractDayTimeDurations"
     }
 
@@ -1092,7 +1092,7 @@ impl SWRLBuiltIn for MultiplyDayTimeDurationBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#multiplyDayTimeDuration"
     }
 
@@ -1138,7 +1138,7 @@ impl SWRLBuiltIn for DivideDayTimeDurationBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#divideDayTimeDuration"
     }
 
@@ -1202,7 +1202,7 @@ impl SWRLBuiltIn for TimezoneBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#timezone"
     }
 
@@ -1256,7 +1256,7 @@ impl SWRLBuiltIn for AddYearMonthDurationBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#addYearMonthDuration"
     }
 
@@ -1318,7 +1318,7 @@ impl SWRLBuiltIn for AddYearMonthDurationsBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#addYearMonthDurations"
     }
 
@@ -1327,13 +1327,13 @@ impl SWRLBuiltIn for AddYearMonthDurationsBuiltIn {
     }
 }
 
-/// Parse a date string (YYYY-MM-DD) into a NaiveDate
+/// Parse a date string (YYYY-MM-DD) into a `NaiveDate`
 fn parse_date(date_str: &str) -> Result<chrono::NaiveDate> {
     chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
         .map_err(|e| Error::reasoning(format!("Invalid date '{date_str}': {e}")))
 }
 
-/// Parse a time string (HH:MM:SS) into a NaiveTime
+/// Parse a time string (HH:MM:SS) into a `NaiveTime`
 fn parse_time(time_str: &str) -> Result<chrono::NaiveTime> {
     chrono::NaiveTime::parse_from_str(time_str, "%H:%M:%S")
         .or_else(|_| chrono::NaiveTime::parse_from_str(time_str, "%H:%M"))
@@ -1391,7 +1391,7 @@ impl SWRLBuiltIn for SubtractDatesBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractDates"
     }
     fn arity(&self) -> Option<usize> {
@@ -1426,7 +1426,7 @@ impl SWRLBuiltIn for SubtractTimesBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractTimes"
     }
     fn arity(&self) -> Option<usize> {
@@ -1459,7 +1459,7 @@ impl SWRLBuiltIn for SubtractYearMonthDurationsBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractYearMonthDurations"
     }
     fn arity(&self) -> Option<usize> {
@@ -1495,7 +1495,7 @@ impl SWRLBuiltIn for MultiplyYearMonthDurationsBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#multiplyYearMonthDurations"
     }
     fn arity(&self) -> Option<usize> {
@@ -1534,7 +1534,7 @@ impl SWRLBuiltIn for DivideYearMonthDurationsBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#divideYearMonthDurations"
     }
     fn arity(&self) -> Option<usize> {
@@ -1569,7 +1569,7 @@ impl SWRLBuiltIn for AddDayTimeDurationsBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#addDayTimeDurations"
     }
     fn arity(&self) -> Option<usize> {
@@ -1609,7 +1609,7 @@ impl SWRLBuiltIn for SubtractYearMonthDurationFromDateTimeBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractYearMonthDurationFromDateTime"
     }
     fn arity(&self) -> Option<usize> {
@@ -1644,7 +1644,7 @@ impl SWRLBuiltIn for SubtractDayTimeDurationFromDateTimeBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractDayTimeDurationFromDateTime"
     }
     fn arity(&self) -> Option<usize> {
@@ -1682,7 +1682,7 @@ impl SWRLBuiltIn for AddYearMonthDurationToDateBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#addYearMonthDurationToDate"
     }
     fn arity(&self) -> Option<usize> {
@@ -1720,7 +1720,7 @@ impl SWRLBuiltIn for AddDayTimeDurationToDateBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#addDayTimeDurationToDate"
     }
     fn arity(&self) -> Option<usize> {
@@ -1758,7 +1758,7 @@ impl SWRLBuiltIn for SubtractYearMonthDurationFromDateBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractYearMonthDurationFromDate"
     }
     fn arity(&self) -> Option<usize> {
@@ -1796,7 +1796,7 @@ impl SWRLBuiltIn for SubtractDayTimeDurationFromDateBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractDayTimeDurationFromDate"
     }
     fn arity(&self) -> Option<usize> {
@@ -1833,7 +1833,7 @@ impl SWRLBuiltIn for AddDayTimeDurationToTimeBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#addDayTimeDurationToTime"
     }
     fn arity(&self) -> Option<usize> {
@@ -1870,7 +1870,7 @@ impl SWRLBuiltIn for SubtractDayTimeDurationFromTimeBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractDayTimeDurationFromTime"
     }
     fn arity(&self) -> Option<usize> {
@@ -1893,8 +1893,9 @@ impl SWRLBuiltIn for SubtractDateTimesYieldingYearMonthDurationBuiltIn {
             (SWRLValue::Literal(dt1), SWRLValue::Literal(dt2)) => {
                 let d1 = parse_date_time(&dt1.value)?;
                 let d2 = parse_date_time(&dt2.value)?;
-                let months_diff =
-                    (d1.year() - d2.year()) * 12 + (d1.month() as i32 - d2.month() as i32);
+                let months_diff = (d1.year() - d2.year()) * 12
+                    + (i32::try_from(d1.month()).unwrap_or(0)
+                        - i32::try_from(d2.month()).unwrap_or(0));
                 Ok(SWRLValue::Literal(Literal::new(
                     format_year_month_duration(months_diff / 12, months_diff % 12),
                 )))
@@ -1904,7 +1905,7 @@ impl SWRLBuiltIn for SubtractDateTimesYieldingYearMonthDurationBuiltIn {
             )),
         }
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtractDateTimesYieldingYearMonthDuration"
     }
     fn arity(&self) -> Option<usize> {

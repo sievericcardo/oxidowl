@@ -104,22 +104,22 @@ pub struct Tableau {
     pub dirty_nodes: Vec<NodeId>,
 
     /// Concept unfolding rules: maps a named-class IRI string to a list of complex class
-    /// expressions that the class is subsumed by (from SubClassOf and EquivalentClasses axioms).
-    /// Used to propagate existential restrictions to individual nodes when a ClassAssertion is
+    /// expressions that the class is subsumed by (from `SubClassOf` and `EquivalentClasses` axioms).
+    /// Used to propagate existential restrictions to individual nodes when a `ClassAssertion` is
     /// processed (the forward direction of `A ≡ ∃R.C` or `A ⊑ ∃R.C`).
     pub concept_unfolding_rules: HashMap<String, Vec<ClassExpression>>,
 
     /// Inequality atoms between tableau nodes (workstream A3).
     ///
     /// A pair `(a, b)` (stored normalised so `a < b`) records that nodes `a` and `b` denote
-    /// distinct individuals. Two nodes marked unequal must never be merged by an AtMost rule.
+    /// distinct individuals. Two nodes marked unequal must never be merged by an `AtMost` rule.
     /// Fresh successors created by the same AtLeast/Exact rule are marked pairwise unequal.
     pub inequalities: HashSet<(NodeId, NodeId)>,
 
     /// Journal of node merges in application order (workstream A3).
     ///
     /// Every `merge_nodes` call appends a [`MergeRecord`] capturing the pre-merge state of the
-    /// two nodes and the edge redirections. When backtracking over a non-deterministic AtMost
+    /// two nodes and the edge redirections. When backtracking over a non-deterministic `AtMost`
     /// merge choice, merges performed since the choice point are undone in reverse order.
     pub merge_log: Vec<MergeRecord>,
 
@@ -128,11 +128,11 @@ pub struct Tableau {
     /// Stored as `(canonical role name, source individual name, target individual name)`.
     /// Individual *names* (the Display strings of the individuals) are stored instead of node
     /// ids so the records survive node merges: the executor resolves the names through
-    /// `individual_map` on every RBox pass, which yields the current representative node of
-    /// each individual after SameIndividual/functional merging. The RBox pass then:
+    /// `individual_map` on every `RBox` pass, which yields the current representative node of
+    /// each individual after SameIndividual/functional merging. The `RBox` pass then:
     ///  - raises a clash if an `R`-edge between the two current nodes appears, and
     ///  - raises a clash if the two individuals have collapsed to the *same* node (the
-    ///    negative assertion's `a ≠ b` consequence), e.g. under SameIndividual.
+    ///    negative assertion's `a ≠ b` consequence), e.g. under `SameIndividual`.
     pub negative_object_assertions: Vec<(String, String, String)>,
 
     /// Concrete-domain (datatype) validator (workstream A4).
@@ -193,7 +193,7 @@ pub enum Choice {
 
     /// Forced-equality merging choice (workstream A5).
     ///
-    /// Raised by the functional / inverse-functional / HasKey RBox rules when two nodes are
+    /// Raised by the functional / inverse-functional / `HasKey` `RBox` rules when two nodes are
     /// forced to denote the same individual. Unlike `AtMostMerge`, the *equality* is
     /// deterministic — there is no alternative model where the nodes stay distinct — so the
     /// only freedom is *which* node survives the merge. `candidates` lists the survivor
@@ -325,13 +325,14 @@ impl Tableau {
 
     /// Load axioms from an ontology
     pub fn load_ontology(&mut self, ontology: &Ontology) -> Result<()> {
+        use crate::dl_clauses::DLClauseGenerator;
+
         // Register DatatypeDefinition axioms so user-defined datatype literals are validated
         // against their defining ranges (workstream A4).
         self.datatype_validator
             .register_ontology_datatypes(ontology);
 
         // Generate DL clauses from the ontology
-        use crate::dl_clauses::DLClauseGenerator;
 
         let mut generator = DLClauseGenerator::new();
         let clause_set = generator.generate_clauses(ontology)?;
@@ -698,10 +699,7 @@ impl Tableau {
                         target_name,
                     ));
                     log::debug!(
-                        "NegativeObjectPropertyAssertion: recorded ¬{}({}, {})",
-                        role_name,
-                        source_id,
-                        target_id
+                        "NegativeObjectPropertyAssertion: recorded ¬{role_name}({source_id}, {target_id})"
                     );
                 }
             }
@@ -744,11 +742,7 @@ impl Tableau {
                     crate::core::tableau::executor::TableauExecutor::merge_nodes(
                         self, survivor, *away,
                     )?;
-                    log::debug!(
-                        "SameIndividual: merged nominal node {} into {}",
-                        away,
-                        survivor
-                    );
+                    log::debug!("SameIndividual: merged nominal node {away} into {survivor}");
                 }
             }
 
@@ -1359,6 +1353,10 @@ impl Tableau {
     /// Node restoration is skipped for node ids beyond the current node list length (they
     /// were truncated away), and edge restoration is skipped for edge indices beyond the
     /// current edge list length.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the merge log is unexpectedly empty while unwinding.
     pub fn undo_merges(&mut self, from_len: usize) {
         while self.merge_log.len() > from_len {
             let rec = self
@@ -1398,7 +1396,7 @@ impl std::fmt::Debug for Tableau {
             .field("state", &self.state)
             .field("pending_rules", &self.pending_queue.len())
             .field("backtrack_points", &self.backtrack_stack.len())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

@@ -1,7 +1,7 @@
-//! Pre-extracted TBox-driven ABox classification SPARQL rule generation.
+//! Pre-extracted TBox-driven `ABox` classification SPARQL rule generation.
 //!
 //! This module discovers supported OWL class-axiom patterns from the loaded
-//! TBox once, then emits simple ABox-only INSERT rules for fast repeated
+//! `TBox` once, then emits simple ABox-only INSERT rules for fast repeated
 //! classification rounds.
 
 #[cfg(feature = "sparql-store")]
@@ -9,11 +9,11 @@ use crate::query::SparqlStore;
 #[cfg(feature = "sparql-store")]
 use crate::semantics::RdfTerm;
 
-/// Pre-extract TBox class-axiom patterns as simple ABox-only SPARQL INSERT rules.
+/// Pre-extract `TBox` class-axiom patterns as simple ABox-only SPARQL INSERT rules.
 ///
-/// Runs SELECT queries against the already-loaded TBox once at ontology load time
+/// Runs SELECT queries against the already-loaded `TBox` once at ontology load time
 /// to discover all class-defining axioms. Generates simple INSERT rules that only
-/// touch ABox triples at classification time.
+/// touch `ABox` triples at classification time.
 ///
 /// Supported pattern families:
 /// 1. `C ≡ (P hasValue V)`
@@ -26,13 +26,32 @@ use crate::semantics::RdfTerm;
 /// 8. `P rdfs:domain C` subject typing
 /// 9. `P rdfs:range C` object typing
 #[cfg(feature = "sparql-store")]
-#[allow(clippy::too_many_lines)]
 pub fn extract_owl_rules_from_tbox(store: &SparqlStore) -> Vec<String> {
     use std::collections::HashMap;
 
     #[inline]
     fn is_iri(t: &RdfTerm) -> bool {
         matches!(t, RdfTerm::Iri(_))
+    }
+
+    #[derive(Default)]
+    struct FacetState {
+        min_incl: Option<String>,
+        min_excl: Option<String>,
+        max_incl: Option<String>,
+        max_excl: Option<String>,
+    }
+
+    #[derive(Default)]
+    struct BiRangeFacets {
+        int_min_incl: Option<String>,
+        int_min_excl: Option<String>,
+        int_max_incl: Option<String>,
+        int_max_excl: Option<String>,
+        dbl_min_incl: Option<String>,
+        dbl_min_excl: Option<String>,
+        dbl_max_incl: Option<String>,
+        dbl_max_excl: Option<String>,
     }
 
     let mut rules: Vec<String> = Vec::new();
@@ -128,14 +147,6 @@ pub fn extract_owl_rules_from_tbox(store: &SparqlStore) -> Vec<String> {
     }
 
     // Rules 4+4e: C equiv intersect(double-range(dp, facets), hasValue(hvp, hv))
-    #[allow(clippy::items_after_statements)]
-    #[derive(Default)]
-    struct FacetState {
-        min_incl: Option<String>,
-        min_excl: Option<String>,
-        max_incl: Option<String>,
-        max_excl: Option<String>,
-    }
     let mut double_intersections: HashMap<(String, String, String, String), FacetState> =
         HashMap::new();
 
@@ -224,17 +235,6 @@ pub fn extract_owl_rules_from_tbox(store: &SparqlStore) -> Vec<String> {
     }
 
     // Rules 4b+4d: C equiv intersect(integer-range, double-range, hasValue)
-    #[derive(Default)]
-    struct BiRangeFacets {
-        int_min_incl: Option<String>,
-        int_min_excl: Option<String>,
-        int_max_incl: Option<String>,
-        int_max_excl: Option<String>,
-        dbl_min_incl: Option<String>,
-        dbl_min_excl: Option<String>,
-        dbl_max_incl: Option<String>,
-        dbl_max_excl: Option<String>,
-    }
     let mut int_dbl: HashMap<(String, String, String, String, String), BiRangeFacets> =
         HashMap::new();
 

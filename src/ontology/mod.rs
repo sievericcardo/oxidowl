@@ -444,7 +444,7 @@ pub struct ImportsDeclaration {
     pub imported_ontology_iri: IRI,
 }
 
-/// Ontology identity (OWL 2 OWLOntologyID)
+/// Ontology identity (OWL 2 `OWLOntologyID`)
 #[derive(Debug, Clone)]
 pub struct OntologyID {
     pub ontology_iri: Option<IRI>,
@@ -459,7 +459,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static ANON_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 impl OntologyID {
-    /// Create a new anonymous OntologyID with a unique internal identifier.
+    /// Create a new anonymous `OntologyID` with a unique internal identifier.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -469,7 +469,7 @@ impl OntologyID {
         }
     }
 
-    /// Create an OntologyID with explicit IRIs.
+    /// Create an `OntologyID` with explicit IRIs.
     #[must_use]
     pub fn new_with_iris(ontology_iri: IRI, version_iri: Option<IRI>) -> Self {
         Self {
@@ -772,7 +772,7 @@ impl Ontology {
             .count()
     }
 
-    /// Get all TBox (class-level) axioms
+    /// Get all `TBox` (class-level) axioms
     #[must_use]
     pub fn get_tbox_axioms(&self) -> Vec<&axioms::Axiom> {
         self.axioms
@@ -789,7 +789,7 @@ impl Ontology {
             .collect()
     }
 
-    /// Get all RBox (property-level) axioms
+    /// Get all `RBox` (property-level) axioms
     #[must_use]
     pub fn get_rbox_axioms(&self) -> Vec<&axioms::Axiom> {
         self.axioms
@@ -822,7 +822,7 @@ impl Ontology {
             .collect()
     }
 
-    /// Get all ABox (individual-level) axioms
+    /// Get all `ABox` (individual-level) axioms
     #[must_use]
     pub fn get_abox_axioms(&self) -> Vec<&axioms::Axiom> {
         self.axioms
@@ -889,6 +889,10 @@ impl Ontology {
     /// Get all data properties from the signature
     #[must_use]
     pub fn get_data_properties_in_signature(&self) -> Vec<DataProperty> {
+        // OWL API v5 includes owl:topDataProperty in the signature whenever it is
+        // referenced as the super-property in a SubDataPropertyOf axiom, even if it
+        // was never explicitly declared.  Mirror that behaviour.
+        const TOP_DATA_PROP: &str = "http://www.w3.org/2002/07/owl#topDataProperty";
         let mut props = Vec::new();
         for a in &self.axioms {
             if let axioms::Axiom::Declaration(d) = a
@@ -898,10 +902,6 @@ impl Ontology {
             }
         }
 
-        // OWL API v5 includes owl:topDataProperty in the signature whenever it is
-        // referenced as the super-property in a SubDataPropertyOf axiom, even if it
-        // was never explicitly declared.  Mirror that behaviour.
-        const TOP_DATA_PROP: &str = "http://www.w3.org/2002/07/owl#topDataProperty";
         let references_top = self.axioms.iter().any(|a| {
             if let axioms::Axiom::SubDataPropertyOf(ax) = a {
                 let DataPropertyExpression::DataProperty(p) = &ax.super_property;
@@ -941,17 +941,6 @@ impl Ontology {
     /// typed literals in `DataPropertyAssertion` axioms), matching OWL API v5.
     #[must_use]
     pub fn get_datatypes_in_signature(&self) -> Vec<Datatype> {
-        let mut dts = Vec::new();
-
-        // Step 1: collect explicitly declared datatypes
-        for a in &self.axioms {
-            if let axioms::Axiom::Declaration(d) = a
-                && let axioms::Entity::Datatype(iri) = &d.entity
-            {
-                dts.push(Datatype { iri: iri.clone() });
-            }
-        }
-
         // Known OWL 2 / XSD built-in datatypes that should appear in the signature
         // when actually used.
         const BUILTIN_DATATYPES: &[&str] = &[
@@ -969,13 +958,8 @@ impl Ontology {
             "http://www.w3.org/2001/XMLSchema#anyURI",
             "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
         ];
-        let builtin_set: std::collections::HashSet<&str> =
-            BUILTIN_DATATYPES.iter().copied().collect();
 
-        // Step 2: collect IRI strings of all used datatypes from axioms
-        let mut used: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-        /// Recursively gather datatype IRIs from a DataRange.
+        /// Recursively gather datatype IRIs from a `DataRange`.
         fn collect_from_range(range: &DataRange, out: &mut std::collections::HashSet<String>) {
             match range {
                 DataRange::Datatype(iri) => {
@@ -998,6 +982,23 @@ impl Ontology {
                 DataRange::DataOneOf(_) => {}
             }
         }
+
+        let mut dts = Vec::new();
+
+        // Step 1: collect explicitly declared datatypes
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::Datatype(iri) = &d.entity
+            {
+                dts.push(Datatype { iri: iri.clone() });
+            }
+        }
+
+        let builtin_set: std::collections::HashSet<&str> =
+            BUILTIN_DATATYPES.iter().copied().collect();
+
+        // Step 2: collect IRI strings of all used datatypes from axioms
+        let mut used: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for a in &self.axioms {
             match a {
@@ -1056,15 +1057,6 @@ impl Ontology {
     /// axioms, matching OWL API v5 behaviour.
     #[must_use]
     pub fn get_annotation_properties_in_signature(&self) -> Vec<AnnotationProperty> {
-        let mut props = Vec::new();
-        for a in &self.axioms {
-            if let axioms::Axiom::Declaration(d) = a
-                && let axioms::Entity::AnnotationProperty(iri) = &d.entity
-            {
-                props.push(AnnotationProperty { iri: iri.clone() });
-            }
-        }
-
         // Built-in annotation properties that should appear in the signature when used
         const BUILTIN_ANNOTATION_PROPS: &[&str] = &[
             "http://www.w3.org/2000/01/rdf-schema#label",
@@ -1075,6 +1067,15 @@ impl Ontology {
             "http://www.w3.org/2002/07/owl#versionInfo",
             "http://www.w3.org/2002/07/owl#priorVersion",
         ];
+        let mut props = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::AnnotationProperty(iri) = &d.entity
+            {
+                props.push(AnnotationProperty { iri: iri.clone() });
+            }
+        }
+
         let builtin_set: std::collections::HashSet<&str> =
             BUILTIN_ANNOTATION_PROPS.iter().copied().collect();
 
@@ -1112,8 +1113,6 @@ impl Ontology {
     /// ranges are included, and `owl:topObjectProperty` / `owl:topDataProperty`
     /// are included when the corresponding entity family is non-empty).
     pub fn signature(&self) -> Result<Signature> {
-        let mut signature = Signature::new();
-
         // ── Local extraction helpers ────────────────────────────────────────
 
         fn push_class(classes: &mut Vec<concepts::Class>, class: concepts::Class) {
@@ -1254,7 +1253,7 @@ impl Ontology {
         ) {
             match expr {
                 DataPropertyExpression::DataProperty(prop) => {
-                    push_data_property(props, prop.clone())
+                    push_data_property(props, prop.clone());
                 }
             }
         }
@@ -1383,6 +1382,8 @@ impl Ontology {
                 props.push(prop);
             }
         }
+
+        let mut signature = Signature::new();
 
         log::debug!("Computing signature from {} axioms", self.axioms.len());
 
@@ -2195,15 +2196,15 @@ pub enum OntologyFormat {
     NQuads,
     /// Notation3
     N3,
-    /// TriG
+    /// `TriG`
     TriG,
-    /// TriX
+    /// `TriX`
     TriX,
     /// JSON-LD
     JsonLd,
     /// RDF/JSON
     RdfJson,
-    /// RDFa
+    /// `RDFa`
     Rdfa,
     /// Binary RDF
     BinaryRdf,

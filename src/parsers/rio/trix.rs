@@ -1,8 +1,10 @@
-//! TriX Parser and Renderer — XML-based RDF with named graphs.
+//! `TriX` Parser and Renderer — XML-based RDF with named graphs.
 
 use crate::Result;
 use crate::ontology::Individual;
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::{
+    Axiom, ClassAssertionAxiom, DeclarationAxiom, Entity, ObjectPropertyAssertionAxiom,
+};
 use crate::ontology::{IRI, NamedIndividual, Ontology};
 use std::fmt::Write;
 

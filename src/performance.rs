@@ -375,29 +375,23 @@ impl MemoryTracker {
         let cache_sizes: Vec<usize> = snapshots.iter().map(|s| s.cache_size).collect();
 
         Ok(MemoryStats {
-            current_total_mb: snapshots
-                .last()
-                .map(MemorySnapshot::total_used_mb)
-                .unwrap_or(0.0),
+            current_total_mb: snapshots.last().map_or(0.0, MemorySnapshot::total_used_mb),
             peak_total_mb: total_used.iter().max().copied().unwrap_or(0) as f64 / (1024.0 * 1024.0),
             avg_total_mb: (total_used.iter().sum::<usize>() as f64 / total_used.len() as f64)
                 / (1024.0 * 1024.0),
             current_heap_mb: snapshots
                 .last()
-                .map(|s| s.heap_allocated as f64 / (1024.0 * 1024.0))
-                .unwrap_or(0.0),
+                .map_or(0.0, |s| s.heap_allocated as f64 / (1024.0 * 1024.0)),
             peak_heap_mb: heap_allocated.iter().max().copied().unwrap_or(0) as f64
                 / (1024.0 * 1024.0),
             current_cache_mb: snapshots
                 .last()
-                .map(|s| s.cache_size as f64 / (1024.0 * 1024.0))
-                .unwrap_or(0.0),
+                .map_or(0.0, |s| s.cache_size as f64 / (1024.0 * 1024.0)),
             peak_cache_mb: cache_sizes.iter().max().copied().unwrap_or(0) as f64
                 / (1024.0 * 1024.0),
             system_available_mb: snapshots
                 .last()
-                .map(MemorySnapshot::system_available_mb)
-                .unwrap_or(0.0),
+                .map_or(0.0, MemorySnapshot::system_available_mb),
         })
     }
 
@@ -551,13 +545,11 @@ impl QueryProfiler {
             slowest_query_ms: total_durations
                 .iter()
                 .max()
-                .map(|d| d.as_millis() as f64)
-                .unwrap_or(0.0),
+                .map_or(0.0, |d| d.as_millis() as f64),
             fastest_query_ms: total_durations
                 .iter()
                 .min()
-                .map(|d| d.as_millis() as f64)
-                .unwrap_or(0.0),
+                .map_or(0.0, |d| d.as_millis() as f64),
             total_atoms_evaluated: timings.iter().map(|t| t.atoms_evaluated).sum(),
             total_joins_performed: timings.iter().map(|t| t.joins_performed).sum(),
         })
@@ -866,7 +858,7 @@ impl std::fmt::Debug for WarmContext {
         f.debug_struct("WarmContext")
             .field("class_count", &self.classification.hierarchy.len())
             .field("age_secs", &self.warmed_at.elapsed().as_secs())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

@@ -227,7 +227,6 @@ impl ShaclValidator {
         Ok(out)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn evaluate_single_constraint(
         &mut self,
         focus_node: &RdfTerm,

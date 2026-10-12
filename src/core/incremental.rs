@@ -155,13 +155,14 @@ impl IncrementalClassifier {
 
     /// Initialize with an ontology (full classification)
     pub fn initialize(&self, ontology: &Ontology) -> Result<()> {
+        use crate::ontology::Axiom;
+
         // Extract all concepts and build index
         let index = self.concept_index.write().map_err(|e| Error::Internal {
             message: format!("IncrementalClassifier index lock poisoned: {e}"),
         })?;
 
         // Index all axioms - extract concepts and index them
-        use crate::ontology::Axiom;
 
         for axiom in ontology.axioms() {
             match axiom {

@@ -1,5 +1,5 @@
 use crate::error::OxidowlError;
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::AxiomId;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 

@@ -6,7 +6,7 @@
 //! **Note:** Rho and Star locality are semantic (require a full reasoner).
 //! Only syntactic Top and Bottom locality are implemented here.
 
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::Axiom;
 use crate::ontology::{ClassExpression, DataPropertyExpression, IRI, ObjectPropertyExpression};
 use std::collections::HashSet;
 

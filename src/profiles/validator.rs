@@ -151,29 +151,7 @@ impl OWL2ProfileValidator {
         let report = self.validate_profile(ontology, target_profile)?;
         let mut suggestions = Vec::new();
 
-        if !report.conforms {
-            suggestions.push(format!(
-                "Ontology does not conform to {}. Consider the following changes:",
-                target_profile.name()
-            ));
-
-            for violation in &report.violations {
-                match &violation.violation_type {
-                    crate::profiles::ProfileViolationType::DisallowedClassExpression(expr) => {
-                        suggestions.push(format!("Remove or replace {expr}"));
-                    }
-                    crate::profiles::ProfileViolationType::DisallowedAxiom(axiom) => {
-                        suggestions.push(format!("Remove or rewrite {axiom} axiom"));
-                    }
-                    crate::profiles::ProfileViolationType::ComplexityViolation(msg) => {
-                        suggestions.push(format!("Simplify construct: {msg}"));
-                    }
-                    _ => {
-                        suggestions.push(format!("Address: {}", violation.violation_type));
-                    }
-                }
-            }
-        } else {
+        if report.conforms {
             suggestions.push(format!(
                 "Ontology conforms to {}. No changes needed.",
                 target_profile.name()
@@ -199,6 +177,28 @@ impl OWL2ProfileValidator {
                     );
                 }
                 _ => {}
+            }
+        } else {
+            suggestions.push(format!(
+                "Ontology does not conform to {}. Consider the following changes:",
+                target_profile.name()
+            ));
+
+            for violation in &report.violations {
+                match &violation.violation_type {
+                    crate::profiles::ProfileViolationType::DisallowedClassExpression(expr) => {
+                        suggestions.push(format!("Remove or replace {expr}"));
+                    }
+                    crate::profiles::ProfileViolationType::DisallowedAxiom(axiom) => {
+                        suggestions.push(format!("Remove or rewrite {axiom} axiom"));
+                    }
+                    crate::profiles::ProfileViolationType::ComplexityViolation(msg) => {
+                        suggestions.push(format!("Simplify construct: {msg}"));
+                    }
+                    _ => {
+                        suggestions.push(format!("Address: {}", violation.violation_type));
+                    }
+                }
             }
         }
 

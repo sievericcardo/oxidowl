@@ -1,8 +1,13 @@
-use crate::ontology::axioms::*;
-use crate::ontology::*;
+use crate::ontology::axioms::{
+    AnnotationAssertionAxiom, Axiom, EquivalentClassesAxiom, SubClassOfAxiom,
+};
+use crate::ontology::{
+    Annotation, AnnotationProperty, AnnotationSubject, AnnotationValue, ClassExpression, IRI,
+};
 
-/// Amalgamate multiple SubClassOf axioms with the same LHS into a single
-/// SubClassOf with ObjectIntersectionOf on the RHS.
+/// Amalgamate multiple `SubClassOf` axioms with the same LHS into a single
+/// `SubClassOf` with `ObjectIntersectionOf` on the RHS.
+#[must_use]
 pub fn amalgamate_sub_class_axioms(axioms: &[SubClassOfAxiom]) -> Vec<SubClassOfAxiom> {
     use std::collections::HashMap;
     let mut grouped: HashMap<ClassExpression, Vec<ClassExpression>> = HashMap::new();
@@ -30,8 +35,9 @@ pub fn amalgamate_sub_class_axioms(axioms: &[SubClassOfAxiom]) -> Vec<SubClassOf
         .collect()
 }
 
-/// Split a SubClassOf with ObjectIntersectionOf on the RHS into individual
-/// SubClassOf axioms.
+/// Split a `SubClassOf` with `ObjectIntersectionOf` on the RHS into individual
+/// `SubClassOf` axioms.
+#[must_use]
 pub fn split_sub_class_axioms(axiom: &SubClassOfAxiom) -> Vec<SubClassOfAxiom> {
     match &axiom.superclass {
         ClassExpression::ObjectIntersectionOf(conjuncts) => conjuncts
@@ -47,8 +53,9 @@ pub fn split_sub_class_axioms(axiom: &SubClassOfAxiom) -> Vec<SubClassOfAxiom> {
     }
 }
 
-/// Convert EquivalentClasses(A, B, C) to bidirectional SubClassOf axioms:
+/// Convert EquivalentClasses(A, B, C) to bidirectional `SubClassOf` axioms:
 /// SubClassOf(A, B), SubClassOf(B, A), SubClassOf(A, C), SubClassOf(C, A).
+#[must_use]
 pub fn convert_equivalent_to_sub_classes(axiom: &EquivalentClassesAxiom) -> Vec<SubClassOfAxiom> {
     let mut result = vec![];
     for i in 0..axiom.classes.len() {
@@ -67,6 +74,7 @@ pub fn convert_equivalent_to_sub_classes(axiom: &EquivalentClassesAxiom) -> Vec<
 }
 
 /// Convert property assertions to annotations.
+#[must_use]
 pub fn convert_property_assertions_to_annotations(axioms: &[Axiom]) -> (Vec<Axiom>, Vec<Axiom>) {
     let mut removed = vec![];
     let mut added = vec![];

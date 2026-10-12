@@ -178,10 +178,10 @@ impl QueryEvaluator {
 
                 match (left_value, right_value) {
                     (Some(BoundValue::Individual(l)), Some(BoundValue::Individual(r))) => {
-                        if l != r {
-                            Ok(vec![QueryBinding::new()])
-                        } else {
+                        if l == r {
                             Ok(vec![])
+                        } else {
+                            Ok(vec![QueryBinding::new()])
                         }
                     }
                     _ => Ok(vec![QueryBinding::new()]),

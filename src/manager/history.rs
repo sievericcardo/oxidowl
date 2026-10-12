@@ -1,6 +1,6 @@
 //! Change history — undo/redo support for ontology mutations.
 //!
-//! ChangeHistory records batches of [`OntologyChange`] and allows
+//! `ChangeHistory` records batches of [`OntologyChange`] and allows
 //! them to be undone (reversed) or redone.
 
 use super::changes::OntologyChange;

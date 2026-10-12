@@ -25,7 +25,7 @@ pub trait ExplanationGenerator: Send + Sync {
 
 // ── SingleExplanationGenerator ───────────────────────────────────────────────
 
-/// Wraps an ExplanationGenerator with lazy caching of a single result.
+/// Wraps an `ExplanationGenerator` with lazy caching of a single result.
 pub struct SingleExplanationGenerator {
     inner: Box<dyn ExplanationGenerator>,
     cached: RwLock<Option<Explanation>>,

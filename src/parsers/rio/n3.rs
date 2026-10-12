@@ -57,7 +57,12 @@ use oxrdf::{GraphName, Literal as OxLiteral, NamedNode, TripleRef};
 use oxttl::n3::{N3Parser as OxN3Parser, N3Quad, N3Term};
 use oxttl::turtle::TurtleSerializer as OxTurtleSerializer;
 
-use crate::ontology::*;
+use crate::ontology::{
+    Annotation, AnnotationProperty, AnnotationValue, AnonymousIndividual, Axiom, Class,
+    ClassExpression, DataProperty, DataPropertyExpression, DataRange, IRI, Individual, Literal,
+    NamedIndividual, ObjectProperty, ObjectPropertyExpression, Ontology, SWRLAtom, SWRLDArgument,
+    SWRLIArgument, SWRLRule, SWRLRuleAxiom, SWRLVariable,
+};
 use crate::parsers::rdf_to_owl;
 use crate::semantics::owl_rdf_mapping::{BlankNodeCounter, axiom_to_triples};
 use crate::semantics::{RdfTerm, Triple};
@@ -78,6 +83,7 @@ pub const LOG_FOR_SOME: &str = "http://www.w3.org/2000/10/swap/log#forSome";
 
 /// Ontology annotations under these properties carry verbatim N3 statement
 /// text that the serializer re-emits as-is (instead of as RDF triples).
+#[must_use]
 pub fn is_n3_preservation_property(iri: &str) -> bool {
     matches!(iri, LOG_IMPLIES | LOG_FORMULA | LOG_FOR_ALL | LOG_FOR_SOME)
 }
@@ -522,7 +528,7 @@ fn repair_path_quads(quads: Vec<N3Quad>) -> Vec<N3Quad> {
                     group_rev.push((j, direction));
                     last_seen = j;
                     if let N3Term::BlankNode(prev_blank) = prev {
-                        cur_key = prev_blank.as_str().to_owned();
+                        prev_blank.as_str().clone_into(&mut cur_key);
                         continue;
                     }
                     first_item = Some(prev.clone());
@@ -535,10 +541,7 @@ fn repair_path_quads(quads: Vec<N3Quad>) -> Vec<N3Quad> {
         }
 
         let Some(first_item) = first_item else {
-            log::warn!(
-                "N3: dropping unrepairable path statement (blank predicate `_:{}')",
-                key
-            );
+            log::warn!("N3: dropping unrepairable path statement (blank predicate `_:{key}')");
             consumed.insert(*anchor_idx);
             for (j, _) in group_rev {
                 consumed.insert(j);
@@ -694,7 +697,7 @@ fn n3_term_to_rdf_term(term: &N3Term) -> Result<RdfTerm> {
                 direction: None,
             })
         }
-        other => Err(Error::ParseError(format!(
+        N3Term::Variable(other) => Err(Error::ParseError(format!(
             "N3: unsupported RDF term in ground triple: {other}"
         ))),
     }
@@ -913,7 +916,7 @@ fn term_to_i_argument(term: &N3Term) -> Option<SWRLIArgument> {
                 id: b.as_str().to_owned(),
             },
         ))),
-        _ => None,
+        N3Term::Literal(_) => None,
     }
 }
 

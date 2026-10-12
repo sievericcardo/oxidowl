@@ -1,4 +1,4 @@
-use crate::ontology::*;
+use crate::ontology::ClassExpression;
 
 /// Converts class expressions to Clausal Normal Form (CNF).
 /// CNF is a conjunction of disjunctions of literals.

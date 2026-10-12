@@ -78,6 +78,10 @@ impl ManchesterParser {
     }
 
     /// Parse Manchester Syntax from string
+    ///
+    /// # Panics
+    ///
+    /// Panics if an import line lacks the expected `Import:` prefix.
     pub fn parse_string(&mut self, content: &str) -> Result<Ontology, OxidowlError> {
         // Use strict validation for Manchester syntax
         let validator = super::validation::SyntaxValidator::new();
@@ -206,7 +210,7 @@ impl ManchesterParser {
         Ok(())
     }
 
-    /// Parse a class frame: "Class: Name\n  SubClassOf: ...\n  EquivalentTo: ..."
+    /// Parse a class frame: "Class: Name\n  `SubClassOf`: ...\n  `EquivalentTo`: ..."
     fn parse_class_frame(
         &mut self,
         name: &str,
@@ -1079,7 +1083,7 @@ impl ManchesterParser {
             .collect()
     }
 
-    /// Parse property expressions separated by "o" (for SubPropertyChain)
+    /// Parse property expressions separated by "o" (for `SubPropertyChain`)
     fn parse_chain_property_expressions(
         &self,
         input: &str,
@@ -1222,7 +1226,7 @@ impl ManchesterParser {
         }
     }
 
-    /// Parse HasKey properties (comma-separated mixed object/data properties)
+    /// Parse `HasKey` properties (comma-separated mixed object/data properties)
     fn parse_has_key_properties(
         &self,
         input: &str,

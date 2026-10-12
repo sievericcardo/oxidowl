@@ -57,6 +57,7 @@ pub struct ClassificationService {
 
 impl ClassificationService {
     /// Create a new classification service
+    #[must_use]
     pub fn new(task_service: ReasoningTaskService) -> Self {
         Self {
             task_service,
@@ -72,6 +73,7 @@ impl ClassificationService {
     }
 
     /// Create a new classification service with custom saturation config
+    #[must_use]
     pub fn with_saturation_config(
         task_service: ReasoningTaskService,
         saturation_config: SaturationConfig,
@@ -214,8 +216,10 @@ impl ClassificationService {
         let mut hierarchy = self.extract_told_subsumers(&classes, &ontology_guard)?;
         info!("(told subsumers) completed in {:?}", phase1_start.elapsed());
 
-        let mut counters = ClassificationCounters::default();
-        counters.told_subsumers = hierarchy.values().map(HashSet::len).sum();
+        let mut counters = ClassificationCounters {
+            told_subsumers: hierarchy.values().map(HashSet::len).sum(),
+            ..Default::default()
+        };
 
         // === PHASE 2: Absorption + dependency-graph propagation (A8) ===
         // When absorption is enabled the dependency-graph propagation subsumes
@@ -246,7 +250,7 @@ impl ClassificationService {
                 .values()
                 .map(|d| d.subsumers.len() + d.existentials.len())
                 .sum();
-            may_need_tableau = dep.may_need_tableau.clone();
+            may_need_tableau.clone_from(&dep.may_need_tableau);
 
             // Build the hierarchy directly from the derivations (they already
             // include the told subsumers plus the transitive closure), avoiding
@@ -482,7 +486,7 @@ impl ClassificationService {
                     real_tableau_checks += 1;
                 }
                 tableau_checks += 1;
-                if tableau_checks % 1000 == 0 {
+                if tableau_checks.is_multiple_of(1000) {
                     debug!("Tableau checks progress: {tableau_checks}");
                     // Per-iteration memory check for long pairwise runs.
                     memory_guard.check()?;
@@ -1043,6 +1047,10 @@ impl ClassificationService {
     }
 
     /// Get all superclasses of a class expression
+    ///
+    /// # Panics
+    ///
+    /// Panics if the ontology signature cannot be extracted.
     pub fn get_superclasses(
         &self,
         concept: &ClassExpression,
@@ -1165,11 +1173,10 @@ impl ClassificationService {
         // Fast path: named class already classified → answer from `equivalents`.
         if let ClassExpression::Class(_) = concept
             && let Some(classif) = &self.classification_cache
+            && let Some(eqs) = classif.equivalents.get(concept)
         {
-            if let Some(eqs) = classif.equivalents.get(concept) {
-                equivalent_classes.extend(eqs.iter().cloned());
-                return Ok(equivalent_classes);
-            }
+            equivalent_classes.extend(eqs.iter().cloned());
+            return Ok(equivalent_classes);
         }
 
         // General case: Check all classes from the signature for bidirectional subsumption
@@ -1220,9 +1227,8 @@ impl ClassificationService {
             // that used to be merged in here has been removed: `signature()` is
             // now a superset of what that walk collected (it also covers SWRL
             // atoms, which the walker does not traverse).
-            let individuals = ontology_guard.signature()?.individuals.clone();
 
-            individuals
+            ontology_guard.signature()?.individuals.clone()
         }; // Drop the read lock here
 
         let mut instances = Vec::new();
@@ -1624,6 +1630,10 @@ impl ClassificationService {
     }
 
     /// Get types of a given individual
+    ///
+    /// # Panics
+    ///
+    /// Panics if an individual's IRI cannot be converted to a URL.
     pub fn get_types(
         &self,
         individual: &str,

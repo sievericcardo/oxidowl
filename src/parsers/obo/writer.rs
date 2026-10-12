@@ -36,6 +36,7 @@ impl OBOWriter {
     }
 
     /// Serialize an ontology to OBO string.
+    #[must_use]
     pub fn serialize(&self, ontology: &Ontology) -> String {
         let converter = Owl2Obo::new();
         converter.serialize(ontology)

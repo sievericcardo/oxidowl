@@ -769,7 +769,7 @@ impl OntologyVisitor<std::collections::HashSet<crate::ontology::Class>> for Clas
     }
 }
 
-/// Visitor interface for OntologyChange variants.
+/// Visitor interface for `OntologyChange` variants.
 pub trait OntologyChangeVisitor {
     fn visit_add_axiom(&mut self, _ontology_iri: &crate::ontology::IRI, _axiom: &Axiom) {}
     fn visit_remove_axiom(&mut self, _ontology_iri: &crate::ontology::IRI, _axiom: &Axiom) {}
@@ -806,7 +806,7 @@ pub trait OntologyChangeVisitor {
     }
 }
 
-/// Dispatch an OntologyChange to the appropriate visitor method.
+/// Dispatch an `OntologyChange` to the appropriate visitor method.
 pub fn dispatch_change(
     change: &crate::manager::changes::OntologyChange,
     visitor: &mut dyn OntologyChangeVisitor,

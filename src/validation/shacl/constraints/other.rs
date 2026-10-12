@@ -9,7 +9,10 @@ use crate::validation::shacl::{
     model::{ShaclMessage, ShaclSeverity},
     paths::term_to_sparql,
     report::ShaclValidationResult,
-    vocabulary::*,
+    vocabulary::{
+        RDF_TYPE, SH_CLOSED_CONSTRAINT_COMPONENT, SH_HAS_VALUE_CONSTRAINT_COMPONENT,
+        SH_IN_CONSTRAINT_COMPONENT,
+    },
 };
 
 fn simple_result(
@@ -62,7 +65,7 @@ pub fn evaluate_closed(
 
     // Always allow rdf:type
     let rdf_type = RdfTerm::iri(RDF_TYPE).ok();
-    let is_rdf_type = |t: &RdfTerm| rdf_type.as_ref().map(|rt| rt == t).unwrap_or(false);
+    let is_rdf_type = |t: &RdfTerm| rdf_type.as_ref().is_some_and(|rt| rt == t);
 
     let mut out = Vec::new();
     for row in rows {
@@ -89,6 +92,7 @@ pub fn evaluate_closed(
 /// Evaluate `sh:hasValue <required_value>`.
 ///
 /// The required RDF term must be among the value nodes.
+#[must_use]
 pub fn evaluate_has_value(
     focus_node: &RdfTerm,
     values: &[RdfTerm],
@@ -117,6 +121,7 @@ pub fn evaluate_has_value(
 /// Evaluate `sh:in <list>`.
 ///
 /// Every value node must be a member of `allowed`.
+#[must_use]
 pub fn evaluate_in(
     focus_node: &RdfTerm,
     values: &[RdfTerm],

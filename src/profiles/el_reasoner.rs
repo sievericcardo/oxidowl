@@ -44,7 +44,7 @@ impl ELReasoner {
     /// Create a new EL reasoner
     #[must_use]
     pub fn new(config: ReasonerConfig) -> Self {
-        #[allow(clippy::arc_with_non_send_sync)]
+        #[allow(clippy::arc_with_non_send_sync)] // Arc shared ownership, single-threaded use here
         let explanation_service = if config
             .reasoning
             .is_enabled(crate::config::ReasoningFeature::Explanations)
@@ -327,7 +327,10 @@ impl ELAxiom {
     /// Convert back to general axiom for explanations
     #[must_use]
     pub fn to_general_axiom(&self) -> Axiom {
-        use crate::ontology::axioms::*;
+        use crate::ontology::axioms::{
+            Axiom, ClassAssertionAxiom, ObjectPropertyAssertionAxiom, SubClassOfAxiom,
+            SubObjectPropertyOfAxiom,
+        };
         match self {
             ELAxiom::ConceptInclusion { lhs, rhs } => Axiom::SubClassOf(SubClassOfAxiom {
                 id: 0,
@@ -458,7 +461,10 @@ impl ELNormalizer {
 
     /// Normalize axioms to EL normal form
     pub fn normalize_axioms(&self, axioms: &[Axiom]) -> Result<Vec<ELAxiom>> {
-        use crate::ontology::axioms::*;
+        use crate::ontology::axioms::{
+            Axiom, ClassAssertionAxiom, ObjectPropertyAssertionAxiom, SubClassOfAxiom,
+            SubObjectPropertyOfAxiom,
+        };
         let mut el_axioms = Vec::with_capacity(axioms.len());
 
         for axiom in axioms {
@@ -469,10 +475,10 @@ impl ELNormalizer {
                     ..
                 }) => {
                     let el_sub = self.normalize_class_expression(subclass)?;
-                    let el_sup = self.normalize_class_expression(superclass)?;
+                    let normalized_sup = self.normalize_class_expression(superclass)?;
                     el_axioms.push(ELAxiom::ConceptInclusion {
                         lhs: el_sub,
-                        rhs: el_sup,
+                        rhs: normalized_sup,
                     });
                 }
                 Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
@@ -612,8 +618,7 @@ impl ConceptHierarchy {
     pub fn is_subsumed(&self, sub: &ELConcept, sup: &ELConcept) -> bool {
         self.transitive_subsumptions
             .get(sub)
-            .map(|sups| sups.contains(sup))
-            .unwrap_or(false)
+            .is_some_and(|sups| sups.contains(sup))
     }
 
     /// Compute transitive closure of subsumptions
@@ -645,8 +650,7 @@ impl ConceptHierarchy {
     fn is_in_transitive(&self, sub: &ELConcept, sup: &ELConcept) -> bool {
         self.transitive_subsumptions
             .get(sub)
-            .map(|sups| sups.contains(sup))
-            .unwrap_or(false)
+            .is_some_and(|sups| sups.contains(sup))
     }
 
     /// Convert to classification hierarchy format
@@ -739,8 +743,7 @@ impl RoleHierarchy {
     ) -> bool {
         self.transitive_inclusions
             .get(sub_role)
-            .map(|sups| sups.contains(super_role))
-            .unwrap_or(false)
+            .is_some_and(|sups| sups.contains(super_role))
     }
 
     /// Get all super-roles of a given role
@@ -1043,19 +1046,19 @@ impl CompletionRule for ExistentialRule {
 
         let Inference::Subsumption {
             sub: filler_sub,
-            sup: filler_sup,
+            sup: parent_filler,
         } = inference;
         // Look for existential restrictions with this filler
         for (existing_sub, existing_sup) in &state.subsumptions {
             if let ELConcept::Existential { role, filler } = existing_sup
                 && filler.as_ref() == filler_sub
             {
-                // existing_sub ⊑ ∃role.filler_sub, filler_sub ⊑ filler_sup ⟹ existing_sub ⊑ ∃role.filler_sup
+                // existing_sub ⊑ ∃role.filler_sub, filler_sub ⊑ parent_filler ⟹ existing_sub ⊑ ∃role.parent_filler
                 new_inferences.push(Inference::Subsumption {
                     sub: existing_sub.clone(),
                     sup: ELConcept::Existential {
                         role: role.clone(),
-                        filler: Box::new(filler_sup.clone()),
+                        filler: Box::new(parent_filler.clone()),
                     },
                 });
             }

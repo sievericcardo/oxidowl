@@ -36,7 +36,7 @@ impl SWRLBuiltIn for NotEqualToBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#notEqualTo"
     }
 
@@ -64,7 +64,7 @@ impl SWRLBuiltIn for MatchesBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#matches"
     }
 
@@ -88,7 +88,7 @@ impl SWRLBuiltIn for BooleanAndBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#booleanAnd"
     }
 
@@ -112,7 +112,7 @@ impl SWRLBuiltIn for BooleanOrBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#booleanOr"
     }
 
@@ -153,7 +153,7 @@ impl SWRLBuiltIn for MinBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#min"
     }
 
@@ -194,7 +194,7 @@ impl SWRLBuiltIn for MaxBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#max"
     }
 
@@ -205,9 +205,6 @@ impl SWRLBuiltIn for MaxBuiltIn {
 
 // Helper function for simple pattern matching
 fn simple_pattern_match(text: &str, pattern: &str) -> bool {
-    let text_chars: Vec<char> = text.chars().collect();
-    let pattern_chars: Vec<char> = pattern.chars().collect();
-
     fn match_recursive(text: &[char], pattern: &[char]) -> bool {
         match (text.first(), pattern.first()) {
             (None, None) => true,
@@ -228,6 +225,9 @@ fn simple_pattern_match(text: &str, pattern: &str) -> bool {
             }
         }
     }
+
+    let text_chars: Vec<char> = text.chars().collect();
+    let pattern_chars: Vec<char> = pattern.chars().collect();
 
     match_recursive(&text_chars, &pattern_chars)
 }

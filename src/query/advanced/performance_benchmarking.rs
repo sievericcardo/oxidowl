@@ -788,8 +788,7 @@ impl PerformanceBenchmarkingSystem {
             .system_info
             .benchmark_timestamp
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0); // Safe: fallback to 0 if system time is before UNIX_EPOCH (unlikely)
+            .map_or(0, |d| d.as_secs()); // Safe: fallback to 0 if system time is before UNIX_EPOCH (unlikely)
 
         let filename = format!(
             "{}/industrial_benchmark_report_{}.json",

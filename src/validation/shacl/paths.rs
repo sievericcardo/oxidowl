@@ -63,6 +63,7 @@ pub fn resolve_values(
 }
 
 /// Format an `RdfTerm` as a SPARQL subject (IRI or blank node).
+#[must_use]
 pub fn term_to_sparql_subject(term: &RdfTerm) -> String {
     match term {
         RdfTerm::Iri(iri) => format!("<{}>", iri.as_str()),
@@ -84,6 +85,7 @@ pub fn term_to_sparql_subject(term: &RdfTerm) -> String {
 
 /// Format an `RdfTerm` for use inside a SPARQL query (subject, object, or
 /// predicate position).
+#[must_use]
 pub fn term_to_sparql(term: &RdfTerm) -> String {
     match term {
         RdfTerm::Iri(iri) => format!("<{}>", iri.as_str()),
@@ -108,6 +110,7 @@ pub fn term_to_sparql(term: &RdfTerm) -> String {
 }
 
 /// Escape a string for use inside a SPARQL string literal.
+#[must_use]
 pub fn sparql_escape_string(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('"', "\\\"")

@@ -415,7 +415,7 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
                 let mut pair_clauses: Vec<DLClause> = Vec::new();
 
                 // --- Compile side i ---
-                let (atom_i_body, mut def_i) = match &axiom.classes[i] {
+                let (first_atom_body, mut first_bundle) = match &axiom.classes[i] {
                     ClassExpression::ObjectSomeValuesFrom { .. }
                     | ClassExpression::ObjectAllValuesFrom { .. }
                     | ClassExpression::ObjectHasValue { .. }
@@ -441,7 +441,7 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
                 };
 
                 // --- Compile side j ---
-                let (atom_j_body, mut def_j) = match &axiom.classes[j] {
+                let (other_atom_body, mut extra_clauses) = match &axiom.classes[j] {
                     ClassExpression::ObjectSomeValuesFrom { .. }
                     | ClassExpression::ObjectAllValuesFrom { .. }
                     | ClassExpression::ObjectHasValue { .. }
@@ -467,25 +467,25 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
                 };
 
                 // Collect auxiliary definition clauses first
-                pair_clauses.append(&mut def_i);
-                pair_clauses.append(&mut def_j);
+                pair_clauses.append(&mut first_bundle);
+                pair_clauses.append(&mut extra_clauses);
 
                 // Produce head-form (positive) atoms for conclusions
                 // Using same variable as the body atoms so the clause is well-formed.
-                // atom_i_body / atom_j_body are already positive (is_positive=true);
+                // first_atom_body / other_atom_body are already positive (is_positive=true);
                 // we reuse them directly in both body and head positions.
 
                 // Ci(x) → Cj(x):  body=[atom_i], head=[atom_j]
                 pair_clauses.push(DLClause::new(
-                    vec![atom_j_body.clone()],
-                    vec![atom_i_body.clone()],
+                    vec![other_atom_body.clone()],
+                    vec![first_atom_body.clone()],
                     self.next_clause_id(),
                 ));
 
                 // Cj(x) → Ci(x):  body=[atom_j], head=[atom_i]
                 pair_clauses.push(DLClause::new(
-                    vec![atom_i_body.clone()],
-                    vec![atom_j_body.clone()],
+                    vec![first_atom_body.clone()],
+                    vec![other_atom_body.clone()],
                     self.next_clause_id(),
                 ));
 
@@ -584,7 +584,7 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
                     &var_x_disj,
                     true,
                 )?;
-                let cj_atom = self.compile_class_expression_to_atom(
+                let disjoint_atom_j = self.compile_class_expression_to_atom(
                     &axiom.disjoint_classes[j],
                     &var_x_disj,
                     true,
@@ -593,7 +593,7 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
                 // Constraint: ¬(Ci(x) ∧ Cj(x))
                 clauses.push(DLClause::new(
                     vec![], // Empty head (constraint)
-                    vec![ci_atom, cj_atom],
+                    vec![ci_atom, disjoint_atom_j],
                     self.next_clause_id(),
                 ));
             }
@@ -1321,9 +1321,10 @@ impl AxiomCompiler for super::generator::DLClauseGenerator {
 
         // Add class constraints: C(x) ∧ C(y)
         let class_x_atom = self.compile_class_expression_to_atom(&axiom.class, &var_x, true)?;
-        let class_y_atom = self.compile_class_expression_to_atom(&axiom.class, &var_y, true)?;
+        let second_class_atom =
+            self.compile_class_expression_to_atom(&axiom.class, &var_y, true)?;
         body_atoms.push(class_x_atom);
-        body_atoms.push(class_y_atom);
+        body_atoms.push(second_class_atom);
 
         // Add key property constraints
         for (idx, key_property) in axiom.object_properties.iter().enumerate() {

@@ -220,10 +220,10 @@ impl OntologyChange {
 // ── ChangeRecord (serializable change history) ───────────────────────────────
 
 /// Serializable record of a single ontology change, preserving all information
-/// needed to replay or audit the change. Models OWL API v5's OWLOntologyChangeRecord.
+/// needed to replay or audit the change. Models OWL API v5's `OWLOntologyChangeRecord`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChangeRecord {
-    /// The type of change (e.g. "AddAxiom", "RemoveAxiom")
+    /// The type of change (e.g. "`AddAxiom`", "`RemoveAxiom`")
     pub change_type: String,
     /// The IRI of the ontology that was changed
     pub ontology_iri: String,
@@ -238,7 +238,7 @@ pub struct ChangeRecord {
 }
 
 impl ChangeRecord {
-    /// Create a ChangeRecord from an OntologyChange.
+    /// Create a `ChangeRecord` from an `OntologyChange`.
     #[must_use]
     pub fn from_change(change: &OntologyChange, sequence_number: u64) -> Self {
         let now = std::time::SystemTime::now()

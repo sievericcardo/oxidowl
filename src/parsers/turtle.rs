@@ -1309,8 +1309,8 @@ impl TurtleParser {
                 Token::PrefixedName(String::new(), subject_iri.to_string())
             };
 
-            let subject_uri = self.resolve_token(&subject_token, state)?;
-            let subject_class = Class::new(IRI::new(&subject_uri));
+            let resolved_subject = self.resolve_token(&subject_token, state)?;
+            let subject_class = Class::new(IRI::new(&resolved_subject));
 
             // Look for intersection patterns like "[ owl:intersectionOf ( ast:Healthy ast:MoistPlant ) ]"
             if statement.contains("owl:intersectionOf")
@@ -2087,15 +2087,15 @@ impl TurtleParser {
                 };
 
                 // Resolve to URIs
-                let subject_uri = self.resolve_token(&subject_token, state)?;
-                let object_uri = self.resolve_token(&object_token, state)?;
+                let resolved_subject = self.resolve_token(&subject_token, state)?;
+                let resolved_object = self.resolve_token(&object_token, state)?;
 
                 // Create SubClassOf axiom
                 let subclass = ClassExpression::Class(Class {
-                    iri: IRI::new(&subject_uri),
+                    iri: IRI::new(&resolved_subject),
                 });
                 let superclass = ClassExpression::Class(Class {
-                    iri: IRI::new(&object_uri),
+                    iri: IRI::new(&resolved_object),
                 });
 
                 let axiom = SubClassOfAxiom {
@@ -2106,7 +2106,7 @@ impl TurtleParser {
                 };
 
                 println!(
-                    "Creating enhanced SubClassOf axiom: {subject_uri} rdfs:subClassOf {object_uri}"
+                    "Creating enhanced SubClassOf axiom: {resolved_subject} rdfs:subClassOf {resolved_object}"
                 );
                 ontology.add_axiom(Axiom::SubClassOf(axiom));
             }
@@ -2212,7 +2212,7 @@ impl TurtleParser {
                 break;
             }
             // Read annotation object
-            let ao_term = self.token_to_rdf_term(&annot_tokens[idx], state)?;
+            let annotation_object_term = self.token_to_rdf_term(&annot_tokens[idx], state)?;
             idx += 1;
             // Skip optional language tag or datatype keyword after a literal
             if idx < annot_tokens.len()
@@ -2221,11 +2221,11 @@ impl TurtleParser {
             {
                 idx += 1;
             }
-            let ap_term = str_to_term(&ap_str);
+            let annotation_property_term = str_to_term(&ap_str);
             rdf_graph.add_triple(crate::semantics::Triple::new(
                 reifier_term.clone(),
-                ap_term,
-                ao_term,
+                annotation_property_term,
+                annotation_object_term,
             ));
         }
 
@@ -2827,7 +2827,7 @@ impl TurtleParser {
     }
 
     fn ensure_annotation_property_declared(&self, iri: &str, ontology: &mut Ontology) {
-        super::rdf_to_owl::ensure_annotation_property_declared(iri, ontology)
+        super::rdf_to_owl::ensure_annotation_property_declared(iri, ontology);
     }
 
     /// Enhanced triple processing with better OWL support.
@@ -3060,7 +3060,7 @@ impl OntologySerializer for TurtleSerializer {
                                 ));
                                 "Declaration"
                             }
-                            _ => "Declaration",
+                            crate::ontology::Entity::Datatype(_) => "Declaration",
                         },
                         _ => "Other",
                     };

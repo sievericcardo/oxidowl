@@ -32,6 +32,7 @@ pub struct ReasoningTaskService {
 
 impl ReasoningTaskService {
     /// Create a new reasoning task service
+    #[must_use]
     pub fn new(tableau_factory: TableauFactory) -> Self {
         Self { tableau_factory }
     }
@@ -247,7 +248,7 @@ impl ReasoningTaskService {
     ///   *witness-augmented* copy of the ontology and inspecting the materialised
     ///   closure. For `SubObjectPropertyOf`, `Transitive`, `Symmetric`,
     ///   `Reflexive`, `ObjectPropertyDomain/Range` the witness creates a fresh
-    ///   edge/individual so the check is non-vacuous; the RBox pass (A5) then
+    ///   edge/individual so the check is non-vacuous; the `RBox` pass (A5) then
     ///   materialises the required closure iff the axiom is entailed.
     /// - **Consistency reductions** (witness + contradiction): `Asymmetric`,
     ///   `Irreflexive`, `Functional`, `InverseFunctional`,
@@ -262,7 +263,7 @@ impl ReasoningTaskService {
     ///   closure of the asserted data-property hierarchy (OWL 2 DL has no data
     ///   property chains, inverses or non-RBox role axioms, so the asserted
     ///   hierarchy closure is complete for these).
-    /// - **HasKey / non-logical axioms**: presence-only (fast path).
+    /// - **`HasKey` / non-logical axioms**: presence-only (fast path).
     pub fn check_entailment_semantic(
         &self,
         axiom: &Axiom,
@@ -567,7 +568,7 @@ impl ReasoningTaskService {
     // ── Object property characteristic entailment ────────────────────────────
 
     /// `O ⊨ R ⊑ S`: run the tableau over `O ∪ {R(w1,w2)}` (fresh witness pair)
-    /// and check that the RBox closure materialised an `S(w1,w2)` edge. A
+    /// and check that the `RBox` closure materialised an `S(w1,w2)` edge. A
     /// `PropertyChain` sub-property is expanded into a witness path
     /// `R1(w0,w1), …, Rn(w(n-1),wn)` and the check closes to `S(w0,wn)`.
     ///
@@ -586,26 +587,23 @@ impl ReasoningTaskService {
             ontology,
             "tasks: reading ontology for sub-object-property entailment",
         )?;
-        let (witnesses, (from, to)) = match sub {
-            ObjectPropertyExpression::PropertyChain(chain) => {
-                let mut nodes: Vec<Individual> =
-                    (0..=chain.len()).map(|_| self.fresh_individual()).collect();
-                let mut witnesses = Vec::new();
-                for (i, role) in chain.iter().enumerate() {
-                    let source = nodes[i].clone();
-                    let target = nodes[i + 1].clone();
-                    witnesses.push(self.object_assertion(role.clone(), source, target));
-                }
-                let from = nodes.remove(0);
-                let to = nodes.pop().expect("chain has at least one role");
-                (witnesses, (from, to))
+        let (witnesses, (from, to)) = if let ObjectPropertyExpression::PropertyChain(chain) = sub {
+            let mut nodes: Vec<Individual> =
+                (0..=chain.len()).map(|_| self.fresh_individual()).collect();
+            let mut witnesses = Vec::new();
+            for (i, role) in chain.iter().enumerate() {
+                let source = nodes[i].clone();
+                let target = nodes[i + 1].clone();
+                witnesses.push(self.object_assertion(role.clone(), source, target));
             }
-            _ => {
-                let w1 = self.fresh_individual();
-                let w2 = self.fresh_individual();
-                let witness = self.object_assertion(sub.clone(), w1.clone(), w2.clone());
-                (vec![witness], (w1, w2))
-            }
+            let from = nodes.remove(0);
+            let to = nodes.pop().expect("chain has at least one role");
+            (witnesses, (from, to))
+        } else {
+            let w1 = self.fresh_individual();
+            let w2 = self.fresh_individual();
+            let witness = self.object_assertion(sub.clone(), w1.clone(), w2.clone());
+            (vec![witness], (w1, w2))
         };
         let tableau = self.run_witness_tableau(&guard, &witnesses)?;
         if !tableau.is_satisfiable() {
@@ -683,7 +681,7 @@ impl ReasoningTaskService {
 
     /// `O ⊨ Reflexive(R)`: witness individual `w` must carry an `R(w,w)` self-loop.
     /// The witness is added to the ontology (as `w:owl:Thing`) so the reflexive
-    /// RBox rule sees a real individual node.
+    /// `RBox` rule sees a real individual node.
     fn entails_reflexive(
         &self,
         property: &ObjectPropertyExpression,
@@ -884,7 +882,7 @@ impl ReasoningTaskService {
     }
 
     /// `O ⊨ ObjectPropertyDomain(R,C)`: run the tableau over `O ∪ {w:∃R.⊤}`; every
-    /// R-edge source (including the witness `w`) must be labelled `C`. The RBox
+    /// R-edge source (including the witness `w`) must be labelled `C`. The `RBox`
     /// domain rule materialises `C` on `w` iff the domain is entailed.
     fn entails_object_domain(
         &self,
@@ -915,7 +913,7 @@ impl ReasoningTaskService {
     }
 
     /// `O ⊨ ObjectPropertyRange(R,C)`: run the tableau over `O ∪ {x:∃R.{w}}`; the
-    /// R-edge target `w` must be labelled `C`. The RBox range rule materialises
+    /// R-edge target `w` must be labelled `C`. The `RBox` range rule materialises
     /// `C` on `w` iff the range is entailed.
     fn entails_object_range(
         &self,
@@ -953,7 +951,7 @@ impl ReasoningTaskService {
 
     /// Transitive closure of the asserted data-property hierarchy:
     /// `SubDataPropertyOf` and `EquivalentDataProperties`. Complete for OWL 2 DL
-    /// (data properties have no chains, inverses or other RBox role axioms).
+    /// (data properties have no chains, inverses or other `RBox` role axioms).
     fn data_property_ancestors(
         &self,
         ontology: &crate::ontology::Ontology,
@@ -965,17 +963,14 @@ impl ReasoningTaskService {
             for axiom in ontology.axioms() {
                 match axiom {
                     Axiom::SubDataPropertyOf(a) => {
-                        if &a.sub_property == &current && ancestors.insert(a.super_property.clone())
-                        {
+                        if a.sub_property == current && ancestors.insert(a.super_property.clone()) {
                             stack.push(a.super_property.clone());
                         }
                     }
-                    Axiom::EquivalentDataProperties(a) => {
-                        if a.properties.contains(&current) {
-                            for q in &a.properties {
-                                if q != &current && ancestors.insert(q.clone()) {
-                                    stack.push(q.clone());
-                                }
+                    Axiom::EquivalentDataProperties(a) if a.properties.contains(&current) => {
+                        for q in &a.properties {
+                            if q != &current && ancestors.insert(q.clone()) {
+                                stack.push(q.clone());
                             }
                         }
                     }
@@ -1078,10 +1073,11 @@ impl ReasoningTaskService {
             "tasks: reading ontology for data-domain entailment",
         )?;
         for axiom in guard.axioms() {
-            if let Axiom::DataPropertyDomain(a) = axiom {
-                if self.is_sub_data_property(&guard, property, &a.property) && &a.domain == domain {
-                    return Ok(true);
-                }
+            if let Axiom::DataPropertyDomain(a) = axiom
+                && self.is_sub_data_property(&guard, property, &a.property)
+                && &a.domain == domain
+            {
+                return Ok(true);
             }
         }
         Ok(false)
@@ -1103,10 +1099,11 @@ impl ReasoningTaskService {
             "tasks: reading ontology for data-range entailment",
         )?;
         for axiom in guard.axioms() {
-            if let Axiom::DataPropertyRange(a) = axiom {
-                if self.is_sub_data_property(&guard, property, &a.property) && &a.range == range {
-                    return Ok(true);
-                }
+            if let Axiom::DataPropertyRange(a) = axiom
+                && self.is_sub_data_property(&guard, property, &a.property)
+                && &a.range == range
+            {
+                return Ok(true);
             }
         }
         Ok(false)
@@ -1127,10 +1124,10 @@ impl ReasoningTaskService {
             "tasks: reading ontology for functional-data entailment",
         )?;
         for axiom in guard.axioms() {
-            if let Axiom::FunctionalDataProperty(a) = axiom {
-                if self.is_sub_data_property(&guard, property, &a.property) {
-                    return Ok(true);
-                }
+            if let Axiom::FunctionalDataProperty(a) = axiom
+                && self.is_sub_data_property(&guard, property, &a.property)
+            {
+                return Ok(true);
             }
         }
         Ok(false)
@@ -1139,8 +1136,8 @@ impl ReasoningTaskService {
     // ── Individual axiom entailment ──────────────────────────────────────────
 
     /// `O ⊨ SameIndividual([a1..an])`: all individuals collapse to the same node
-    /// in the completed tableau (nominal merging materialises SameIndividual,
-    /// functional/inverse-functional, and HasKey equalities).
+    /// in the completed tableau (nominal merging materialises `SameIndividual`,
+    /// functional/inverse-functional, and `HasKey` equalities).
     fn entails_same_individual(
         &self,
         individuals: &[Individual],

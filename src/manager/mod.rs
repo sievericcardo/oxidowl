@@ -82,7 +82,7 @@ pub type OntologyManagerRef = Arc<RwLock<OntologyManager>>;
 
 // ── ManagerConfig ────────────────────────────────────────────────────────────
 
-/// Configuration for the OntologyManager.
+/// Configuration for the `OntologyManager`.
 #[derive(Debug, Clone)]
 pub struct ManagerConfig {
     /// Enable change history for undo/redo.
@@ -550,7 +550,7 @@ impl OntologyManager {
         if self.pending_changes.is_empty() {
             return;
         }
-        let pending: Vec<_> = self.pending_changes.drain(..).collect();
+        let pending: Vec<_> = std::mem::take(&mut self.pending_changes);
         self.notify_change_listeners(&pending);
     }
 

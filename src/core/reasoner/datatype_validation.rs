@@ -93,6 +93,11 @@ impl DatatypeValidator {
     }
 
     /// Validate that a literal conforms to its declared datatype
+    ///
+    /// # Panics
+    ///
+    /// Panics if a user-defined datatype definition disappears between the
+    /// existence check and its use.
     pub fn validate_literal(&self, literal: &Literal) -> Result<bool> {
         let Some(datatype_url) = &literal.datatype else {
             // No datatype means xsd:string
@@ -110,14 +115,14 @@ impl DatatypeValidator {
                 .get_datatype_definition(&IRI::new(datatype_iri_str))
                 .is_some()
         {
-            return Ok(self.literal_satisfies_data_range(
+            return self.literal_satisfies_data_range(
                 literal,
                 &self
                     .manager
                     .get_datatype_definition(&IRI::new(datatype_iri_str))
                     .expect("just checked")
                     .data_range,
-            )?);
+            );
         }
 
         // owl:real / owl:rational accept any numeric lexical form.
@@ -329,18 +334,10 @@ impl DatatypeValidator {
             OWL2Datatype::Int => lexical.parse::<i32>().is_ok(),
             OWL2Datatype::Short => lexical.parse::<i16>().is_ok(),
             OWL2Datatype::Byte => lexical.parse::<i8>().is_ok(),
-            OWL2Datatype::NonNegativeInteger => {
-                lexical.parse::<i128>().map(|v| v >= 0).unwrap_or(false)
-            }
-            OWL2Datatype::PositiveInteger => {
-                lexical.parse::<i128>().map(|v| v > 0).unwrap_or(false)
-            }
-            OWL2Datatype::NonPositiveInteger => {
-                lexical.parse::<i128>().map(|v| v <= 0).unwrap_or(false)
-            }
-            OWL2Datatype::NegativeInteger => {
-                lexical.parse::<i128>().map(|v| v < 0).unwrap_or(false)
-            }
+            OWL2Datatype::NonNegativeInteger => lexical.parse::<i128>().is_ok_and(|v| v >= 0),
+            OWL2Datatype::PositiveInteger => lexical.parse::<i128>().is_ok_and(|v| v > 0),
+            OWL2Datatype::NonPositiveInteger => lexical.parse::<i128>().is_ok_and(|v| v <= 0),
+            OWL2Datatype::NegativeInteger => lexical.parse::<i128>().is_ok_and(|v| v < 0),
             OWL2Datatype::UnsignedLong => lexical.parse::<u64>().is_ok(),
             OWL2Datatype::UnsignedInt => lexical.parse::<u32>().is_ok(),
             OWL2Datatype::UnsignedShort => lexical.parse::<u16>().is_ok(),
@@ -874,6 +871,7 @@ impl DatatypeValidator {
     /// `seed` offsets the canonical value so distinct seeds produce distinct values where
     /// the range's value space is infinite (used by the data ≥-rule to mint pairwise-≠
     /// successors).
+    #[must_use]
     pub fn generate_literal_for_range(&self, range: &DataRange, seed: usize) -> RangeValue {
         match range {
             DataRange::Datatype(iri) => {
@@ -949,7 +947,7 @@ impl DatatypeValidator {
                             }
                         }
                         RangeValue::Empty => return RangeValue::Empty,
-                        RangeValue::Witness => continue,
+                        RangeValue::Witness => {}
                     }
                 }
                 RangeValue::Witness
@@ -959,7 +957,7 @@ impl DatatypeValidator {
                     match self.generate_literal_for_range(sub, seed) {
                         RangeValue::Value(lit) => return RangeValue::Value(lit),
                         // Skip an empty branch; try the next disjunct.
-                        RangeValue::Empty => continue,
+                        RangeValue::Empty => {}
                         RangeValue::Witness => return RangeValue::Witness,
                     }
                 }
@@ -989,6 +987,7 @@ impl DatatypeValidator {
     ///
     /// Returns [`RangeValue::Empty`] when the range cannot provide another distinct value
     /// (e.g. `≥3 P xsd:boolean`, or `≥2` over a single-value facet-restricted range).
+    #[must_use]
     pub fn generate_distinct_literal_for_range(
         &self,
         range: &DataRange,
@@ -1004,7 +1003,7 @@ impl DatatypeValidator {
                     }
                     saw_candidate = true;
                 }
-                RangeValue::Empty => continue,
+                RangeValue::Empty => {}
                 RangeValue::Witness => return RangeValue::Witness,
             }
         }
@@ -1071,34 +1070,34 @@ impl DatatypeValidator {
         let upper = max_inc.or_else(|| max_exc.map(|m| m - 1.0));
 
         // Contradictory facets → empty range.
-        if let (Some(lo), Some(hi)) = (lower, upper) {
-            if lo > hi {
-                return RangeValue::Empty;
-            }
+        if let (Some(lo), Some(hi)) = (lower, upper)
+            && lo > hi
+        {
+            return RangeValue::Empty;
         }
-        if let (Some(lo), Some(hi)) = (min_exc, max_inc) {
-            if lo >= hi {
-                return RangeValue::Empty;
-            }
+        if let (Some(lo), Some(hi)) = (min_exc, max_inc)
+            && lo >= hi
+        {
+            return RangeValue::Empty;
         }
-        if let (Some(lo), Some(hi)) = (min_exc, max_exc) {
-            if lo >= hi {
-                return RangeValue::Empty;
-            }
+        if let (Some(lo), Some(hi)) = (min_exc, max_exc)
+            && lo >= hi
+        {
+            return RangeValue::Empty;
         }
-        if let (Some(lo), Some(hi)) = (min_inc, max_exc) {
-            if lo >= hi {
-                return RangeValue::Empty;
-            }
+        if let (Some(lo), Some(hi)) = (min_inc, max_exc)
+            && lo >= hi
+        {
+            return RangeValue::Empty;
         }
 
         // Numeric base: candidate = lower + seed, must respect the upper bound.
         if let Some(lo) = lower {
             let candidate = lo + seed as f64;
-            if let Some(hi) = upper {
-                if candidate > hi {
-                    return RangeValue::Empty;
-                }
+            if let Some(hi) = upper
+                && candidate > hi
+            {
+                return RangeValue::Empty;
             }
             return RangeValue::Value(Literal::with_datatype(
                 candidate.to_string(),
@@ -1184,13 +1183,13 @@ impl DatatypeValidator {
             }
             "http://www.w3.org/2001/XMLSchema#totalDigits" => {
                 let max: usize = facet_value.parse().unwrap_or(usize::MAX);
-                let digit_count = literal.value.chars().filter(|c| c.is_ascii_digit()).count();
+                let digit_count = literal.value.chars().filter(char::is_ascii_digit).count();
                 Ok(digit_count <= max)
             }
             "http://www.w3.org/2001/XMLSchema#fractionDigits" => {
                 let max: usize = facet_value.parse().unwrap_or(usize::MAX);
                 let fraction_digits = match literal.value.split_once('.') {
-                    Some((_, frac)) => frac.chars().filter(|c| c.is_ascii_digit()).count(),
+                    Some((_, frac)) => frac.chars().filter(char::is_ascii_digit).count(),
                     None => 0,
                 };
                 Ok(fraction_digits <= max)
@@ -1234,7 +1233,7 @@ impl DatatypeValidator {
                 return true;
             }
             matches!(
-                OWL2Datatype::from_iri(&IRI::new(l.datatype.as_ref().map(|u| u.as_str()).unwrap_or(""))),
+                OWL2Datatype::from_iri(&IRI::new(l.datatype.as_ref().map_or("", url::Url::as_str))),
                 Some(dt) if dt.category() == crate::ontology::datatypes::DatatypeCategory::String
             )
         };
@@ -1276,10 +1275,10 @@ impl DatatypeValidator {
                 }
                 let ia = IRI::new(da.as_str());
                 let ib = IRI::new(db.as_str());
-                if Self::datatypes_compatible(&ia, &ib) {
-                    if let (Ok(x), Ok(y)) = (a.value.parse::<f64>(), b.value.parse::<f64>()) {
-                        return x == y;
-                    }
+                if Self::datatypes_compatible(&ia, &ib)
+                    && let (Ok(x), Ok(y)) = (a.value.parse::<f64>(), b.value.parse::<f64>())
+                {
+                    return x.partial_cmp(&y) == Some(std::cmp::Ordering::Equal);
                 }
                 false
             }
@@ -1296,16 +1295,25 @@ impl DatatypeValidator {
         let iri = dt.iri();
         match dt {
             OWL2Datatype::Boolean => {
-                let v = if seed % 2 == 0 { "false" } else { "true" };
+                let v = if seed.is_multiple_of(2) {
+                    "false"
+                } else {
+                    "true"
+                };
                 Literal::with_datatype(v.to_string(), iri)
             }
             OWL2Datatype::PositiveInteger => Literal::with_datatype((seed + 1).to_string(), iri),
-            OWL2Datatype::NegativeInteger => {
-                Literal::with_datatype((-(seed as i64) - 1).to_string(), iri)
-            }
-            OWL2Datatype::NonPositiveInteger => {
-                Literal::with_datatype((-(seed as i64)).to_string(), iri)
-            }
+            OWL2Datatype::NegativeInteger => Literal::with_datatype(
+                (i64::try_from(seed).unwrap_or(i64::MAX).saturating_neg() - 1).to_string(),
+                iri,
+            ),
+            OWL2Datatype::NonPositiveInteger => Literal::with_datatype(
+                i64::try_from(seed)
+                    .unwrap_or(i64::MAX)
+                    .saturating_neg()
+                    .to_string(),
+                iri,
+            ),
             OWL2Datatype::NonNegativeInteger
             | OWL2Datatype::UnsignedLong
             | OWL2Datatype::UnsignedInt
@@ -1396,7 +1404,7 @@ impl DatatypeValidator {
                     let (rep, next) = read_quantifier(&chars, i)?;
                     i = next;
                     let first = *class_chars.first()?;
-                    out.extend(std::iter::repeat(first).take(rep));
+                    out.extend(std::iter::repeat_n(first, rep));
                 }
                 '\\' => {
                     i += 1;
@@ -1414,13 +1422,13 @@ impl DatatypeValidator {
                     i += 1;
                     let (rep, next) = read_quantifier(&chars, i)?;
                     i = next;
-                    out.extend(std::iter::repeat(ch).take(rep));
+                    out.extend(std::iter::repeat_n(ch, rep));
                 }
                 '.' => {
                     i += 1;
                     let (rep, next) = read_quantifier(&chars, i)?;
                     i = next;
-                    out.extend(std::iter::repeat('a').take(rep));
+                    out.extend(std::iter::repeat_n('a', rep));
                 }
                 '^' | '$' => {
                     i += 1;
@@ -1433,7 +1441,7 @@ impl DatatypeValidator {
                     i += 1;
                     let (rep, next) = read_quantifier(&chars, i)?;
                     i = next;
-                    out.extend(std::iter::repeat(other).take(rep));
+                    out.extend(std::iter::repeat_n(other, rep));
                 }
             }
         }
@@ -1455,15 +1463,12 @@ fn read_quantifier(chars: &[char], i: usize) -> Option<(usize, usize)> {
             let close = chars[i..].iter().position(|&c| c == '}')? + i;
             let inner: String = chars[i + 1..close].iter().collect();
             let next = close + 1;
-            match inner.split_once(',') {
-                Some((lo, _hi)) => {
-                    let n: usize = lo.trim().parse().ok()?;
-                    Some((n, next))
-                }
-                None => {
-                    let n: usize = inner.trim().parse().ok()?;
-                    Some((n, next))
-                }
+            if let Some((lo, _hi)) = inner.split_once(',') {
+                let n: usize = lo.trim().parse().ok()?;
+                Some((n, next))
+            } else {
+                let n: usize = inner.trim().parse().ok()?;
+                Some((n, next))
             }
         }
         _ => Some((1, i)),

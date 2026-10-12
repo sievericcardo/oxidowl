@@ -151,6 +151,7 @@ impl ProfileViolation {
     }
 
     /// Set the location information
+    #[must_use]
     pub fn with_location(mut self, location: impl Into<String>) -> Self {
         self.location = Some(location.into());
         self

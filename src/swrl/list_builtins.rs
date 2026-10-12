@@ -37,7 +37,7 @@ impl SWRLBuiltIn for ListConcatBuiltIn {
         ))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#listConcat"
     }
 
@@ -85,7 +85,7 @@ impl SWRLBuiltIn for MemberBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#member"
     }
 
@@ -108,7 +108,7 @@ impl SWRLBuiltIn for ListLengthBuiltIn {
                 let length = if list_str.is_empty() {
                     0
                 } else {
-                    list_str.split(',').count() as i64
+                    i64::try_from(list_str.split(',').count()).unwrap_or(i64::MAX)
                 };
                 Ok(SWRLValue::Boolean(*result == length))
             }
@@ -118,7 +118,7 @@ impl SWRLBuiltIn for ListLengthBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#length"
     }
 
@@ -165,7 +165,7 @@ impl SWRLBuiltIn for ListIntersectionBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#listIntersection"
     }
 
@@ -212,7 +212,7 @@ impl SWRLBuiltIn for ListSubtractionBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#listSubtraction"
     }
 
@@ -268,7 +268,7 @@ impl SWRLBuiltIn for FirstBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#first"
     }
 
@@ -307,7 +307,7 @@ impl SWRLBuiltIn for RestBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#rest"
     }
 
@@ -357,7 +357,7 @@ impl SWRLBuiltIn for SublistBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#sublist"
     }
 
@@ -383,7 +383,7 @@ impl SWRLBuiltIn for EmptyBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#empty"
     }
 

@@ -132,11 +132,11 @@ impl ExecutionStrategy for DirectStrategy {
         query.body_atoms.len() == 1
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "direct"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Direct evaluation for single-atom queries"
     }
 }
@@ -162,11 +162,11 @@ impl ExecutionStrategy for TableauStrategy {
         true
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "balanced"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Nested-loop join in natural atom order (default fallback)"
     }
 }
@@ -200,11 +200,11 @@ impl ExecutionStrategy for JoinOptimizedStrategy {
         query.body_atoms.len() > 1
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "join_optimized"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Selectivity-based join reordering"
     }
 }
@@ -230,11 +230,11 @@ impl ExecutionStrategy for CycleAwareStrategy {
         query.body_atoms.len() > 1
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "cycle_aware"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Cycle-aware atom ordering that defers cycle-closing joins"
     }
 }
@@ -260,11 +260,11 @@ impl ExecutionStrategy for FilterFirstStrategy {
         query.body_atoms.len() > 1
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "filter_first"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Evaluates selective filter atoms first to prune bindings early"
     }
 }
@@ -299,11 +299,11 @@ impl ExecutionStrategy for StreamingStrategy {
         true
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "streaming"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Streaming evaluation with a bounded result set"
     }
 }
@@ -335,11 +335,11 @@ impl ExecutionStrategy for ProjectionOptimizedStrategy {
         !query.answer_variables.is_empty()
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "projection_optimized"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Binds answer variables early to minimise intermediate binding size"
     }
 }
@@ -368,11 +368,11 @@ impl ExecutionStrategy for DataOptimizedStrategy {
             .any(|a| matches!(a, QueryAtom::DataPropertyAtom { .. }))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "data_optimized"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Prioritizes data-property atoms for data-heavy queries"
     }
 }
@@ -381,6 +381,7 @@ impl ExecutionStrategy for DataOptimizedStrategy {
 ///
 /// Includes aliases so that every name produced by the rule-based and ML
 /// strategy selectors resolves to a concrete implementation.
+#[must_use]
 pub fn default_strategies() -> Vec<(&'static str, Box<dyn ExecutionStrategy>)> {
     vec![
         ("direct", Box::new(DirectStrategy)),

@@ -1518,8 +1518,7 @@ fn serialize_individual_xml(ind: &crate::ontology::Individual) -> String {
     format!(
         "<NamedIndividual IRI=\"{}\"/>",
         ind.iri()
-            .map(super::super::ontology::IRI::as_str)
-            .unwrap_or("_:anonymous")
+            .map_or("_:anonymous", super::super::ontology::IRI::as_str)
     )
 }
 

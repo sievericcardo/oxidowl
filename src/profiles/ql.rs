@@ -393,7 +393,7 @@ impl QLValidator {
             ObjectPropertyExpression::InverseObjectProperty(_prop) => {
                 true // prop is already an ObjectProperty, so it's basic
             }
-            _ => false,
+            ObjectPropertyExpression::PropertyChain(_) => false,
         }
     }
 

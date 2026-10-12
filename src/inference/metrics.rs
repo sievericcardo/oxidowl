@@ -1,6 +1,6 @@
 //! Ontology Metrics — quantitative measurements of ontology structure.
 
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::{Axiom, AxiomTrait, AxiomType, Entity};
 use crate::ontology::{ClassExpression, Ontology};
 use crate::searcher::{EntityIndex, EntitySearcher};
 use crate::transform::expressivity::DLExpressivityChecker;
@@ -553,6 +553,7 @@ pub struct NumberOfAxiomsByType {
 }
 
 impl NumberOfAxiomsByType {
+    #[must_use]
     pub fn new(axiom_type: AxiomType) -> Self {
         NumberOfAxiomsByType {
             axiom_type,
@@ -589,6 +590,7 @@ impl Default for NumberOfGCIAxioms {
 }
 
 impl NumberOfGCIAxioms {
+    #[must_use]
     pub fn new() -> Self {
         NumberOfGCIAxioms { count: 0 }
     }
@@ -625,6 +627,7 @@ impl Default for NumberOfHiddenGCI {
 }
 
 impl NumberOfHiddenGCI {
+    #[must_use]
     pub fn new() -> Self {
         NumberOfHiddenGCI { count: 0 }
     }
@@ -661,6 +664,7 @@ impl Default for NumberOfSWRLRuleAxioms {
 }
 
 impl NumberOfSWRLRuleAxioms {
+    #[must_use]
     pub fn new() -> Self {
         NumberOfSWRLRuleAxioms { count: 0 }
     }
@@ -690,6 +694,7 @@ impl Default for AverageNumberOfNamedSuperclasses {
 }
 
 impl AverageNumberOfNamedSuperclasses {
+    #[must_use]
     pub fn new() -> Self {
         AverageNumberOfNamedSuperclasses { average: 0.0 }
     }
@@ -746,6 +751,7 @@ impl Default for MaxNumberOfNamedSuperclasses {
 }
 
 impl MaxNumberOfNamedSuperclasses {
+    #[must_use]
     pub fn new() -> Self {
         MaxNumberOfNamedSuperclasses { max: 0 }
     }
@@ -801,6 +807,7 @@ impl Default for PerPropertyAxiomTypeCounts {
 }
 
 impl PerPropertyAxiomTypeCounts {
+    #[must_use]
     pub fn new() -> Self {
         PerPropertyAxiomTypeCounts {
             functional_count: 0,

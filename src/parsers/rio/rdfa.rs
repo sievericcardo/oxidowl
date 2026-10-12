@@ -1,10 +1,10 @@
-//! RDFa 1.1 parser core (DOM-based) and serializer — extracts RDF from
+//! `RDFa` 1.1 parser core (DOM-based) and serializer — extracts RDF from
 //! HTML/XHTML attribute markup.
 //!
 //! # Parsing (B5 Slice 4)
 //!
 //! The document is parsed with **html5ever** into an [`RcDom`] tree and the
-//! RDFa Core 1.1 processing sequence (W3C Rec, §7.5 "Sequence" + §8 detail)
+//! `RDFa` Core 1.1 processing sequence (W3C Rec, §7.5 "Sequence" + §8 detail)
 //! is evaluated over that DOM, depth-first:
 //!
 //! 1. **Evaluation context** per element: base IRI (document `<base href>`,
@@ -26,7 +26,7 @@
 //! 4. **Literals** (§8.3.1): `@property` honours `@content`,
 //!    `@datatype` (typed literal; `datatype=""` → plain literal) and the
 //!    current language tag (element `@lang` first, then inherited); without
-//!    them the descendant text is used (whitespace preserved, as RDFa
+//!    them the descendant text is used (whitespace preserved, as `RDFa`
 //!    requires).
 //! 5. **Blank nodes**: `@typeof`-only subjects, `@rel` without an object,
 //!    `@about="_:label"` / `@resource="_:label"` (explicit labels stay
@@ -56,7 +56,7 @@
 //!    triples with direction *none* (§7.5 step 9), appending the subject a
 //!    descendant establishes.
 //! 9. **Vocabulary expansion** (§10, opt-in): `RdfaParser::with_vocabulary_expansion(true)`
-//!    applies the RDFa Vocabulary Entailment rules (prp-spo1, prp-eqp1/2,
+//!    applies the `RDFa` Vocabulary Entailment rules (prp-spo1, prp-eqp1/2,
 //!    cax-sco, cax-eqc1/2) to the output graph before it is mapped into the
 //!    ontology.  Off by default (§10.2) and never dereferences remote
 //!    vocabularies — only the triples already present in the document are
@@ -65,7 +65,7 @@
 //! The evaluation first produces plain [`crate::semantics::Triple`]s, then
 //! maps them into the [`Ontology`] through the **shared** RDF→OWL mapping
 //! ([`crate::parsers::rdf_to_owl::map_rdf_triples`]) — the same code Turtle,
-//! RDF/XML, JSON-LD, N3, TriX, HDT and BinaryRDF use.  Discovered `@prefix`
+//! RDF/XML, JSON-LD, N3, `TriX`, HDT and `BinaryRDF` use.  Discovered `@prefix`
 //! declarations are recorded in [`Ontology::prefixes`].
 //!
 //! ## Base IRI
@@ -91,7 +91,7 @@
 //! output reproduces the source axioms for the supported subset (asserted by
 //! `tests/rdfa_tests.rs::serializer_round_trip_reproduces_core_axioms`).
 //!
-//! Constructs that have no RDFa spelling are **never dropped silently**:
+//! Constructs that have no `RDFa` spelling are **never dropped silently**:
 //!
 //! * `owl:imports` declarations are written as HTML comments carrying
 //!   their IRI text;
@@ -142,13 +142,13 @@
 //! ## Documented gaps (deliberate divergences, not silent drops)
 //!
 //! * **`rdf:XMLLiteral`** uses concatenated descendant text and the
-//!   element's children are still evaluated.  RDFa requires the value to be
+//!   element's children are still evaluated.  `RDFa` requires the value to be
 //!   the descendant markup serialized with Exclusive XML Canonicalization
 //!   (§7.5 step 10) and the recursion flag cleared; implementing C14N over
 //!   the html5ever DOM (namespace/marker nodes, entity rewriting) is not
 //!   feasible at low risk here, so the text form is kept and documented.
 //! * **Initial context scope** — the embedded term/prefix map is the
-//!   RDFa Core + HTML link-relation term set described above; host-language
+//!   `RDFa` Core + HTML link-relation term set described above; host-language
 //!   specific contexts (XHTML+RDFa's `xhv` terms for XHTML 1.x documents)
 //!   are not loaded, and §9's remote context documents are never fetched.
 //! * **Vocabulary expansion** never dereferences `rdfa:usesVocabulary`
@@ -201,9 +201,9 @@ const XHV_NS: &str = "http://www.w3.org/1999/xhtml/vocab#";
 /// `next`, `prev`, `search`, `stylesheet`, `icon`, …), exposed under the
 /// conventional `rel` prefix (RFC 4287 §4.2.4.1, Atom+RDFa).
 const REL_NS: &str = "http://www.iana.org/assignments/relation/";
-/// RDFa vocabulary (`rdfa:usesVocabulary`, `rdfa:prefix`, …).
+/// `RDFa` vocabulary (`rdfa:usesVocabulary`, `rdfa:prefix`, …).
 const RDFA_NS: &str = "http://www.w3.org/ns/rdfa#";
-/// Dublin Core terms (RDFa Core initial context prefix).
+/// Dublin Core terms (`RDFa` Core initial context prefix).
 const DC_NS: &str = "http://purl.org/dc/terms/";
 const DC11_NS: &str = "http://purl.org/dc/elements/1.1/";
 
@@ -227,7 +227,7 @@ pub const DEFAULT_BASE: &str = "http://example.invalid/";
 /// ever recurses deeper than this.
 const MAX_DEPTH: usize = 1024;
 
-/// Default byte budget for a single RDFa document (CR-011 M4): input larger
+/// Default byte budget for a single `RDFa` document (CR-011 M4): input larger
 /// than this is rejected before html5ever ever sees it, bounding memory and
 /// tokenizer CPU on untrusted input.  Override per parser instance with
 /// [`RdfaParser::with_max_input_bytes`].
@@ -247,19 +247,19 @@ const MAX_ESTIMATED_DEPTH: usize = 4096;
 // Entry points
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Parse an RDFa document with no caller-supplied base (see [`DEFAULT_BASE`]).
+/// Parse an `RDFa` document with no caller-supplied base (see [`DEFAULT_BASE`]).
 pub fn parse(content: &str) -> Result<Ontology> {
     parse_with_base(content, None)
 }
 
-/// Parse an RDFa document, resolving relative IRIs against `base` (which must
+/// Parse an `RDFa` document, resolving relative IRIs against `base` (which must
 /// be an absolute IRI when given).  A document `<base href>` overrides the
 /// supplied value, as HTML requires.
 pub fn parse_with_base(content: &str, base: Option<&str>) -> Result<Ontology> {
     RdfaParser::new().parse_with_base(content, base)
 }
 
-/// RDFa 1.1 parser (html5ever DOM + RDFa Core 1.1 sequence + shared RDF→OWL
+/// `RDFa` 1.1 parser (html5ever DOM + `RDFa` Core 1.1 sequence + shared RDF→OWL
 /// mapping).
 #[derive(Debug, Clone)]
 pub struct RdfaParser {
@@ -284,7 +284,7 @@ impl RdfaParser {
         }
     }
 
-    /// Enable RDFa Vocabulary Expansion (§10) on the output graph before it
+    /// Enable `RDFa` Vocabulary Expansion (§10) on the output graph before it
     /// is mapped into the ontology.  Must be off by default (§10.2).  The
     /// expansion only reasons over triples already present in the document —
     /// no vocabulary IRI is dereferenced.
@@ -309,12 +309,12 @@ impl RdfaParser {
         self.vocabulary_expansion
     }
 
-    /// Parse an RDFa document without a caller-supplied base.
+    /// Parse an `RDFa` document without a caller-supplied base.
     pub fn parse(&self, content: &str) -> Result<Ontology> {
         self.parse_with_base(content, None)
     }
 
-    /// Parse an RDFa document with an optional caller-supplied base IRI.
+    /// Parse an `RDFa` document with an optional caller-supplied base IRI.
     pub fn parse_with_base(&self, content: &str, base: Option<&str>) -> Result<Ontology> {
         // ── CR-011 M4: input guards, evaluated before html5ever runs ────
         if content.len() > self.max_input_bytes {
@@ -388,7 +388,7 @@ impl RdfaParser {
     }
 }
 
-/// The initial prefix map of the embedded RDFa 1.1 initial context (§9).
+/// The initial prefix map of the embedded `RDFa` 1.1 initial context (§9).
 /// Not recorded in [`Ontology::prefixes`] — only document-declared
 /// `@prefix`/`xmlns` mappings are (they are the author's declarations).
 fn initial_prefixes() -> HashMap<String, String> {
@@ -408,12 +408,12 @@ fn initial_prefixes() -> HashMap<String, String> {
     prefixes
 }
 
-/// The initial **term map** of the embedded RDFa 1.1 initial context (§9),
+/// The initial **term map** of the embedded `RDFa` 1.1 initial context (§9),
 /// applied by §7.4.3 when no `@vocab` is in scope.  Sourced locally — §9
 /// recommends embedding well-known initial contexts in the implementation,
 /// and fetching one at parse time would be a network dependency.
 ///
-/// * `license` / `role` — the RDFa Core initial-context terms
+/// * `license` / `role` — the `RDFa` Core initial-context terms
 ///   (`https://www.w3.org/2011/rdfa-context/rdfa-1.1`);
 /// * everything else — IANA-registered link relation types under the `rel`
 ///   prefix, i.e. the values HTML puts in `@rel`.
@@ -532,7 +532,7 @@ struct Incomplete {
     inlist: Option<ListMap>,
 }
 
-/// RDFa evaluation context as defined in §7.2 (base, parent subject,
+/// `RDFa` evaluation context as defined in §7.2 (base, parent subject,
 /// parent object, vocabulary, prefix map, language, incomplete triples,
 /// list mapping).
 #[derive(Debug, Clone)]
@@ -556,7 +556,7 @@ struct ElementStep {
     list_owner: Option<(ListMap, RdfTerm)>,
 }
 
-/// The RDFa value attributes of one element (§5).  `Option::is_some` is the
+/// The `RDFa` value attributes of one element (§5).  `Option::is_some` is the
 /// *presence* test the processing sequence uses — an empty value is still a
 /// present attribute.
 #[derive(Debug, Clone, Copy, Default)]
@@ -857,7 +857,7 @@ impl Evaluator {
         }
     }
 
-    /// Apply the RDFa Core 1.1 sequence (§7.5) to one element and return the
+    /// Apply the `RDFa` Core 1.1 sequence (§7.5) to one element and return the
     /// evaluation context its children run in (§7.5 final step), plus the
     /// list mapping this element owns (if any) to be emitted after the
     /// children have been processed.
@@ -947,60 +947,13 @@ impl Evaluator {
         let mut typed_resource: Option<RdfTerm> = None;
         let mut skip = false;
 
-        if !rdfa.has_relrev() {
-            if rdfa.property.is_some() && rdfa.content.is_none() && rdfa.datatype.is_none() {
-                // ── §7.5 step 5a: @property without @content/@datatype ──
-                if let Some(raw) = rdfa.about {
-                    new_subject = Some(self.resolve_resource(raw, &base, &prefixes));
-                } else if is_root {
-                    new_subject = Some(RdfTerm::Iri(base.clone()));
-                } else {
-                    new_subject = ctx.parent_object.clone();
-                }
-                if has_typeof {
-                    if rdfa.about.is_some() || is_root {
-                        typed_resource = new_subject.clone();
-                    } else {
-                        typed_resource =
-                            Some(match self.object_from_attrs(rdfa, &base, &prefixes) {
-                                Some(term) => term,
-                                None => self.fresh_bnode(),
-                            });
-                        // `current object resource` tracks the typed resource
-                        // so descendants chain off it (§7.5 step 5a).
-                        current_object = typed_resource.clone();
-                    }
-                }
-            } else {
-                // ── §7.5 step 5b: everything else ───────────────────────
-                // Presence decides the rule (`@about` → `@resource` →
-                // `@href` → `@src`); an ignored/invalid value behaves like
-                // an empty one (§7.4) → document base.
-                if let Some(subject) = self.subject_from_attrs(rdfa, &base, &prefixes) {
-                    new_subject = Some(subject);
-                } else if is_root {
-                    new_subject = Some(RdfTerm::Iri(base.clone()));
-                } else if has_typeof {
-                    new_subject = Some(self.fresh_bnode());
-                } else if let Some(parent_object) = ctx.parent_object.clone() {
-                    new_subject = Some(parent_object);
-                    if rdfa.property.is_none() {
-                        // Plain wrapper element: descendants keep operating on
-                        // the incoming subject context (§7.5 skip flag).
-                        skip = true;
-                    }
-                }
-                if has_typeof {
-                    typed_resource = new_subject.clone();
-                }
-            }
-        } else {
+        if rdfa.has_relrev() {
             // ── §7.5 step 6: element carries @rel / @rev ────────────────
             if let Some(raw) = rdfa.about {
                 new_subject = Some(self.resolve_resource(raw, &base, &prefixes));
             }
             if has_typeof && rdfa.about.is_some() {
-                typed_resource = new_subject.clone();
+                typed_resource.clone_from(&new_subject);
             }
             if new_subject.is_none() {
                 if is_root {
@@ -1015,7 +968,51 @@ impl Evaluator {
                 None => None,
             };
             if has_typeof && rdfa.about.is_none() {
-                typed_resource = current_object.clone();
+                typed_resource.clone_from(&current_object);
+            }
+        } else if rdfa.property.is_some() && rdfa.content.is_none() && rdfa.datatype.is_none() {
+            // ── §7.5 step 5a: @property without @content/@datatype ──
+            if let Some(raw) = rdfa.about {
+                new_subject = Some(self.resolve_resource(raw, &base, &prefixes));
+            } else if is_root {
+                new_subject = Some(RdfTerm::Iri(base.clone()));
+            } else {
+                new_subject.clone_from(&ctx.parent_object);
+            }
+            if has_typeof {
+                if rdfa.about.is_some() || is_root {
+                    typed_resource.clone_from(&new_subject);
+                } else {
+                    typed_resource = Some(match self.object_from_attrs(rdfa, &base, &prefixes) {
+                        Some(term) => term,
+                        None => self.fresh_bnode(),
+                    });
+                    // `current object resource` tracks the typed resource
+                    // so descendants chain off it (§7.5 step 5a).
+                    current_object.clone_from(&typed_resource);
+                }
+            }
+        } else {
+            // ── §7.5 step 5b: everything else ───────────────────────
+            // Presence decides the rule (`@about` → `@resource` →
+            // `@href` → `@src`); an ignored/invalid value behaves like
+            // an empty one (§7.4) → document base.
+            if let Some(subject) = self.subject_from_attrs(rdfa, &base, &prefixes) {
+                new_subject = Some(subject);
+            } else if is_root {
+                new_subject = Some(RdfTerm::Iri(base.clone()));
+            } else if has_typeof {
+                new_subject = Some(self.fresh_bnode());
+            } else if let Some(parent_object) = ctx.parent_object.clone() {
+                new_subject = Some(parent_object);
+                if rdfa.property.is_none() {
+                    // Plain wrapper element: descendants keep operating on
+                    // the incoming subject context (§7.5 skip flag).
+                    skip = true;
+                }
+            }
+            if has_typeof {
+                typed_resource.clone_from(&new_subject);
             }
         }
 
@@ -1036,7 +1033,7 @@ impl Evaluator {
                     match Url::parse(&type_iri) {
                         Ok(url) => self.push(typed.clone(), RDF_TYPE, RdfTerm::Iri(url)),
                         Err(e) => {
-                            log::warn!("RDFa: ignoring invalid @typeof value '{type_iri}': {e}")
+                            log::warn!("RDFa: ignoring invalid @typeof value '{type_iri}': {e}");
                         }
                     }
                 }
@@ -1348,7 +1345,7 @@ impl Evaluator {
         }
     }
 
-    /// `@about` / `@resource` value (SafeCURIEorCURIEorIRI), §7.4:
+    /// `@about` / `@resource` value (`SafeCURIEorCURIEorIRI`), §7.4:
     ///
     /// * `[prefix:local]` / `[_:label]` → the bracketed CURIE is evaluated
     ///   and expanded (an IRI, or the named blank node);
@@ -1397,12 +1394,11 @@ impl Evaluator {
         if let Some(url) = expand_curie(raw, base, prefixes) {
             return RdfTerm::Iri(url);
         }
-        match resolve_iri(raw, base) {
-            Some(url) => RdfTerm::Iri(url),
-            None => {
-                log::warn!("RDFa: ignoring unresolvable IRI reference '{raw}'");
-                RdfTerm::Iri(base.clone())
-            }
+        if let Some(url) = resolve_iri(raw, base) {
+            RdfTerm::Iri(url)
+        } else {
+            log::warn!("RDFa: ignoring unresolvable IRI reference '{raw}'");
+            RdfTerm::Iri(base.clone())
         }
     }
 }
@@ -1423,7 +1419,7 @@ fn expand_curie(raw: &str, base: &Url, prefixes: &HashMap<String, String>) -> Op
 // Term / CURIE / IRI expansion
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Expand a TERMorCURIEorAbsIRI attribute value (`@property`, `@rel`,
+/// Expand a `TERMorCURIEorAbsIRI` attribute value (`@property`, `@rel`,
 /// `@rev`, `@typeof`, `@datatype`).
 ///
 /// Order (§7.4.4 + task rule: local `@prefix`/`xmlns` > `@vocab`):
@@ -1462,7 +1458,7 @@ fn expand_term(
     None
 }
 
-/// RDFa term syntax (§7.4.3): `NCNameStartChar termChar*` with `termChar =
+/// `RDFa` term syntax (§7.4.3): `NCNameStartChar termChar*` with `termChar =
 /// (NameChar - ':') | '/'`.  Approximated with the ASCII subset.
 fn is_rdfa_term(token: &str) -> bool {
     let mut chars = token.chars();
@@ -1550,9 +1546,9 @@ fn parse_prefix_declaration(
 // RDFa Vocabulary Expansion (§10) — opt-in, local
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Apply RDFa Vocabulary Expansion (§10) to the output graph in place.
+/// Apply `RDFa` Vocabulary Expansion (§10) to the output graph in place.
 ///
-/// This is the §10.1.1 *RDFa Vocabulary Entailment* — the six OWL 2 RL
+/// This is the §10.1.1 *`RDFa` Vocabulary Entailment* — the six OWL 2 RL
 /// rules `prp-spo1`, `prp-eqp1`, `prp-eqp2`, `cax-sco`, `cax-eqc1`,
 /// `cax-eqc2` — evaluated to a fixpoint over the triples the document
 /// produced.  Two deliberate restrictions keep it network-free and
@@ -1780,74 +1776,76 @@ fn estimate_source_depth(content: &str) -> usize {
     let bytes = content.as_bytes();
     let mut depth: usize = 0;
     let mut max_depth: usize = 0;
-    let mut i: usize = 0;
-    while i < bytes.len() {
-        if bytes[i] != b'<' {
-            i += 1;
+    let mut cursor: usize = 0;
+    while cursor < bytes.len() {
+        if bytes[cursor] != b'<' {
+            cursor += 1;
             continue;
         }
         // `<!-- comment -->` — skip wholesale.
-        if content[i..].starts_with("<!--") {
-            i = match content[i + 4..].find("-->") {
-                Some(end) => i + 4 + end + 3,
+        if content[cursor..].starts_with("<!--") {
+            cursor = match content[cursor + 4..].find("-->") {
+                Some(end) => cursor + 4 + end + 3,
                 None => bytes.len(),
             };
             continue;
         }
         // `<!doctype …>`, `<?xml …?>`, CDATA and other `<!…>`/`<?…>` forms.
-        if i + 1 < bytes.len() && (bytes[i + 1] == b'!' || bytes[i + 1] == b'?') {
-            i = match content[i..].find('>') {
-                Some(end) => i + end + 1,
+        if cursor + 1 < bytes.len() && (bytes[cursor + 1] == b'!' || bytes[cursor + 1] == b'?') {
+            cursor = match content[cursor..].find('>') {
+                Some(end) => cursor + end + 1,
                 None => bytes.len(),
             };
             continue;
         }
         // Closing tag.
-        if i + 1 < bytes.len() && bytes[i + 1] == b'/' {
+        if cursor + 1 < bytes.len() && bytes[cursor + 1] == b'/' {
             depth = depth.saturating_sub(1);
-            i = match content[i..].find('>') {
-                Some(end) => i + end + 1,
+            cursor = match content[cursor..].find('>') {
+                Some(end) => cursor + end + 1,
                 None => bytes.len(),
             };
             continue;
         }
         // Start tag must begin with an ASCII alpha (anything else — e.g.
-        // `a < b` in text — is not a tag).
-        if i + 1 >= bytes.len() || !bytes[i + 1].is_ascii_alphabetic() {
-            i += 1;
+        // `a < byte` in text — is not a tag).
+        if cursor + 1 >= bytes.len() || !bytes[cursor + 1].is_ascii_alphabetic() {
+            cursor += 1;
             continue;
         }
-        let name_start = i + 1;
-        let mut j = name_start;
-        while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'-') {
-            j += 1;
+        let name_start = cursor + 1;
+        let mut name_end = name_start;
+        while name_end < bytes.len()
+            && (bytes[name_end].is_ascii_alphanumeric() || bytes[name_end] == b'-')
+        {
+            name_end += 1;
         }
-        let name = content[name_start..j].to_ascii_lowercase();
+        let name = content[name_start..name_end].to_ascii_lowercase();
         // Scan to the tag's `>`, honouring quoted attribute values that may
         // contain `>`.
-        let mut k = j;
+        let mut scan = name_end;
         let mut quote: Option<u8> = None;
         let mut self_closing = false;
         let mut terminated = false;
-        while k < bytes.len() {
-            let b = bytes[k];
+        while scan < bytes.len() {
+            let byte = bytes[scan];
             match quote {
-                Some(q) => {
-                    if b == q {
+                Some(quote_char) => {
+                    if byte == quote_char {
                         quote = None;
                     }
                 }
                 None => {
-                    if b == b'"' || b == b'\'' {
-                        quote = Some(b);
-                    } else if b == b'>' {
-                        self_closing = k > name_start && bytes[k - 1] == b'/';
+                    if byte == b'"' || byte == b'\'' {
+                        quote = Some(byte);
+                    } else if byte == b'>' {
+                        self_closing = scan > name_start && bytes[scan - 1] == b'/';
                         terminated = true;
                         break;
                     }
                 }
             }
-            k += 1;
+            scan += 1;
         }
         if !terminated {
             break; // unterminated tag — nothing left to count
@@ -1859,8 +1857,11 @@ fn estimate_source_depth(content: &str) -> usize {
             // matching close tag so tag-like strings inside JS/CSS don't
             // inflate the estimate.
             if HTML_RAW_TEXT_ELEMENTS.contains(&name.as_str()) {
-                match find_ascii_ci(&content.as_bytes()[k + 1..], format!("</{name}").as_bytes()) {
-                    Some(p) => i = k + 1 + p,
+                match find_ascii_ci(
+                    &content.as_bytes()[scan + 1..],
+                    format!("</{name}").as_bytes(),
+                ) {
+                    Some(p) => cursor = scan + 1 + p,
                     // Unterminated raw-text element: the rest of the
                     // document is its text content — nothing left to scan.
                     None => break,
@@ -1868,7 +1869,7 @@ fn estimate_source_depth(content: &str) -> usize {
                 continue;
             }
         }
-        i = k + 1;
+        cursor = scan + 1;
     }
     max_depth
 }
@@ -2458,8 +2459,8 @@ fn ntriples_syntax(triple: &Triple) -> String {
 
 fn ntriples_term(term: &RdfTerm) -> String {
     match term {
-        RdfTerm::Iri(url) => format!("<{}>", url),
-        RdfTerm::BlankNode(id) => format!("_:{}", id),
+        RdfTerm::Iri(url) => format!("<{url}>"),
+        RdfTerm::BlankNode(id) => format!("_:{id}"),
         RdfTerm::Literal {
             value,
             datatype,
@@ -2470,7 +2471,7 @@ fn ntriples_term(term: &RdfTerm) -> String {
             if let Some(language) = language {
                 out.push_str(&format!("@{language}"));
             } else if let Some(datatype) = datatype {
-                out.push_str(&format!("^^<{}>", datatype));
+                out.push_str(&format!("^^<{datatype}>"));
             }
             out
         }
@@ -2497,7 +2498,7 @@ fn escape_ntriples(value: &str) -> String {
 // Serializer — HTML5 + RDFa writer
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// All triples of one subject, ready to be rendered as a single RDFa block.
+/// All triples of one subject, ready to be rendered as a single `RDFa` block.
 #[derive(Debug)]
 struct SubjectBlock {
     subject: RdfTerm,
@@ -2509,10 +2510,10 @@ struct SubjectBlock {
     lists: Vec<(String, RdfTerm)>,
 }
 
-/// RDFa 1.1 (HTML5) writer.
+/// `RDFa` 1.1 (HTML5) writer.
 ///
 /// The ontology is converted with the shared canonical emission
-/// ([`ontology_to_triples`]) and every triple is rendered as RDFa markup:
+/// ([`ontology_to_triples`]) and every triple is rendered as `RDFa` markup:
 /// `@about`/`@typeof` on the subject block, `@rel`+`@href` for resource
 /// objects, `@property` (+`@content`, `@datatype`, `@lang`) for literals,
 /// `@inlist` for RDF collections, plus an `@prefix` block and an empty
@@ -2520,7 +2521,7 @@ struct SubjectBlock {
 /// into the same triples, hence the same axioms (see
 /// `tests/rdfa_tests.rs::serializer_round_trip_reproduces_core_axioms`).
 ///
-/// Constructs without an RDFa spelling are written as HTML comments instead
+/// Constructs without an `RDFa` spelling are written as HTML comments instead
 /// of being dropped: `owl:imports` declarations, literals carrying an RDF
 /// 1.2 base direction, and blank-node labels that are not stable under the
 /// parser's label sanitiser.  SWRL rules and IRI-less ontology annotations
@@ -2538,7 +2539,7 @@ impl RdfaRenderer {
         Self
     }
 
-    /// Serialize `ontology` as an HTML5 document annotated with RDFa 1.1.
+    /// Serialize `ontology` as an HTML5 document annotated with `RDFa` 1.1.
     pub fn serialize(&self, ontology: &Ontology) -> Result<String> {
         let triples = ontology_to_triples(ontology)?;
         let mut notes: Vec<String> = Vec::new();
@@ -2628,19 +2629,18 @@ impl RdfaRenderer {
                 continue;
             }
             let key = format!("{:?}", triple.subject);
-            let position = match block_index.get(&key) {
-                Some(position) => *position,
-                None => {
-                    blocks.push(SubjectBlock {
-                        subject: triple.subject.clone(),
-                        types: Vec::new(),
-                        children: Vec::new(),
-                        lists: Vec::new(),
-                    });
-                    let position = blocks.len() - 1;
-                    block_index.insert(key, position);
-                    position
-                }
+            let position = if let Some(position) = block_index.get(&key) {
+                *position
+            } else {
+                blocks.push(SubjectBlock {
+                    subject: triple.subject.clone(),
+                    types: Vec::new(),
+                    children: Vec::new(),
+                    lists: Vec::new(),
+                });
+                let position = blocks.len() - 1;
+                block_index.insert(key, position);
+                position
             };
             let block = &mut blocks[position];
             if let Some(items) = collections.remove(&index) {
@@ -2824,7 +2824,7 @@ fn subject_attribute(term: &RdfTerm) -> String {
     }
 }
 
-/// RDF 1.2 `dirLangString` literals carry a base direction RDFa has no
+/// RDF 1.2 `dirLangString` literals carry a base direction `RDFa` has no
 /// attribute for — they are reported instead of being written lossily.
 fn is_directional_literal(term: &RdfTerm) -> bool {
     matches!(

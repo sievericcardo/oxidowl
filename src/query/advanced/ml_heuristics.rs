@@ -504,8 +504,7 @@ impl StrategySelectionModel {
         let strategy_confidence = self
             .strategy_performance
             .get(strategy)
-            .map(|hist| hist.average_confidence)
-            .unwrap_or(0.5);
+            .map_or(0.5, |hist| hist.average_confidence);
 
         // Combine confidences
         f64::midpoint(model_confidence, strategy_confidence)

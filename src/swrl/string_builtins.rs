@@ -30,7 +30,7 @@ impl SWRLBuiltIn for StringEqualIgnoreCaseBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#stringEqualIgnoreCase"
     }
 
@@ -59,7 +59,7 @@ impl SWRLBuiltIn for NormalizeSpaceBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#normalizeSpace"
     }
 
@@ -89,7 +89,7 @@ impl SWRLBuiltIn for ContainsIgnoreCaseBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#containsIgnoreCase"
     }
 
@@ -128,7 +128,7 @@ impl SWRLBuiltIn for SubstringBeforeBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#substringBefore"
     }
 
@@ -165,7 +165,7 @@ impl SWRLBuiltIn for SubstringAfterBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#substringAfter"
     }
 
@@ -213,7 +213,7 @@ impl SWRLBuiltIn for TranslateBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#translate"
     }
 

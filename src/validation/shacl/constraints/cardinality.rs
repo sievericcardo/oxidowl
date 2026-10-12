@@ -4,13 +4,14 @@ use crate::semantics::RdfTerm;
 use crate::validation::shacl::{
     model::{ShaclMessage, ShaclSeverity},
     report::ShaclValidationResult,
-    vocabulary::*,
+    vocabulary::{SH_MAX_COUNT_CONSTRAINT_COMPONENT, SH_MIN_COUNT_CONSTRAINT_COMPONENT},
 };
 
 /// Evaluate `sh:minCount <n>`.
 ///
 /// Produces a violation on the focus node (no specific value node) if the
 /// count of value nodes is less than `min_count`.
+#[must_use]
 pub fn evaluate_min_count(
     focus_node: &RdfTerm,
     values: &[RdfTerm],
@@ -40,6 +41,7 @@ pub fn evaluate_min_count(
 }
 
 /// Evaluate `sh:maxCount <n>`.
+#[must_use]
 pub fn evaluate_max_count(
     focus_node: &RdfTerm,
     values: &[RdfTerm],

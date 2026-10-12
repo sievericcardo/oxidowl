@@ -1395,7 +1395,7 @@ impl FunctionalParser {
     }
 
     /// Generic property characteristic axiom parser
-    /// Used for AsymmetricObjectProperty, IrreflexiveObjectProperty
+    /// Used for `AsymmetricObjectProperty`, `IrreflexiveObjectProperty`
     fn parse_property_char_axiom(
         &self,
         tokens: &[String],
@@ -1462,7 +1462,7 @@ impl FunctionalParser {
         Ok(position)
     }
 
-    /// Parse ObjectPropertyDomain or ObjectPropertyRange
+    /// Parse `ObjectPropertyDomain` or `ObjectPropertyRange`
     fn parse_obj_prop_domain_range(
         &self,
         tokens: &[String],
@@ -1550,7 +1550,7 @@ impl FunctionalParser {
             position = self.skip_annotations(tokens, position);
             let sub_iri = self.expand_iri(&tokens[position], prefixes)?;
             position += 1;
-            let sup_iri = self.expand_iri(&tokens[position], prefixes)?;
+            let super_property_iri = self.expand_iri(&tokens[position], prefixes)?;
             position += 1;
             let axiom = crate::ontology::SubDataPropertyOfAxiom {
                 id: generate_axiom_id(),
@@ -1561,7 +1561,7 @@ impl FunctionalParser {
                 ),
                 super_property: crate::ontology::DataPropertyExpression::DataProperty(
                     crate::ontology::DataProperty {
-                        iri: crate::ontology::IRI::new(&sup_iri),
+                        iri: crate::ontology::IRI::new(&super_property_iri),
                     },
                 ),
                 annotations: vec![],
@@ -1574,7 +1574,7 @@ impl FunctionalParser {
         Ok(position)
     }
 
-    /// Parse DataPropertyDomain or DataPropertyRange
+    /// Parse `DataPropertyDomain` or `DataPropertyRange`
     fn parse_data_prop_domain_range(
         &self,
         tokens: &[String],
@@ -1622,7 +1622,7 @@ impl FunctionalParser {
         Ok(position)
     }
 
-    /// Parse SameIndividual or DifferentIndividuals
+    /// Parse `SameIndividual` or `DifferentIndividuals`
     fn parse_same_or_diff_individuals(
         &self,
         tokens: &[String],
@@ -3836,8 +3836,8 @@ fn serialize_object_property_expression(ope: &crate::ontology::ObjectPropertyExp
 }
 
 /// Serialize an OPE in contexts where it can be an inverse or chain
-/// (e.g., SubObjectPropertyOf, ObjectPropertyDomain), wrapping named
-/// properties with ObjectProperty().
+/// (e.g., `SubObjectPropertyOf`, `ObjectPropertyDomain`), wrapping named
+/// properties with `ObjectProperty()`.
 #[allow(dead_code)]
 fn serialize_object_property_expression_full(
     ope: &crate::ontology::ObjectPropertyExpression,

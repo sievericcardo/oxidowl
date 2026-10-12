@@ -5,7 +5,7 @@ use super::generator::{Explanation, ExplanationGenerator};
 use crate::Result;
 use crate::ontology::OntologyRef;
 use crate::ontology::axioms::{Axiom, AxiomId, AxiomTrait};
-use crate::reasoner_api::ReasonerFactory;
+use crate::reasoner_api::{OWLReasonerConfiguration, ReasonerFactory};
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
@@ -263,7 +263,10 @@ impl HSTExplanationGenerator {
                 continue;
             }
             let onto = Self::build_onto(&test_set);
-            if let Ok(reasoner) = self.factory.create_reasoner(&onto, &Default::default()) {
+            if let Ok(reasoner) = self
+                .factory
+                .create_reasoner(&onto, &OWLReasonerConfiguration::default())
+            {
                 if reasoner.is_entailed(entailment).unwrap_or(false) {
                     // ax is NOT essential
                 } else {
@@ -277,7 +280,9 @@ impl HSTExplanationGenerator {
         for ax in axioms.iter().filter(|a| essential.contains(&a.axiom_id())) {
             let test_set: Vec<Axiom> = minimal.iter().chain(std::iter::once(ax)).cloned().collect();
             let onto = Self::build_onto(&test_set);
-            if let Ok(reasoner) = self.factory.create_reasoner(&onto, &Default::default())
+            if let Ok(reasoner) = self
+                .factory
+                .create_reasoner(&onto, &OWLReasonerConfiguration::default())
                 && reasoner.is_entailed(entailment).unwrap_or(false)
             {
                 minimal.push(ax.clone());

@@ -237,17 +237,17 @@ pub struct ClusterStatistics {
 // ─── Actor message type ─────────────────────────────────────────────────────
 
 enum ClusterQueryMsg {
-    GetClusterState {
+    ClusterState {
         tx: oneshot::Sender<ClusterState>,
     },
-    GetNodeInfo {
+    NodeInfo {
         node_id: NodeId,
         tx: oneshot::Sender<Option<NodeInfo>>,
     },
-    GetActiveNodes {
+    ActiveNodes {
         tx: oneshot::Sender<Vec<NodeInfo>>,
     },
-    GetClusterHealth {
+    ClusterHealth {
         tx: oneshot::Sender<ClusterHealth>,
     },
 }
@@ -379,13 +379,13 @@ impl ClusterManager {
     /// Handle a state query from the query channel
     fn handle_cluster_query(state: &ClusterState, msg: ClusterQueryMsg) {
         match msg {
-            ClusterQueryMsg::GetClusterState { tx } => {
+            ClusterQueryMsg::ClusterState { tx } => {
                 let _ = tx.send(state.clone());
             }
-            ClusterQueryMsg::GetNodeInfo { node_id, tx } => {
+            ClusterQueryMsg::NodeInfo { node_id, tx } => {
                 let _ = tx.send(state.nodes.get(&node_id).cloned());
             }
-            ClusterQueryMsg::GetActiveNodes { tx } => {
+            ClusterQueryMsg::ActiveNodes { tx } => {
                 let active: Vec<NodeInfo> = state
                     .nodes
                     .values()
@@ -394,7 +394,7 @@ impl ClusterManager {
                     .collect();
                 let _ = tx.send(active);
             }
-            ClusterQueryMsg::GetClusterHealth { tx } => {
+            ClusterQueryMsg::ClusterHealth { tx } => {
                 let _ = tx.send(state.health.clone());
             }
         }
@@ -543,7 +543,7 @@ impl ClusterManager {
     pub async fn get_cluster_state(&self) -> Result<ClusterState> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.query_tx
-            .send(ClusterQueryMsg::GetClusterState { tx: resp_tx })
+            .send(ClusterQueryMsg::ClusterState { tx: resp_tx })
             .await
             .map_err(|_| Error::Internal {
                 message: "ClusterManager actor is down".to_string(),
@@ -557,7 +557,7 @@ impl ClusterManager {
     pub async fn get_node_info(&self, node_id: NodeId) -> Result<Option<NodeInfo>> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.query_tx
-            .send(ClusterQueryMsg::GetNodeInfo {
+            .send(ClusterQueryMsg::NodeInfo {
                 node_id,
                 tx: resp_tx,
             })
@@ -574,7 +574,7 @@ impl ClusterManager {
     pub async fn get_active_nodes(&self) -> Result<Vec<NodeInfo>> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.query_tx
-            .send(ClusterQueryMsg::GetActiveNodes { tx: resp_tx })
+            .send(ClusterQueryMsg::ActiveNodes { tx: resp_tx })
             .await
             .map_err(|_| Error::Internal {
                 message: "ClusterManager actor is down".to_string(),
@@ -588,7 +588,7 @@ impl ClusterManager {
     pub async fn get_cluster_health(&self) -> Result<ClusterHealth> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.query_tx
-            .send(ClusterQueryMsg::GetClusterHealth { tx: resp_tx })
+            .send(ClusterQueryMsg::ClusterHealth { tx: resp_tx })
             .await
             .map_err(|_| Error::Internal {
                 message: "ClusterManager actor is down".to_string(),
@@ -625,7 +625,7 @@ impl HealthMonitor {
         })
     }
 
-    /// Start health monitoring (no-op — managed by ClusterManager actor)
+    /// Start health monitoring (no-op — managed by `ClusterManager` actor)
     pub async fn start(
         &mut self,
         _event_sender: mpsc::UnboundedSender<ClusterEvent>,

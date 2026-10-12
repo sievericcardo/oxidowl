@@ -124,6 +124,18 @@ impl HdtRenderer {
 
     /// Write a real binary HDT file for `ontology` to `out`.
     pub fn serialize_to_writer(&self, out: &mut dyn Write, ontology: &Ontology) -> Result<()> {
+        // `hdt::Hdt::write` takes `&mut impl Write` (i.e. a `Sized` type),
+        // so adapt the `dyn Write` sink to a concrete writer wrapper.
+        struct DynWriter<'a>(&'a mut dyn Write);
+        impl Write for DynWriter<'_> {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0.write(buf)
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                self.0.flush()
+            }
+        }
+
         // ── 1. Ontology → canonical RDF triples (shared emission) ───────
         let triples = ontology_to_triples(ontology)?;
 
@@ -141,17 +153,6 @@ impl HdtRenderer {
         let base = ontology.get_iri().map_or(DEFAULT_BASE_IRI, IRI::as_str);
         let hdt = ::hdt::Hdt::from_triples(dict_triples, base)
             .map_err(|e| Error::ontology_parsing(format!("HDT: failed to build HDT: {e}")))?;
-        // `hdt::Hdt::write` takes `&mut impl Write` (i.e. a `Sized` type),
-        // so adapt the `dyn Write` sink to a concrete writer wrapper.
-        struct DynWriter<'a>(&'a mut dyn Write);
-        impl Write for DynWriter<'_> {
-            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-                self.0.write(buf)
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                self.0.flush()
-            }
-        }
         hdt.write(&mut DynWriter(out))
             .map_err(|e| Error::io(format!("HDT: failed to write HDT file: {e}")))
     }

@@ -365,6 +365,7 @@ impl ManchesterRenderer {
     // ── Class expression rendering ───────────────────────────────────────
 
     /// Render a class expression in Manchester syntax.
+    #[must_use]
     pub fn render_ce(&self, expr: &ClassExpression) -> String {
         match expr {
             ClassExpression::Class(cls) => cls.iri.to_string(),

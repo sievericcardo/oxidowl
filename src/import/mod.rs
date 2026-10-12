@@ -234,6 +234,11 @@ impl ImportDependencyGraph {
     }
 
     /// Get topological ordering of ontologies (for safe import order)
+    ///
+    /// # Panics
+    ///
+    /// Panics if the import graph is internally inconsistent (an ontology IRI
+    /// is missing from the in-degree map).
     pub fn topological_sort(&self) -> Result<Vec<IRI>, ImportError> {
         // Check for cycles first
         let cycles = self.detect_cycles();
@@ -618,8 +623,10 @@ impl ImportManager {
                 .headers()
                 .get("content-type")
                 .and_then(|v| v.to_str().ok())
-                .map(std::string::ToString::to_string)
-                .unwrap_or_else(|| "application/rdf+xml".to_string());
+                .map_or_else(
+                    || "application/rdf+xml".to_string(),
+                    std::string::ToString::to_string,
+                );
 
             // Download content
             let content = response.text().map_err(|e| OxidowlError::ImportError {

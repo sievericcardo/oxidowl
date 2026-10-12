@@ -20,6 +20,7 @@ pub enum ShaclShape {
 
 impl ShaclShape {
     /// The shape's RDF node (IRI or blank node).
+    #[must_use]
     pub fn id(&self) -> &ShapeId {
         match self {
             ShaclShape::NodeShape(s) => &s.id,
@@ -28,6 +29,7 @@ impl ShaclShape {
     }
 
     /// Whether the shape is deactivated (`sh:deactivated true`).
+    #[must_use]
     pub fn is_deactivated(&self) -> bool {
         match self {
             ShaclShape::NodeShape(s) => s.deactivated,
@@ -36,6 +38,7 @@ impl ShaclShape {
     }
 
     /// The explicit severity, or `Violation` by default.
+    #[must_use]
     pub fn severity(&self) -> &ShaclSeverity {
         match self {
             ShaclShape::NodeShape(s) => &s.severity,
@@ -44,6 +47,7 @@ impl ShaclShape {
     }
 
     /// Static messages attached to the shape.
+    #[must_use]
     pub fn messages(&self) -> &[ShaclMessage] {
         match self {
             ShaclShape::NodeShape(s) => &s.messages,
@@ -52,6 +56,7 @@ impl ShaclShape {
     }
 
     /// The targets declared on this shape.
+    #[must_use]
     pub fn targets(&self) -> &[ShaclTarget] {
         match self {
             ShaclShape::NodeShape(s) => &s.targets,
@@ -60,6 +65,7 @@ impl ShaclShape {
     }
 
     /// Constraints attached directly to this shape.
+    #[must_use]
     pub fn constraints(&self) -> &[ShaclConstraint] {
         match self {
             ShaclShape::NodeShape(s) => &s.constraints,
@@ -279,6 +285,7 @@ pub enum ShaclSeverity {
 
 impl ShaclSeverity {
     /// Return the IRI for this severity.
+    #[must_use]
     pub fn as_iri(&self) -> &str {
         match self {
             ShaclSeverity::Violation => crate::validation::shacl::vocabulary::SH_VIOLATION,
@@ -289,8 +296,9 @@ impl ShaclSeverity {
     }
 
     /// Parse from an IRI string.
+    #[must_use]
     pub fn from_iri(iri: &str) -> Self {
-        use crate::validation::shacl::vocabulary::*;
+        use crate::validation::shacl::vocabulary::{SH_INFO, SH_VIOLATION, SH_WARNING};
         match iri {
             SH_VIOLATION => ShaclSeverity::Violation,
             SH_WARNING => ShaclSeverity::Warning,
@@ -321,8 +329,12 @@ pub enum ShaclNodeKind {
 
 impl ShaclNodeKind {
     /// Parse from the IRI of a `sh:NodeKind` instance.
+    #[must_use]
     pub fn from_iri(iri: &str) -> Option<Self> {
-        use crate::validation::shacl::vocabulary::*;
+        use crate::validation::shacl::vocabulary::{
+            SH_BLANK_NODE, SH_BLANK_NODE_OR_IRI, SH_BLANK_NODE_OR_LITERAL, SH_IRI,
+            SH_IRI_OR_LITERAL, SH_LITERAL,
+        };
         match iri {
             SH_IRI => Some(ShaclNodeKind::IRI),
             SH_BLANK_NODE => Some(ShaclNodeKind::BlankNode),
@@ -335,6 +347,7 @@ impl ShaclNodeKind {
     }
 
     /// Returns `true` if the given `RdfTerm` satisfies this node kind.
+    #[must_use]
     pub fn matches(&self, term: &RdfTerm) -> bool {
         match self {
             ShaclNodeKind::IRI => matches!(term, RdfTerm::Iri(_)),

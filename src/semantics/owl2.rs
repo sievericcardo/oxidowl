@@ -8,7 +8,10 @@
 
 #![allow(dead_code)]
 
-use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple, vocabulary::*};
+use super::{
+    RdfGraph, RdfTerm, SemanticInterpretation, Triple,
+    vocabulary::{OWL_NOTHING, OWL_THING},
+};
 use crate::{
     Error, Result,
     ontology::{
@@ -1342,11 +1345,11 @@ impl Owl2ReasoningEngine {
 
         use std::collections::VecDeque;
 
+        const MAX_ITERATIONS: usize = 1000; // Prevent infinite loops
         let mut queue = VecDeque::new();
         let mut nodes = HashMap::new();
         let mut next_individual_id = 0;
         let mut iteration_count = 0;
-        const MAX_ITERATIONS: usize = 1000; // Prevent infinite loops
 
         // Create initial node with the class expression to check
         let initial_individual = format!("_:x{next_individual_id}");

@@ -1,4 +1,4 @@
-//! Entity provider traits decomposed from DataFactory.
+//! Entity provider traits decomposed from `DataFactory`.
 //!
 //! These traits allow code to depend on only the entity creation methods
 //! they need, following the interface segregation principle.
@@ -74,7 +74,6 @@ impl<T> EntityProvider for T where
 
 // ── Axiom Provider (creation-building methods) ───────────────────────────────
 
-#[allow(clippy::too_many_arguments)]
 pub trait AxiomCreationProvider {
     fn next_axiom_id(&self) -> AxiomId;
 

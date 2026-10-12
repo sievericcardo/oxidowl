@@ -7,7 +7,13 @@
 
 #![allow(dead_code)]
 
-use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple, vocabulary::*};
+use super::{
+    RdfGraph, RdfTerm, SemanticInterpretation, Triple,
+    vocabulary::{
+        RDF_PROPERTY, RDF_TYPE, RDFS_CLASS, RDFS_DATATYPE, RDFS_DOMAIN, RDFS_LITERAL, RDFS_RANGE,
+        RDFS_RESOURCE, RDFS_SUBCLASS_OF, RDFS_SUBPROPERTY_OF,
+    },
+};
 use crate::{Error, Result};
 use std::collections::{HashMap, HashSet};
 
@@ -336,8 +342,8 @@ impl RdfsEntailmentEngine {
 
     /// Perform RDFS entailment reasoning
     pub fn reason(&mut self) -> Result<()> {
-        let mut iteration = 0;
         const MAX_ITERATIONS: usize = 1000; // Prevent infinite loops
+        let mut iteration = 0;
 
         while !self.fixed_point && iteration < MAX_ITERATIONS {
             let initial_size = self.derived_graph.size();

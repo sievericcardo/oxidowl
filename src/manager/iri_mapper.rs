@@ -178,7 +178,7 @@ impl OntologyIRIMapper for AutoIRIMapper {
         inner.mapping.get(ontology_iri).cloned()
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "AutoIRIMapper"
     }
 }
@@ -195,7 +195,7 @@ impl OntologyIRIMapper for NonMappingOntologyIRIMapper {
         None
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "NonMappingIRIMapper"
     }
 }
@@ -231,7 +231,7 @@ impl OntologyIRIMapper for CompositeIRIMapper {
         None
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "CompositeIRIMapper"
     }
 }
@@ -248,9 +248,10 @@ pub struct ZipIRIMapper {
 }
 
 impl ZipIRIMapper {
-    /// Create a new ZipIRIMapper by scanning a ZIP file.
+    /// Create a new `ZipIRIMapper` by scanning a ZIP file.
     /// Each entry whose name ends with `.owl`, `.rdf`, `.ttl`, `.ofn`, `.owx`,
     /// or `.omn` is considered a potential ontology file.
+    #[must_use]
     pub fn new(zip_path: PathBuf) -> Self {
         let mappings = HashMap::new();
 

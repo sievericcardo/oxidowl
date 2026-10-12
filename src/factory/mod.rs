@@ -1,4 +1,4 @@
-//! OWL DataFactory — unified entity/axiom/expression builder.
+//! OWL `DataFactory` — unified entity/axiom/expression builder.
 //!
 //! Provides entity interning (deduplication by IRI), consistent ID
 //! generation for axioms, and builder methods for all OWL 2 constructs.
@@ -46,7 +46,7 @@ impl std::fmt::Debug for DataFactory {
 }
 
 impl DataFactory {
-    /// Create a new DataFactory with empty entity caches.
+    /// Create a new `DataFactory` with empty entity caches.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -732,7 +732,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a SubClassOf axiom.
+    /// Create a `SubClassOf` axiom.
     #[must_use]
     pub fn get_sub_class_of_axiom(
         &self,
@@ -747,7 +747,7 @@ impl DataFactory {
         }
     }
 
-    /// Create an EquivalentClasses axiom.
+    /// Create an `EquivalentClasses` axiom.
     #[must_use]
     pub fn get_equivalent_classes_axiom(
         &self,
@@ -760,7 +760,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a DisjointClasses axiom.
+    /// Create a `DisjointClasses` axiom.
     #[must_use]
     pub fn get_disjoint_classes_axiom(
         &self,
@@ -773,7 +773,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a DisjointUnion axiom.
+    /// Create a `DisjointUnion` axiom.
     #[must_use]
     pub fn get_disjoint_union_axiom(
         &self,
@@ -788,7 +788,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a SubObjectPropertyOf axiom.
+    /// Create a `SubObjectPropertyOf` axiom.
     #[must_use]
     pub fn get_sub_object_property_of_axiom(
         &self,
@@ -803,7 +803,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a SubDataPropertyOf axiom.
+    /// Create a `SubDataPropertyOf` axiom.
     #[must_use]
     pub fn get_sub_data_property_of_axiom(
         &self,
@@ -818,7 +818,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a ClassAssertion axiom.
+    /// Create a `ClassAssertion` axiom.
     #[must_use]
     pub fn get_class_assertion_axiom(
         &self,
@@ -833,7 +833,7 @@ impl DataFactory {
         }
     }
 
-    /// Create an ObjectPropertyAssertion axiom.
+    /// Create an `ObjectPropertyAssertion` axiom.
     #[must_use]
     pub fn get_object_property_assertion_axiom(
         &self,
@@ -850,7 +850,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a DataPropertyAssertion axiom.
+    /// Create a `DataPropertyAssertion` axiom.
     #[must_use]
     pub fn get_data_property_assertion_axiom(
         &self,
@@ -867,7 +867,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a SameIndividual axiom.
+    /// Create a `SameIndividual` axiom.
     #[must_use]
     pub fn get_same_individual_axiom(
         &self,
@@ -880,7 +880,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a DifferentIndividuals axiom.
+    /// Create a `DifferentIndividuals` axiom.
     #[must_use]
     pub fn get_different_individuals_axiom(
         &self,
@@ -893,7 +893,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a FunctionalObjectProperty axiom.
+    /// Create a `FunctionalObjectProperty` axiom.
     #[must_use]
     pub fn get_functional_object_property_axiom(
         &self,
@@ -906,7 +906,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a FunctionalDataProperty axiom.
+    /// Create a `FunctionalDataProperty` axiom.
     #[must_use]
     pub fn get_functional_data_property_axiom(
         &self,
@@ -919,7 +919,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a TransitiveObjectProperty axiom.
+    /// Create a `TransitiveObjectProperty` axiom.
     #[must_use]
     pub fn get_transitive_object_property_axiom(
         &self,
@@ -932,7 +932,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a SymmetricObjectProperty axiom.
+    /// Create a `SymmetricObjectProperty` axiom.
     #[must_use]
     pub fn get_symmetric_object_property_axiom(
         &self,
@@ -945,7 +945,7 @@ impl DataFactory {
         }
     }
 
-    /// Create an AsymmetricObjectProperty axiom.
+    /// Create an `AsymmetricObjectProperty` axiom.
     #[must_use]
     pub fn get_asymmetric_object_property_axiom(
         &self,
@@ -958,7 +958,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a ReflexiveObjectProperty axiom.
+    /// Create a `ReflexiveObjectProperty` axiom.
     #[must_use]
     pub fn get_reflexive_object_property_axiom(
         &self,
@@ -971,7 +971,7 @@ impl DataFactory {
         }
     }
 
-    /// Create an IrreflexiveObjectProperty axiom.
+    /// Create an `IrreflexiveObjectProperty` axiom.
     #[must_use]
     pub fn get_irreflexive_object_property_axiom(
         &self,
@@ -984,7 +984,7 @@ impl DataFactory {
         }
     }
 
-    /// Create an InverseFunctionalObjectProperty axiom.
+    /// Create an `InverseFunctionalObjectProperty` axiom.
     #[must_use]
     pub fn get_inverse_functional_object_property_axiom(
         &self,
@@ -997,7 +997,7 @@ impl DataFactory {
         }
     }
 
-    /// Create an InverseObjectProperties axiom.
+    /// Create an `InverseObjectProperties` axiom.
     #[must_use]
     pub fn get_inverse_object_properties_axiom(
         &self,
@@ -1012,7 +1012,7 @@ impl DataFactory {
         }
     }
 
-    /// Create an ObjectPropertyDomain axiom.
+    /// Create an `ObjectPropertyDomain` axiom.
     #[must_use]
     pub fn get_object_property_domain_axiom(
         &self,
@@ -1027,7 +1027,7 @@ impl DataFactory {
         }
     }
 
-    /// Create an ObjectPropertyRange axiom.
+    /// Create an `ObjectPropertyRange` axiom.
     #[must_use]
     pub fn get_object_property_range_axiom(
         &self,
@@ -1042,7 +1042,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a DataPropertyDomain axiom.
+    /// Create a `DataPropertyDomain` axiom.
     #[must_use]
     pub fn get_data_property_domain_axiom(
         &self,
@@ -1057,7 +1057,7 @@ impl DataFactory {
         }
     }
 
-    /// Create a DataPropertyRange axiom.
+    /// Create a `DataPropertyRange` axiom.
     #[must_use]
     pub fn get_data_property_range_axiom(
         &self,

@@ -3,6 +3,28 @@
 //! Command-line interface for running oxidowl performance tests
 //! Similar to `HermiT`'s test automation
 
+// Mirror the library keep-list: performance timings intentionally accept
+// precision loss and the CLI struct naturally has many boolean flags.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::missing_errors_doc,
+    clippy::unnecessary_wraps,
+    clippy::unused_self,
+    clippy::unused_async,
+    clippy::match_same_arms,
+    clippy::format_push_string,
+    clippy::needless_pass_by_value,
+    clippy::struct_excessive_bools,
+    clippy::self_only_used_in_recursion,
+    clippy::ref_option,
+    clippy::inline_always,
+    clippy::struct_field_names,
+    clippy::too_many_lines, // complex domain logic (tableau/parsers); splitting these is high-risk
+    clippy::large_enum_variant
+)]
+
 use clap::{Parser, Subcommand};
 use oxidowl::{
     config::ReasonerConfig,
@@ -122,7 +144,6 @@ impl PerformanceMetrics {
     }
 
     #[must_use]
-    #[allow(clippy::cast_precision_loss)] // sample counts never exceed f64 precision in practice
     pub fn mean(&self) -> f64 {
         if self.samples.is_empty() {
             0.0
@@ -132,7 +153,6 @@ impl PerformanceMetrics {
     }
 
     #[must_use]
-    #[allow(clippy::cast_precision_loss)] // sample counts never exceed f64 precision in practice
     pub fn std_dev(&self) -> f64 {
         if self.samples.len() < 2 {
             0.0
@@ -327,7 +347,6 @@ async fn run_conformance_tests() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[allow(clippy::cast_precision_loss)] // nanosecond ratios; precision loss is negligible for performance measurements
 async fn run_algorithm_tests(config: BenchmarkConfig) -> Result<(), Box<dyn std::error::Error>> {
     println!("Running algorithm comparison tests...");
 
@@ -486,7 +505,6 @@ fn create_large_test_ontology(size: usize) -> Ontology {
     ontology
 }
 
-#[allow(clippy::cast_precision_loss)] // nanosecond timings; precision loss is negligible
 async fn run_consistency_benchmark(
     ontology: &Ontology,
     config: &BenchmarkConfig,
@@ -526,7 +544,6 @@ async fn run_consistency_benchmark(
     })
 }
 
-#[allow(clippy::cast_precision_loss)] // nanosecond timings; precision loss is negligible
 async fn run_satisfiability_benchmark(
     ontology: &Ontology,
     config: &BenchmarkConfig,
@@ -573,7 +590,6 @@ async fn run_satisfiability_benchmark(
     })
 }
 
-#[allow(clippy::cast_precision_loss)] // nanosecond timings; precision loss is negligible
 async fn run_algorithm_benchmark(
     ontology: &Ontology,
     reasoner_config: &ReasonerConfig,

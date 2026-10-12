@@ -1,7 +1,10 @@
 //! RDF/JSON Parser and Renderer.
 
 use crate::Result;
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::{
+    Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom, DeclarationAxiom, Entity,
+    ObjectPropertyAssertionAxiom,
+};
 use crate::ontology::{
     Class, DataProperty, DataPropertyExpression, Individual, ObjectProperty,
     ObjectPropertyExpression,

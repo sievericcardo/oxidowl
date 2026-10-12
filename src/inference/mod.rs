@@ -2,7 +2,15 @@
 
 pub mod metrics;
 
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::{
+    AsymmetricObjectPropertyAxiom, Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom,
+    DisjointClassesAxiom, Entity, EquivalentClassesAxiom, EquivalentDataPropertiesAxiom,
+    EquivalentObjectPropertiesAxiom, FunctionalObjectPropertyAxiom,
+    InverseFunctionalObjectPropertyAxiom, InverseObjectPropertiesAxiom,
+    IrreflexiveObjectPropertyAxiom, ObjectPropertyAssertionAxiom, ReflexiveObjectPropertyAxiom,
+    SubClassOfAxiom, SubDataPropertyOfAxiom, SubObjectPropertyOfAxiom,
+    SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
+};
 use crate::ontology::{
     ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, Ontology,
 };

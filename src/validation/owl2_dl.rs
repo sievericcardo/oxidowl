@@ -2,7 +2,10 @@
 
 use crate::ontology::axioms::AxiomTrait;
 use crate::ontology::concepts::ClassExpression;
-use crate::ontology::{ObjectPropertyExpression, Ontology, axioms::*};
+use crate::ontology::{
+    ObjectPropertyExpression, Ontology,
+    axioms::{Axiom, Entity},
+};
 use crate::{Error, error::OxidowlError};
 use std::collections::{HashMap, HashSet};
 
@@ -346,7 +349,7 @@ pub struct OWL2DLValidator {
     /// A property expression is non-simple if it is transitive, occurs in the
     /// body of a complex role inclusion (property chain), is the inverse of a
     /// non-simple property expression, or is a super-property of a non-simple
-    /// property expression. Computed as a least fixpoint over the RBox.
+    /// property expression. Computed as a least fixpoint over the `RBox`.
     non_simple_properties: HashSet<ObjectPropertyExpression>,
     defined_datatypes: HashSet<String>,
     validation_cache: HashMap<String, ValidationReport>,
@@ -533,20 +536,20 @@ impl OWL2DLValidator {
                         });
                     }
                 }
-                Axiom::InverseFunctionalObjectProperty(inverse_functional_axiom) => {
-                    if !self.is_simple_property_expression(&inverse_functional_axiom.property) {
-                        errors.push(ValidationError {
-                            error_type:
-                                ValidationErrorType::NonSimplePropertyInInverseFunctionalProperty,
-                            message: format!(
-                                "Non-simple property {} used in InverseFunctionalObjectProperty axiom",
-                                inverse_functional_axiom.property
-                            ),
-                            severity: ValidationSeverity::Error,
-                            axiom_id: Some(inverse_functional_axiom.id.to_string()),
-                            location: None,
-                        });
-                    }
+                Axiom::InverseFunctionalObjectProperty(inverse_functional_axiom)
+                    if !self.is_simple_property_expression(&inverse_functional_axiom.property) =>
+                {
+                    errors.push(ValidationError {
+                        error_type:
+                            ValidationErrorType::NonSimplePropertyInInverseFunctionalProperty,
+                        message: format!(
+                            "Non-simple property {} used in InverseFunctionalObjectProperty axiom",
+                            inverse_functional_axiom.property
+                        ),
+                        severity: ValidationSeverity::Error,
+                        axiom_id: Some(inverse_functional_axiom.id.to_string()),
+                        location: None,
+                    });
                 }
                 _ => {}
             }

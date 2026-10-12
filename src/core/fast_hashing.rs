@@ -704,10 +704,10 @@ pub fn compute_fast_signature(concepts: &ConceptSet) -> u64 {
     sorted_concepts.sort_by(|a, b| {
         let a_ord = concept_variant_ord(a);
         let b_ord = concept_variant_ord(b);
-        if a_ord != b_ord {
-            a_ord.cmp(&b_ord)
-        } else {
+        if a_ord == b_ord {
             compare_concepts(a, b)
+        } else {
+            a_ord.cmp(&b_ord)
         }
     });
 
@@ -728,14 +728,14 @@ pub fn hash_concept(concept: &ClassExpression) -> u64 {
     hasher.finish()
 }
 
-/// Return a stable sort key for a `ClassExpression` (used by persistent_collections).
+/// Return a stable sort key for a `ClassExpression` (used by `persistent_collections`).
 #[inline]
 #[must_use]
 pub fn concept_sort_key(c: &ClassExpression) -> u8 {
     concept_variant_ord(c)
 }
 
-/// Structural comparison for same-variant `ClassExpression` values (used by persistent_collections).
+/// Structural comparison for same-variant `ClassExpression` values (used by `persistent_collections`).
 #[must_use]
 pub fn compare_concepts_for_sort(a: &ClassExpression, b: &ClassExpression) -> std::cmp::Ordering {
     compare_concepts(a, b)

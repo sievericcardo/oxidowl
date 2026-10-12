@@ -1,8 +1,8 @@
-//! Oxigraph-backed SPARQL store for ABox classification and reasoning
+//! Oxigraph-backed SPARQL store for `ABox` classification and reasoning
 //!
 //! This module provides an in-process Oxigraph store that mirrors the ontology
 //! as standard OWL/RDF triples, enabling full SPARQL 1.1 query and update
-//! support including the SPARQL-based ABox classification rules.
+//! support including the SPARQL-based `ABox` classification rules.
 
 #![cfg(feature = "sparql-store")]
 
@@ -103,7 +103,7 @@ impl OxigraphStore {
         Ok(())
     }
 
-    /// Load materialized ABox facts into the store
+    /// Load materialized `ABox` facts into the store
     pub fn load_materialized_facts(&self, kb: &MaterializedKnowledgeBase) -> Result<()> {
         let rdf_type = named(RDF_TYPE);
         // Class assertions
@@ -235,11 +235,13 @@ impl OxigraphStore {
     }
 
     /// Number of quads in the store
+    #[must_use]
     pub fn len(&self) -> usize {
         self.store.len().unwrap_or(0)
     }
 
     /// Return true if the store is empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -247,7 +249,7 @@ impl OxigraphStore {
     // ─── Private helpers ────────────────────────────────────────────────────
 
     fn load_axiom(&self, axiom: &Axiom) -> Result<()> {
-        use crate::ontology::axioms::*;
+        use crate::ontology::axioms::Axiom;
         match axiom {
             // ABox
             Axiom::ClassAssertion(ax) => self.load_class_assertion(ax),
@@ -636,7 +638,7 @@ impl OxigraphStore {
         Ok(())
     }
 
-    /// Convert a ClassExpression to an Oxigraph Term, inserting blank-node triples as needed
+    /// Convert a `ClassExpression` to an Oxigraph Term, inserting blank-node triples as needed
     fn class_expr_to_term(&self, expr: &ClassExpression) -> Result<Term> {
         match expr {
             ClassExpression::Class(c) => Ok(Term::NamedNode(named(c.iri.as_str()))),
@@ -774,7 +776,7 @@ impl OxigraphStore {
 
 // ─── Free-function helpers ───────────────────────────────────────────────────
 
-/// Convert a materialized RLClassExpression to a Term (for loading into store)
+/// Convert a materialized `RLClassExpression` to a Term (for loading into store)
 fn rl_class_expr_to_term(
     class: &crate::profiles::rl_reasoner::RLClassExpression,
     _store: &Store,
@@ -800,6 +802,7 @@ fn term_to_named_or_blank(t: &Term) -> Option<NamedOrBlankNode> {
 }
 
 /// Extract IRI string from Individual (named only)
+#[must_use]
 pub fn individual_iri(ind: &Individual) -> Option<String> {
     match ind {
         Individual::Named(named) => Some(named.iri.to_string()),
@@ -807,7 +810,8 @@ pub fn individual_iri(ind: &Individual) -> Option<String> {
     }
 }
 
-/// Extract IRI string from ObjectPropertyExpression (simple property only)
+/// Extract IRI string from `ObjectPropertyExpression` (simple property only)
+#[must_use]
 pub fn obj_prop_iri_from_expr(expr: &ObjectPropertyExpression) -> Option<String> {
     match expr {
         ObjectPropertyExpression::ObjectProperty(p) => Some(p.iri.to_string()),
@@ -819,14 +823,16 @@ pub fn obj_prop_iri_from_expr(expr: &ObjectPropertyExpression) -> Option<String>
     }
 }
 
-/// Extract IRI string from DataPropertyExpression
+/// Extract IRI string from `DataPropertyExpression`
+#[must_use]
 pub fn data_prop_iri(expr: &DataPropertyExpression) -> Option<String> {
     match expr {
         DataPropertyExpression::DataProperty(p) => Some(p.iri.to_string()),
     }
 }
 
-/// Like obj_prop_iri_from_expr but only for simple ObjectProperty (not inverse)
+/// Like `obj_prop_iri_from_expr` but only for simple `ObjectProperty` (not inverse)
+#[must_use]
 pub fn obj_prop_iri(expr: &ObjectPropertyExpression) -> Option<String> {
     if let ObjectPropertyExpression::ObjectProperty(p) = expr {
         Some(p.iri.to_string())

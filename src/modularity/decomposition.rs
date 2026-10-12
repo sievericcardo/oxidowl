@@ -108,6 +108,7 @@ impl AtomicDecomposition {
 
 /// Compute a simple atomic decomposition by axiom co-occurrence in signatures.
 /// Groups axioms that share entities into connected components (atoms).
+#[must_use]
 pub fn compute_atomic_decomposition(ontology: &Ontology) -> AtomicDecomposition {
     let axioms = ontology.axioms().to_vec();
     if axioms.is_empty() {

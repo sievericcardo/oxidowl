@@ -88,9 +88,8 @@ impl LockFreeCacheMetrics {
         } else {
             // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
             // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
-            #[allow(clippy::cast_precision_loss)]
-            let rate = hits as f64 / total as f64;
-            rate
+
+            hits as f64 / total as f64
         }
     }
 }

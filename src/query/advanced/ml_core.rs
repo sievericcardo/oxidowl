@@ -1824,15 +1824,14 @@ impl StrategySelectionModel {
         let alternatives = self.get_alternative_strategies(&strategy, features);
 
         // Get performance profile
-        let expected_performance = self
-            .strategy_registry
-            .get(&strategy)
-            .map(|meta| meta.performance.clone())
-            .unwrap_or_else(|| PerformanceProfile {
+        let expected_performance = self.strategy_registry.get(&strategy).map_or_else(
+            || PerformanceProfile {
                 expected_time: 100.0,
                 expected_memory: 100.0,
                 scalability: ScalabilityClass::Linear,
-            });
+            },
+            |meta| meta.performance.clone(),
+        );
 
         Ok(StrategyRecommendation {
             strategy,
@@ -1851,7 +1850,7 @@ impl StrategySelectionModel {
         }
 
         // Chain pattern: moderate join count, linear structure
-        #[allow(clippy::float_cmp)]
+        #[allow(clippy::float_cmp)] // join_count is an integral f64 feature; exact compare intended
         if features.join_count >= 2.0
             && features.join_count <= 5.0
             && features.variable_count == features.join_count + 1.0

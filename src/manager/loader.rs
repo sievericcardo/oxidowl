@@ -34,7 +34,7 @@ impl OntologyLoader {
         Self { manager, config }
     }
 
-    /// Create a new loader with an explicit LoaderConfig.
+    /// Create a new loader with an explicit `LoaderConfig`.
     #[must_use]
     pub fn new_with_config(manager: Arc<RwLock<OntologyManager>>, config: LoaderConfig) -> Self {
         Self { manager, config }

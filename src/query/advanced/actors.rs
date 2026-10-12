@@ -84,6 +84,7 @@ pub struct OptimizerHandle {
 
 impl OptimizerHandle {
     /// Spawn the actor task and return a handle.
+    #[must_use]
     pub fn spawn(
         optimizer: CostBasedOptimizer,
         strategy_selector: ExecutionStrategySelector,
@@ -236,6 +237,7 @@ pub struct MLStrategyHandle {
 
 impl MLStrategyHandle {
     /// Spawn the actor task and return a handle.
+    #[must_use]
     pub fn spawn(ml_engine: MLEngine) -> Self {
         let (tx, mut rx) = mpsc::channel::<MLMsg>(64);
         tokio::spawn(async move {
@@ -355,6 +357,7 @@ pub struct MonitorHandle {
 
 impl MonitorHandle {
     /// Spawn the actor task and return a handle.
+    #[must_use]
     pub fn spawn(monitor: ExecutionPerformanceMonitor) -> Self {
         let (tx, mut rx) = mpsc::unbounded_channel::<MonitorMsg>();
         tokio::spawn(async move {
@@ -435,6 +438,7 @@ pub struct TaskCoordinatorHandle {
 
 impl TaskCoordinatorHandle {
     /// Spawn the actor task and return a handle.
+    #[must_use]
     pub fn spawn(
         thread_pool: ThreadPool,
         resource_manager: ResourceManager,
@@ -442,9 +446,9 @@ impl TaskCoordinatorHandle {
     ) -> Self {
         let (tx, mut rx) = mpsc::channel::<TaskCoordinatorMsg>(256);
         tokio::spawn(async move {
-            let _thread_pool = thread_pool;
-            let _resource_manager = resource_manager;
-            let _config = config;
+            // Hold these for the actor's lifetime; they are intentionally not
+            // otherwise used and are dropped when the task ends.
+            let keepalive = (thread_pool, resource_manager, config);
             let mut work_queue: VecDeque<ParallelTask> = VecDeque::new();
             let mut active_tasks: HashMap<TaskId, TaskStatus> = HashMap::new();
             loop {
@@ -471,6 +475,7 @@ impl TaskCoordinatorHandle {
                     }
                 }
             }
+            drop(keepalive);
         });
         Self { tx }
     }

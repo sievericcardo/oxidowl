@@ -1,7 +1,7 @@
-//! DefinitionTracker — tracks class definitions in an ontology.
+//! `DefinitionTracker` — tracks class definitions in an ontology.
 
+use crate::ontology::axioms::Axiom;
 use crate::ontology::axioms::AxiomTrait;
-use crate::ontology::axioms::*;
 use crate::ontology::{ClassExpression, IRI, Ontology};
 use std::collections::HashMap;
 

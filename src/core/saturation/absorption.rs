@@ -1,6 +1,6 @@
 //! GCI absorption for the classification fast path (workstream A8).
 //!
-//! Absorbs TBox general concept inclusions (GCIs) into deterministic clauses
+//! Absorbs `TBox` general concept inclusions (GCIs) into deterministic clauses
 //! that the saturation engine and the dependency-graph propagation can
 //! discharge *without* invoking the full tableau:
 //!
@@ -127,7 +127,10 @@ pub fn is_non_deterministic(expr: &ClassExpression) -> bool {
 }
 
 /// Collect every named class mentioned anywhere inside `expr` (recursively).
-pub fn collect_named_classes(expr: &ClassExpression, out: &mut HashSet<ClassExpression>) {
+pub fn collect_named_classes<S: std::hash::BuildHasher>(
+    expr: &ClassExpression,
+    out: &mut HashSet<ClassExpression, S>,
+) {
     match expr {
         ClassExpression::Class(_) => {
             out.insert(expr.clone());

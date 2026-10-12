@@ -208,7 +208,7 @@ impl HornedOwlAdapter {
         Ok(Class::new(iri))
     }
 
-    /// Convert horned-owl ObjectProperty to oxidowl ObjectProperty
+    /// Convert horned-owl `ObjectProperty` to oxidowl `ObjectProperty`
     pub fn convert_object_property(
         &mut self,
         horned_prop: &horned_owl::model::ObjectProperty<String>,
@@ -217,7 +217,7 @@ impl HornedOwlAdapter {
         crate::ontology::ObjectProperty::new(iri)
     }
 
-    /// Convert horned-owl DataProperty to oxidowl DataProperty
+    /// Convert horned-owl `DataProperty` to oxidowl `DataProperty`
     pub fn convert_data_property(
         &mut self,
         horned_prop: &horned_owl::model::DataProperty<String>,
@@ -226,7 +226,7 @@ impl HornedOwlAdapter {
         Ok(crate::ontology::DataProperty { iri })
     }
 
-    /// Convert horned-owl NamedIndividual to oxidowl Individual
+    /// Convert horned-owl `NamedIndividual` to oxidowl Individual
     pub fn convert_named_individual(
         &mut self,
         horned_ind: &horned_owl::model::NamedIndividual<String>,
@@ -252,7 +252,7 @@ impl HornedOwlAdapter {
         }
     }
 
-    /// Convert horned-owl ClassExpression to oxidowl ClassExpression
+    /// Convert horned-owl `ClassExpression` to oxidowl `ClassExpression`
     pub fn convert_class_expression(
         &mut self,
         horned_ce: &horned_owl::model::ClassExpression<String>,
@@ -316,7 +316,7 @@ impl HornedOwlAdapter {
         }
     }
 
-    /// Convert horned-owl ObjectPropertyExpression to oxidowl ObjectPropertyExpression
+    /// Convert horned-owl `ObjectPropertyExpression` to oxidowl `ObjectPropertyExpression`
     pub fn convert_object_property_expression(
         &mut self,
         horned_ope: &horned_owl::model::ObjectPropertyExpression<String>,
@@ -644,10 +644,10 @@ impl HornedOwlAdapter {
     ///
     /// Extracts and converts SWRL rules from a horned-owl ontology to oxidowl format.
     ///
-    /// SWRL rules in OWL 2 are represented as DLSafeRule axioms. This method:
-    /// 1. Identifies DLSafeRule axioms in the horned-owl ontology
+    /// SWRL rules in OWL 2 are represented as `DLSafeRule` axioms. This method:
+    /// 1. Identifies `DLSafeRule` axioms in the horned-owl ontology
     /// 2. Converts each rule's head and body atoms
-    /// 3. Creates corresponding oxidowl SWRLRuleAxiom instances
+    /// 3. Creates corresponding oxidowl `SWRLRuleAxiom` instances
     /// 4. Validates the converted rules for DL-safety
     pub fn convert_ontology_with_swrl<A, AA, O>(
         &mut self,

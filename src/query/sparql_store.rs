@@ -140,11 +140,11 @@ pub mod vocabulary {
     }
 }
 
-/// Internal shorthand alias for vocabulary::xsd used within this module.
+/// Internal shorthand alias for `vocabulary::xsd` used within this module.
 mod xsd {
     pub use super::vocabulary::xsd::*;
 }
-/// Internal shorthand for vocabulary::rdf.
+/// Internal shorthand for `vocabulary::rdf`.
 mod vocab {
     pub mod rdf {
         pub use super::super::vocabulary::rdf::*;
@@ -355,7 +355,7 @@ pub enum SerializationFormat {
     NTriples,
     /// N-Quads (`.nq`) – preserves named-graph information
     NQuads,
-    /// TriG (`.trig`) – Turtle with named-graph blocks
+    /// `TriG` (`.trig`) – Turtle with named-graph blocks
     TriG,
     /// RDF/XML (`.rdf` / `.owl`)
     RdfXml,
@@ -1936,16 +1936,13 @@ pub fn oxterm_to_rdfterm(term: &Term) -> RdfTerm {
 fn ox_subject_to_rdfterm(subj: &NamedOrBlankNode) -> RdfTerm {
     match subj {
         NamedOrBlankNode::NamedNode(n) => Url::parse(n.as_str())
-            .map(RdfTerm::Iri)
-            .unwrap_or_else(|_| RdfTerm::BlankNode(n.as_str().to_string())),
+            .map_or_else(|_| RdfTerm::BlankNode(n.as_str().to_string()), RdfTerm::Iri),
         NamedOrBlankNode::BlankNode(b) => RdfTerm::BlankNode(b.as_str().to_string()),
     }
 }
 
 fn ox_named_node_to_rdfterm(n: &NamedNode) -> RdfTerm {
-    Url::parse(n.as_str())
-        .map(RdfTerm::Iri)
-        .unwrap_or_else(|_| RdfTerm::BlankNode(n.as_str().to_string()))
+    Url::parse(n.as_str()).map_or_else(|_| RdfTerm::BlankNode(n.as_str().to_string()), RdfTerm::Iri)
 }
 
 /// Convert an Oxigraph `Triple` (from a CONSTRUCT result) to an oxidowl `Triple`.
@@ -2396,7 +2393,7 @@ mod tests {
         let i = SparqlStore::integer_literal(42);
         assert!(matches!(&i, RdfTerm::Literal { value, .. } if value == "42"));
 
-        let d = SparqlStore::double_literal(3.14);
+        let d = SparqlStore::double_literal(3.25);
         // Check it has the xsd:double datatype IRI
         if let RdfTerm::Literal {
             datatype: Some(dt), ..

@@ -54,9 +54,6 @@ impl OBOParser {
     fn parse_stanzas(&self, content: &str) -> Vec<OBOStanza> {
         let mut stanzas = Vec::new();
         let mut current: Option<OBOStanza> = None;
-        let _tag_buf = String::new();
-        let _value_buf = String::new();
-        let _in_value = false;
 
         for line in content.lines() {
             let trimmed = line.trim();

@@ -17,6 +17,7 @@ use crate::{
     Result,
     core::tableau::NodeId,
     ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression, OntologyRef},
+    reasoner_api::OWLReasonerConfiguration,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -481,7 +482,7 @@ impl JustificationComputer {
     }
 
     /// Compute justification for a subsumption.
-    /// Tries reasoner-backed computation via BlackBoxExplanation first,
+    /// Tries reasoner-backed computation via `BlackBoxExplanation` first,
     /// then falls back to structural deletion-based minimization.
     pub fn compute_subsumption_justification(
         &self,
@@ -520,7 +521,7 @@ impl JustificationComputer {
         Ok(minimal_set)
     }
 
-    /// Compute justification using BlackBoxExplanation (reasoner-backed).
+    /// Compute justification using `BlackBoxExplanation` (reasoner-backed).
     /// Returns `None` if no reasoner factory is set or the result is empty.
     fn compute_justification_with_reasoner(
         &self,
@@ -566,7 +567,9 @@ impl JustificationComputer {
             o.add_axiom(ax.clone());
         }
         let onto = OntologyRef::new(std::sync::RwLock::new(o));
-        let reasoner = factory.create_reasoner(&onto, &Default::default()).ok()?;
+        let reasoner = factory
+            .create_reasoner(&onto, &OWLReasonerConfiguration::default())
+            .ok()?;
         reasoner.is_entailed(entailment).ok()
     }
 
@@ -722,7 +725,9 @@ impl JustificationComputer {
                 o.add_axiom(ax.clone());
             }
             let onto = OntologyRef::new(std::sync::RwLock::new(o));
-            if let Ok(reasoner) = factory.create_reasoner(&onto, &Default::default()) {
+            if let Ok(reasoner) =
+                factory.create_reasoner(&onto, &OWLReasonerConfiguration::default())
+            {
                 if let Ok(true) = reasoner.is_consistent() {
                     return Ok(vec![]);
                 }
@@ -736,7 +741,9 @@ impl JustificationComputer {
                         test_o.add_axiom(ax.clone());
                     }
                     let test_onto = OntologyRef::new(std::sync::RwLock::new(test_o));
-                    if let Ok(r) = factory.create_reasoner(&test_onto, &Default::default()) {
+                    if let Ok(r) =
+                        factory.create_reasoner(&test_onto, &OWLReasonerConfiguration::default())
+                    {
                         if let Ok(false) = r.is_consistent() {
                             // still inconsistent
                         } else {

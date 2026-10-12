@@ -20,17 +20,17 @@ impl SWRLBuiltIn for BooleanNotBuiltIn {
 
         match (&args[0], &args[1]) {
             (SWRLValue::Boolean(result), SWRLValue::Boolean(input)) => {
-                if *result != *input {
-                    Ok(SWRLValue::Boolean(true))
-                } else {
+                if *result == *input {
                     Ok(SWRLValue::Boolean(false))
+                } else {
+                    Ok(SWRLValue::Boolean(true))
                 }
             }
             _ => Err(Error::reasoning("BooleanNot requires boolean arguments")),
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#booleanNot"
     }
 

@@ -6,7 +6,7 @@
 //! e.g. told `A ⊑ B` or a role-successor `A ⊑ ∃R.B`), condense it into SCCs,
 //! and process the SCC condensation in dependency order (superclasses first),
 //! iterating each SCC to a local fixpoint and caching the result for every
-//! dependent class.  This mirrors HermiT's core optimization of never
+//! dependent class.  This mirrors `HermiT`'s core optimization of never
 //! recomputing a class's subsumers that the ontology structure already fixes.
 //!
 //! All propagation rules are sound OWL-EL rules; the output is a *lower bound*
@@ -205,10 +205,11 @@ impl DependencyClassifier {
         // `∃R.X` for every named `X ⊒ C`.
         for (r, c) in &deriv.existentials {
             for gci in &absorption.role_range_gcis {
-                if &gci.property == r && class_subsumed_by(c, &gci.filler, derivations) {
-                    if deriv.subsumers.insert(gci.head.clone()) {
-                        newly_added.push(gci.head.clone());
-                    }
+                if &gci.property == r
+                    && class_subsumed_by(c, &gci.filler, derivations)
+                    && deriv.subsumers.insert(gci.head.clone())
+                {
+                    newly_added.push(gci.head.clone());
                 }
             }
         }
@@ -219,10 +220,9 @@ impl DependencyClassifier {
                 .conjuncts
                 .iter()
                 .all(|conj| deriv.subsumers.contains(conj))
+                && deriv.subsumers.insert(gci.head.clone())
             {
-                if deriv.subsumers.insert(gci.head.clone()) {
-                    newly_added.push(gci.head.clone());
-                }
+                newly_added.push(gci.head.clone());
             }
         }
 
@@ -230,7 +230,7 @@ impl DependencyClassifier {
         // named subsumer (members reached via R2 are already closed).
         let mut work: Vec<ClassExpression> = newly_added
             .into_iter()
-            .filter(|c| c.is_named_class())
+            .filter(crate::ontology::concepts::ClassExpression::is_named_class)
             .collect();
         let mut seen: HashSet<ClassExpression> = work.iter().cloned().collect();
         let mut i = 0usize;

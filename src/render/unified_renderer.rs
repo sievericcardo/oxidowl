@@ -1,4 +1,4 @@
-use crate::ontology::*;
+use crate::ontology::{Axiom, ClassExpression, DataRange, Entity, Individual, Literal};
 
 /// Unified trait for rendering individual OWL objects to strings.
 /// Implemented by all syntax renderers.
@@ -11,7 +11,7 @@ pub trait OWLObjectRenderer {
     fn render_data_range(&self, data_range: &DataRange) -> String;
 }
 
-/// Simple implementation of OWLObjectRenderer that uses debug formatting.
+/// Simple implementation of `OWLObjectRenderer` that uses debug formatting.
 pub struct DebugOWLObjectRenderer;
 
 impl OWLObjectRenderer for DebugOWLObjectRenderer {

@@ -97,6 +97,7 @@ impl ParallelTableauExpander {
     ///
     /// `max_cycle_depth` should be set to at least the number of named classes in
     /// the ontology; the value `512` is a safe default for mid-sized ontologies.
+    #[must_use]
     pub fn new(config: PerformanceConfig, max_cycle_depth: u32) -> Self {
         Self {
             config,
@@ -114,7 +115,7 @@ impl ParallelTableauExpander {
     /// # Concurrency model
     /// - **Read-only** ontology data is shared via `Arc<Ontology>`.
     /// - Each Rayon thread constructs its own `TableauAlgorithmInstance`.
-    /// - `CycleDetector` is `Send + Sync` (DashMap + atomics only).
+    /// - `CycleDetector` is `Send + Sync` (`DashMap` + atomics only).
     pub fn expand_batch(
         &self,
         tasks: Vec<TableauExpansionTask>,
@@ -198,6 +199,7 @@ impl ParallelTableauExpander {
     ///
     /// Optionally accepts a `priority_hints` map (concept IRI → priority) to
     /// guide scheduling.  Concepts absent from the map receive priority `0`.
+    #[must_use]
     pub fn build_tasks(
         &self,
         concepts: &[ClassExpression],

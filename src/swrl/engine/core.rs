@@ -478,7 +478,7 @@ impl SWRLRuleEngine {
     /// **Current behaviour (placeholder):** only ground rules with an *empty
     /// body* (tautological antecedent) are evaluated; all other rules return
     /// no inferences.  A production implementation would unify each body atom
-    /// against the ABox to produce variable bindings, then instantiate the head
+    /// against the `ABox` to produce variable bindings, then instantiate the head
     /// atoms under those bindings.  Full unification-based matching is already
     /// handled by the sequential `ForwardChaining` and `BackwardChaining`
     /// engines; this function is the hook point for a future parallelised

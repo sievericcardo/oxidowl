@@ -111,8 +111,8 @@ impl SaturationResult {
 
     /// Check if one concept subsumes another based on saturation
     #[must_use]
-    pub fn subsumes(&self, subsumer: &ClassExpression, subsumed: &ClassExpression) -> bool {
-        if let Some(s) = self.subsumptions.get(subsumed) {
+    pub fn subsumes(&self, subsumer: &ClassExpression, other_concept: &ClassExpression) -> bool {
+        if let Some(s) = self.subsumptions.get(other_concept) {
             s.contains(subsumer)
         } else {
             false
@@ -194,10 +194,10 @@ impl SaturationEngine {
     /// speedup is several orders of magnitude on large biomedical ontologies
     /// (ORE-2015 GO/SNOMED benchmarks).
     ///
-    /// For the deterministic EL-like fragment (SubClassOf chains,
-    /// EquivalentClasses, domain/range), this produces the exact same result
+    /// For the deterministic EL-like fragment (`SubClassOf` chains,
+    /// `EquivalentClasses`, domain/range), this produces the exact same result
     /// as the old rule engine.  Concepts that contain non-deterministic
-    /// constructs (ObjectUnionOf, ObjectMaxCardinality, …) are still marked
+    /// constructs (`ObjectUnionOf`, `ObjectMaxCardinality`, …) are still marked
     /// `RequiresFullTableau` so the caller can run a proper tableau expansion.
     pub fn saturate_ontology(&self, ontology: &Ontology) -> Result<SaturationResult> {
         let start_time = Instant::now();
@@ -676,7 +676,7 @@ impl SaturationEngine {
     /// Get cache size
     #[must_use]
     pub fn cache_size(&self) -> usize {
-        self.cache.read().map(|c| c.len()).unwrap_or(0)
+        self.cache.read().map_or(0, |c| c.len())
     }
 }
 

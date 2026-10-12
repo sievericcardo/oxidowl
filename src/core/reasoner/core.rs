@@ -32,12 +32,12 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-/// Statistics returned by ABox materialization operations.
+/// Statistics returned by `ABox` materialization operations.
 #[derive(Debug, Default, Clone)]
 pub struct MaterializationStats {
     /// Number of forward-chaining rules fired
     pub rules_fired: u64,
-    /// Number of new facts added to the ABox
+    /// Number of new facts added to the `ABox`
     pub facts_added: usize,
     /// Number of fixpoint iterations
     pub iterations: u64,
@@ -134,7 +134,7 @@ pub struct Reasoner {
     /// Reused across repeated `classify()` calls to avoid re-initialization overhead.
     el_reasoner: Option<Box<crate::profiles::el_reasoner::ELReasoner>>,
 
-    /// Custom SPARQL INSERT WHERE rules for ABox materialization
+    /// Custom SPARQL INSERT WHERE rules for `ABox` materialization
     sparql_materialization_rules: Vec<String>,
 
     /// Flag indicating that the Oxigraph store should be rebuilt
@@ -427,7 +427,7 @@ impl Reasoner {
     ///
     /// Keys are individual Display names (the `Individual::to_string` form used
     /// by the tableau's nominal labels); values are the canonical node id after
-    /// SameIndividual / functional / inverse-functional / HasKey merging. Two
+    /// `SameIndividual` / functional / inverse-functional / `HasKey` merging. Two
     /// individuals are forced equal exactly when they share a node id. Returns
     /// `Ok(None)` when the ontology is inconsistent (vacuously everything is
     /// same-as, but the caller falls back to its syntactic equality structure).
@@ -1079,6 +1079,8 @@ impl Reasoner {
     /// target profile is configured, or whenever the EL fast path fails for
     /// any reason (never propagates an EL-only error).
     pub fn classify(&mut self) -> Result<ClassificationResult> {
+        use crate::profiles::ProfileValidator;
+
         if let Some(ontology) = self.ontology.clone() {
             let mut statistics = ReasoningStatistics::new();
 
@@ -1097,11 +1099,7 @@ impl Reasoner {
             let is_el = profile_allows_el && {
                 let ont = read_lock(&ontology, "classify: EL profile detection")?;
                 let validator = crate::profiles::el::ELValidator::new();
-                use crate::profiles::ProfileValidator;
-                validator
-                    .validate(&ont)
-                    .map(|r| r.conforms)
-                    .unwrap_or(false)
+                validator.validate(&ont).is_ok_and(|r| r.conforms)
             };
 
             if is_el {
@@ -1417,8 +1415,7 @@ impl Reasoner {
     pub fn get_ontology_size(&self) -> usize {
         if let Some(ref ontology) = self.ontology {
             read_lock(ontology, "core: reading ontology for size")
-                .map(|guard| guard.axioms().len())
-                .unwrap_or(0)
+                .map_or(0, |guard| guard.axioms().len())
         } else {
             0
         }
@@ -1446,7 +1443,10 @@ impl Reasoner {
         path: P,
         format: crate::ontology::OntologyFormat,
     ) -> Result<()> {
-        use crate::parsers::*;
+        use crate::parsers::{
+            Parser, extract_first_crosssyntax_section, functional, manchester, ntriples, owl_xml,
+            rdf_xml, turtle,
+        };
 
         let file_path = path.as_ref();
         let content = std::fs::read_to_string(file_path).map_err(|e| crate::Error::Io {
@@ -1918,9 +1918,10 @@ impl Reasoner {
                         .map(|ind| {
                             format!(
                                 "<NamedIndividual IRI=\"{}\"/>",
-                                ind.iri()
-                                    .map(std::string::ToString::to_string)
-                                    .unwrap_or_else(|| "unknown".to_string())
+                                ind.iri().map_or_else(
+                                    || "unknown".to_string(),
+                                    std::string::ToString::to_string
+                                )
                             )
                         })
                         .collect();
@@ -2900,7 +2901,7 @@ impl Reasoner {
     // ABox materialization and SPARQL classification
     // -------------------------------------------------------------------------
 
-    /// Materialize ABox facts using native OWL 2 RL forward-chaining rules.
+    /// Materialize `ABox` facts using native OWL 2 RL forward-chaining rules.
     ///
     /// Returns statistics about the materialization run.
     pub fn materialize_abox(&mut self) -> Result<MaterializationStats> {
@@ -2957,12 +2958,12 @@ impl Reasoner {
         })
     }
 
-    /// Add a custom SPARQL INSERT WHERE rule to run during ABox classification.
+    /// Add a custom SPARQL INSERT WHERE rule to run during `ABox` classification.
     pub fn add_sparql_materialization_rule(&mut self, sparql: &str) {
         self.sparql_materialization_rules.push(sparql.to_owned());
     }
 
-    /// Run SPARQL-based ABox classification using Oxigraph.
+    /// Run SPARQL-based `ABox` classification using Oxigraph.
     ///
     /// Loads the ontology + any materialized facts into an Oxigraph in-memory
     /// store, executes a fixpoint loop of INSERT WHERE rules, then syncs the
@@ -2971,6 +2972,9 @@ impl Reasoner {
     #[cfg(feature = "sparql-store")]
     pub fn run_sparql_abox_classification(&mut self) -> Result<MaterializationStats> {
         use crate::core::reasoner::oxigraph_store::OxigraphStore;
+        use crate::ontology::{
+            Axiom, Class, IRI, Individual, NamedIndividual, axioms::ClassAssertionAxiom,
+        };
 
         let ontology_ref = self
             .ontology
@@ -3139,9 +3143,6 @@ impl Reasoner {
                 {
                     continue;
                 }
-                use crate::ontology::{
-                    Axiom, Class, IRI, Individual, NamedIndividual, axioms::ClassAssertionAxiom,
-                };
                 let axiom = Axiom::ClassAssertion(ClassAssertionAxiom {
                     id: 0,
                     individual: Individual::Named(NamedIndividual {
@@ -3173,6 +3174,10 @@ impl Reasoner {
 
     /// Execute a SPARQL CONSTRUCT / INSERT WHERE via Oxigraph and return the
     /// number of triples that were added.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal Oxigraph store has not been initialized.
     #[cfg(feature = "sparql-store")]
     pub fn execute_construct_update(&mut self, sparql: &str) -> Result<usize> {
         use crate::core::reasoner::oxigraph_store::OxigraphStore;
@@ -3206,7 +3211,7 @@ impl Reasoner {
 ///
 /// The A8 path is *incomplete* for role-hierarchy / transitive-role driven
 /// existential consequences (`R ⊑ S` ⇒ `∃R.C` does not propagate to `∃S.C`),
-/// so ontologies using any role RBox axiom still use the EL reasoner.  It is
+/// so ontologies using any role `RBox` axiom still use the EL reasoner.  It is
 /// also conservative about EL constructs whose consequences the deterministic
 /// propagation does not model (nominals, `hasSelf`, cardinality restrictions):
 /// those are flagged for the tableau, but for EL ontologies the EL reasoner is

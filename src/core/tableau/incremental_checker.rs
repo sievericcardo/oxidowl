@@ -205,6 +205,10 @@ impl CheckResultCache {
     /// - 10,000 entries ≈ 880 KB
     /// - 50,000 entries ≈ 4.4 MB
     /// - 100,000 entries ≈ 8.8 MB
+    ///
+    /// # Panics
+    ///
+    /// Panics if `capacity` is zero.
     #[must_use]
     pub fn new(capacity: usize) -> Self {
         let cache = LruCache::new(NonZeroUsize::new(capacity).expect("capacity must be > 0"));

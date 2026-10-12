@@ -87,7 +87,7 @@ pub enum ConceptLabel {
     ///
     /// Carried by data-successor nodes to record the actual literal value minted by a
     /// `DataSomeValuesFrom`/`DataMinCardinality` expansion or asserted by `DataHasValue` /
-    /// an ABox `DataPropertyAssertion`. Value-space matching (`data_node_matches_range`)
+    /// an `ABox` `DataPropertyAssertion`. Value-space matching (`data_node_matches_range`)
     /// inspects this label to decide range membership; two nodes with value-equal labels
     /// denote the same data value and are deduplicated by the ≤-rule.
     DataValue(crate::ontology::Literal),

@@ -177,6 +177,10 @@ impl<T: Clone + Eq + Hash> Node<T> {
     }
 
     /// Get a representative element (first in iteration order).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the equivalence node has no entities.
     #[must_use]
     pub fn get_representative_element(&self) -> T
     where
@@ -427,6 +431,11 @@ pub struct IndividualEquality {
 
 impl IndividualEquality {
     /// Build the equality structure from an ontology.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an equivalence component is unexpectedly empty.
+    #[must_use]
     pub fn from_ontology(ontology: &Ontology) -> Self {
         let mut adjacency: HashMap<Individual, Vec<Individual>> = HashMap::new();
         let mut all: HashSet<Individual> = HashSet::new();
@@ -585,6 +594,7 @@ impl IndividualEquality {
     }
 
     /// Get the `Node` of all individuals equivalent to `individual`.
+    #[must_use]
     pub fn same_as(&self, individual: &Individual) -> Node<Individual> {
         if let Some(rep) = self.rep_of.get(individual)
             && let Some(members) = self.components.get(rep)
@@ -596,6 +606,7 @@ impl IndividualEquality {
 
     /// Get the `NodeSet` of individuals different from `individual`, grouped by
     /// same-as component.
+    #[must_use]
     pub fn different(&self, individual: &Individual) -> NodeSet<Individual> {
         let rep = self
             .rep_of
@@ -644,7 +655,7 @@ pub enum InferenceDepth {
 /// Controls whether reasoner buffers changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferingMode {
-    /// Buffer changes until flush() is called.
+    /// Buffer changes until `flush()` is called.
     Buffering,
     /// Apply changes immediately.
     NonBuffering,
@@ -1121,7 +1132,7 @@ pub struct TableauOWLReasoner {
     cached_hierarchy: Mutex<Option<ClassificationCache>>,
     /// Cached property hierarchy (lazily computed).
     cached_property_hierarchy: Mutex<Option<PropertyHierarchyCache>>,
-    /// Cached SameAs / DifferentAs components (lazily computed).
+    /// Cached `SameAs` / `DifferentAs` components (lazily computed).
     cached_individual_equality: Mutex<Option<IndividualEquality>>,
 }
 
@@ -1177,7 +1188,7 @@ impl TableauOWLReasoner {
         })
     }
 
-    /// Ensure the SameAs / DifferentAs components have been computed, populating
+    /// Ensure the `SameAs` / `DifferentAs` components have been computed, populating
     /// the cache.
     fn ensure_individual_equality(&self) -> Result<IndividualEquality> {
         let mut cache =
@@ -2386,11 +2397,9 @@ impl OWLReasoner for TableauOWLReasoner {
 
     fn is_precomputed(&self, inference_type: InferenceType) -> bool {
         match inference_type {
-            InferenceType::ClassHierarchy => self
-                .cached_hierarchy
-                .lock()
-                .map(|c| c.is_some())
-                .unwrap_or(false),
+            InferenceType::ClassHierarchy => {
+                self.cached_hierarchy.lock().is_ok_and(|c| c.is_some())
+            }
             _ => false,
         }
     }

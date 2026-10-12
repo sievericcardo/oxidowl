@@ -23,7 +23,7 @@ use std::{sync::Arc, time::Instant};
 pub struct TableauExecutor;
 
 impl TableauExecutor {
-    /// Convert an ObjectPropertyExpression to a role name string using Display (not Debug).
+    /// Convert an `ObjectPropertyExpression` to a role name string using Display (not Debug).
     /// Using Display avoids the extra `Atomic(...)` / `Inverse(...)` wrapping that Debug adds,
     /// and is consistent between SOME-rule generation and ALL/AtLeast/AtMost lookups.
     #[inline]
@@ -177,29 +177,25 @@ impl TableauExecutor {
             }
 
             // Get next rule application
-            let rule_app = match Arc::make_mut(&mut tableau.pending_queue).pop_front() {
-                Some(rule_app) => rule_app,
-                None => {
-                    // Queue exhausted: the tableau is complete (nothing left to expand).
-                    debug!("Tableau is complete and satisfiable");
-                    tableau.state = TableauState::Satisfiable;
-                    break;
-                }
+            let Some(rule_app) = Arc::make_mut(&mut tableau.pending_queue).pop_front() else {
+                // Queue exhausted: the tableau is complete (nothing left to expand).
+                debug!("Tableau is complete and satisfiable");
+                tableau.state = TableauState::Satisfiable;
+                break;
             };
 
             // Blocked nodes must not be re-expanded: skip any rule targeted at a blocked node.
             // This is what guarantees termination for cyclic TBoxes (e.g. C ⊑ ∃R.C chains).
             // Nominal and Root nodes are never marked blocked, so their rules are never skipped.
-            if let Ok(node_id) = rule_app.node.parse::<NodeId>() {
-                if let Some(node) = tableau.nodes.get(node_id)
-                    && node.is_blocked()
-                {
-                    trace!(
-                        "Skipping rule {:?} for blocked node {}",
-                        rule_app.rule, node_id
-                    );
-                    continue;
-                }
+            if let Ok(node_id) = rule_app.node.parse::<NodeId>()
+                && let Some(node) = tableau.nodes.get(node_id)
+                && node.is_blocked()
+            {
+                trace!(
+                    "Skipping rule {:?} for blocked node {}",
+                    rule_app.rule, node_id
+                );
+                continue;
             }
 
             // Apply the rule
@@ -673,50 +669,50 @@ impl TableauExecutor {
 
         // A single-nominal filler `≥1 R.{a}` is witnessed by the nominal node itself
         // (never a fresh node). Higher nominal cardinalities are unsatisfiable.
-        if let ClassExpression::ObjectOneOf(individuals) = filler {
-            if individuals.len() == 1 {
-                let target = tableau.get_or_create_nominal_node(&individuals[0])?;
-                if cardinality > 1 {
-                    let clash = Clash {
-                        clash_type: ClashType::Cardinality {
-                            role: RoleLabel::Atomic(role_name.clone()),
-                            node: node_id,
-                            min_cardinality: cardinality,
-                            max_cardinality: u32::MAX,
-                        },
-                        nodes: vec![node_id],
-                        dependencies: Arc::new(DependencySet::new()),
-                        explanation: format!(
-                            "Node {node_id} requires ≥{cardinality} R-successors each equal to {{{}}} but a single nominal individual can witness only one",
-                            individuals[0]
-                        ),
-                    };
-                    tableau.clash_detector.add_clash(clash);
-                    tableau.statistics.increment_clashes();
-                    log::warn!(
-                        "Cardinality clash at node {node_id}: ≥{cardinality} R.{} is unsatisfiable",
+        if let ClassExpression::ObjectOneOf(individuals) = filler
+            && individuals.len() == 1
+        {
+            let target = tableau.get_or_create_nominal_node(&individuals[0])?;
+            if cardinality > 1 {
+                let clash = Clash {
+                    clash_type: ClashType::Cardinality {
+                        role: RoleLabel::Atomic(role_name.clone()),
+                        node: node_id,
+                        min_cardinality: cardinality,
+                        max_cardinality: u32::MAX,
+                    },
+                    nodes: vec![node_id],
+                    dependencies: Arc::new(DependencySet::new()),
+                    explanation: format!(
+                        "Node {node_id} requires ≥{cardinality} R-successors each equal to {{{}}} but a single nominal individual can witness only one",
                         individuals[0]
-                    );
-                    return Ok(());
-                }
-
-                let existing_successors = tableau
-                    .nodes
-                    .get(node_id)
-                    .and_then(|n| n.role_successors.get(role_name.as_str()))
-                    .cloned()
-                    .unwrap_or_default();
-                if !existing_successors.contains(&target) {
-                    let role_label = RoleLabel::Atomic(role_name.clone());
-                    tableau.add_edge(node_id, target, role_label)?;
-                    let filler_label = ConceptLabel::Complex(Box::new(filler.clone()));
-                    tableau.add_concept_to_node(target, filler_label)?;
-                    debug!(
-                        "Applied AT_LEAST rule at node {node_id}: reused nominal successor {target}"
-                    );
-                }
+                    ),
+                };
+                tableau.clash_detector.add_clash(clash);
+                tableau.statistics.increment_clashes();
+                log::warn!(
+                    "Cardinality clash at node {node_id}: ≥{cardinality} R.{} is unsatisfiable",
+                    individuals[0]
+                );
                 return Ok(());
             }
+
+            let existing_successors = tableau
+                .nodes
+                .get(node_id)
+                .and_then(|n| n.role_successors.get(role_name.as_str()))
+                .cloned()
+                .unwrap_or_default();
+            if !existing_successors.contains(&target) {
+                let role_label = RoleLabel::Atomic(role_name.clone());
+                tableau.add_edge(node_id, target, role_label)?;
+                let filler_label = ConceptLabel::Complex(Box::new(filler.clone()));
+                tableau.add_concept_to_node(target, filler_label)?;
+                debug!(
+                    "Applied AT_LEAST rule at node {node_id}: reused nominal successor {target}"
+                );
+            }
+            return Ok(());
         }
 
         // Filler-aware counting: existing R-successors that already satisfy the filler.
@@ -853,15 +849,11 @@ impl TableauExecutor {
                     .iter()
                     .copied()
                     .filter(|&s| {
-                        tableau
-                            .nodes
-                            .get(s)
-                            .map(|n| {
-                                n.concepts
-                                    .iter()
-                                    .any(|c| matches!(c, ConceptLabel::Nominal(_)))
-                            })
-                            .unwrap_or(false)
+                        tableau.nodes.get(s).is_some_and(|n| {
+                            n.concepts
+                                .iter()
+                                .any(|c| matches!(c, ConceptLabel::Nominal(_)))
+                        })
                     })
                     .collect()
             })
@@ -904,7 +896,7 @@ impl TableauExecutor {
     /// Each required merge records a non-deterministic choice point ([`super::Choice::AtMostMerge`])
     /// carrying *all* valid merge candidate pairs, and applies the first one. If a later clash
     /// is detected the executor backtracks and tries the next candidate, which is what makes
-    /// AtMost reasoning complete for non-deterministic ontologies.
+    /// `AtMost` reasoning complete for non-deterministic ontologies.
     fn resolve_max_cardinality(
         tableau: &mut super::Tableau,
         node_id: NodeId,
@@ -1030,8 +1022,8 @@ impl TableauExecutor {
     /// [`super::MergeRecord`] is appended to the merge journal so the operation can be
     /// undone exactly when backtracking over a merge choice.
     ///
-    /// `pub(crate)`: also used by `Tableau::process_axiom` to collapse SameIndividual
-    /// nodes when loading the ABox (workstream A5).
+    /// `pub(crate)`: also used by `Tableau::process_axiom` to collapse `SameIndividual`
+    /// nodes when loading the `ABox` (workstream A5).
     pub(crate) fn merge_nodes(
         tableau: &mut super::Tableau,
         target: NodeId,
@@ -1065,13 +1057,11 @@ impl TableauExecutor {
         let target_node_type = tableau
             .nodes
             .get(target)
-            .map(|n| n.node_type)
-            .unwrap_or(NodeType::Generated);
+            .map_or(NodeType::Generated, |n| n.node_type);
         let source_node_type = tableau
             .nodes
             .get(source)
-            .map(|n| n.node_type)
-            .unwrap_or(NodeType::Generated);
+            .map_or(NodeType::Generated, |n| n.node_type);
         let target_status = tableau
             .nodes
             .get(target)
@@ -1117,7 +1107,7 @@ impl TableauExecutor {
 
         // Keep the individual→node map consistent: any individual that pointed at the
         // merged-away node now resolves to the surviving node.
-        for (_, node_id) in tableau.individual_map.iter_mut() {
+        for node_id in tableau.individual_map.values_mut() {
             if *node_id == source {
                 *node_id = target;
             }
@@ -1209,14 +1199,18 @@ impl TableauExecutor {
                 .truncate(backtrack_point.saved_state.edge_count);
             tableau.rebuild_role_successors();
             tableau.pending_queue = backtrack_point.saved_state.pending_queue.clone();
-            tableau.inequalities = backtrack_point.saved_state.inequalities.clone();
-            tableau.individual_map = backtrack_point.saved_state.individual_map.clone();
+            tableau
+                .inequalities
+                .clone_from(&backtrack_point.saved_state.inequalities);
+            tableau
+                .individual_map
+                .clone_from(&backtrack_point.saved_state.individual_map);
 
             // Restore per-node concept sets so the alternative is applied to the same
             // labels the choice point saw (undoes OR-rule disjunct additions, etc.).
             for (i, concepts) in backtrack_point.saved_state.node_concepts.iter().enumerate() {
                 if let Some(node) = tableau.nodes.get_mut(i) {
-                    node.concepts = concepts.clone();
+                    node.concepts.clone_from(concepts);
                 }
             }
 
@@ -1451,8 +1445,7 @@ impl TableauExecutor {
                         tableau
                             .nodes
                             .get(s)
-                            .map(|sn| is_top || sn.concepts.contains(&filler_label))
-                            .unwrap_or(false)
+                            .is_some_and(|sn| is_top || sn.concepts.contains(&filler_label))
                     })
                     .collect()
             })
@@ -1461,8 +1454,8 @@ impl TableauExecutor {
         out
     }
 
-    /// Re-queue the AtMost rules for every `≤n`/`=n` object constraint on `role_name` at
-    /// `node_id`. Called after the AtLeast rule creates fresh successors, so any resulting
+    /// Re-queue the `AtMost` rules for every `≤n`/`=n` object constraint on `role_name` at
+    /// `node_id`. Called after the `AtLeast` rule creates fresh successors, so any resulting
     /// excess is merged/clashed.
     fn re_queue_max_rules_for_role(
         tableau: &mut super::Tableau,
@@ -1792,7 +1785,7 @@ impl TableauExecutor {
     }
 
     /// Apply the HAS VALUE rule
-    /// Expands ∃R.{a} (ObjectHasValue) by creating an R-edge from x to the nominal node
+    /// Expands ∃R.{a} (`ObjectHasValue`) by creating an R-edge from x to the nominal node
     /// representing `a` (reusing the existing nominal node when one already exists).
     fn apply_has_value_rule(tableau: &mut super::Tableau, rule_app: RuleApplication) -> Result<()> {
         let node_id: NodeId = rule_app
@@ -1814,8 +1807,7 @@ impl TableauExecutor {
                         .nodes
                         .get(node_id)
                         .and_then(|n| n.role_successors.get(role_name.as_str()))
-                        .map(|succs| succs.contains(&nominal_id))
-                        .unwrap_or(false);
+                        .is_some_and(|succs| succs.contains(&nominal_id));
 
                     if !has_edge {
                         let role_label = RoleLabel::Atomic(role_name.clone());
@@ -1890,6 +1882,8 @@ impl TableauExecutor {
     /// Apply the CHOOSE rule (non-deterministic choice)
     /// Handles choice points in tableau expansion for backtracking
     fn apply_choose_rule(tableau: &mut super::Tableau, rule_app: RuleApplication) -> Result<()> {
+        use super::{BacktrackPoint, Choice};
+
         let node_id: NodeId = rule_app
             .node
             .parse()
@@ -1915,8 +1909,6 @@ impl TableauExecutor {
             };
 
             // Create backtrack point for this choice
-            use super::{BacktrackPoint, Choice};
-
             let backtrack_point = BacktrackPoint {
                 id: tableau.backtrack_stack.len(),
                 node_id,
@@ -1955,8 +1947,7 @@ impl TableauExecutor {
         if tableau
             .nodes
             .get(node_id)
-            .map(|n| n.node_type == NodeType::Root)
-            .unwrap_or(false)
+            .is_some_and(|n| n.node_type == NodeType::Root)
         {
             debug!("DATATYPE rule skipped at root node {node_id} (TBox encoding)");
             return Ok(());
@@ -2065,24 +2056,13 @@ impl TableauExecutor {
             .nodes
             .get(node_id)
             .and_then(|n| n.role_successors.get(data_prop_name.as_str()))
-            .map(|succs| {
+            .is_some_and(|succs| {
                 succs.iter().any(|&s| {
-                    tableau
-                        .nodes
-                        .get(s)
-                        .map(|sn| {
-                            Self::data_node_matches_range(
-                                tableau,
-                                sn,
-                                &data_prop_name,
-                                filler,
-                                is_top,
-                            )
-                        })
-                        .unwrap_or(false)
+                    tableau.nodes.get(s).is_some_and(|sn| {
+                        Self::data_node_matches_range(tableau, sn, &data_prop_name, filler, is_top)
+                    })
                 })
-            })
-            .unwrap_or(false);
+            });
         if already_satisfied {
             return Ok(());
         }
@@ -2194,8 +2174,7 @@ impl TableauExecutor {
         }
 
         debug!(
-            "Applied DATATYPE rule (all) at node {node_id}: checked {} data nodes",
-            successor_count
+            "Applied DATATYPE rule (all) at node {node_id}: checked {successor_count} data nodes"
         );
         Ok(())
     }
@@ -2217,17 +2196,15 @@ impl TableauExecutor {
             .nodes
             .get(node_id)
             .and_then(|n| n.role_successors.get(data_prop_name.as_str()))
-            .map(|succs| {
+            .is_some_and(|succs| {
                 succs.iter().any(|&s| {
                     tableau
                         .nodes
                         .get(s)
                         .and_then(Self::data_value_of)
-                        .map(|v| DatatypeValidator::literal_values_equal(v, value))
-                        .unwrap_or(false)
+                        .is_some_and(|v| DatatypeValidator::literal_values_equal(v, value))
                 })
-            })
-            .unwrap_or(false);
+            });
         if existing_equal {
             return Ok(());
         }
@@ -2387,12 +2364,11 @@ impl TableauExecutor {
                     break;
                 }
             }
-            match matched {
-                Some(gi) => groups[gi].push(succ),
-                None => {
-                    representatives.push(lit.clone());
-                    groups.push(vec![succ]);
-                }
+            if let Some(gi) = matched {
+                groups[gi].push(succ);
+            } else {
+                representatives.push(lit.clone());
+                groups.push(vec![succ]);
             }
         }
 
@@ -2522,13 +2498,9 @@ impl TableauExecutor {
                     .iter()
                     .copied()
                     .filter(|&s| {
-                        tableau
-                            .nodes
-                            .get(s)
-                            .map(|sn| {
-                                Self::data_node_matches_range(tableau, sn, role_name, range, is_top)
-                            })
-                            .unwrap_or(false)
+                        tableau.nodes.get(s).is_some_and(|sn| {
+                            Self::data_node_matches_range(tableau, sn, role_name, range, is_top)
+                        })
                     })
                     .collect()
             })
@@ -2649,7 +2621,7 @@ impl TableauExecutor {
     /// Handles property chain axioms of arbitrary length: R1 ∘ … ∘ Rn ⊑ R.
     ///
     /// Workstream A5: this delegates to the shared n-ary chain engine
-    /// ([`Self::apply_property_chains`]) used by the RBox pass, which composes n-hop paths
+    /// ([`Self::apply_property_chains`]) used by the `RBox` pass, which composes n-hop paths
     /// (n ≥ 2) into the super-property edge. The `RuleApplication` node is ignored because
     /// the chain rule is inherently graph-global; this method exists for the rare case where
     /// a `PropertyChain` rule is queued directly.
@@ -2668,7 +2640,8 @@ impl TableauExecutor {
                 && let ObjectPropertyExpression::PropertyChain(chain) = &a.sub_property
                 && !matches!(a.super_property, ObjectPropertyExpression::PropertyChain(_))
             {
-                let chain_names: Vec<String> = chain.iter().map(|p| p.to_string()).collect();
+                let chain_names: Vec<String> =
+                    chain.iter().map(std::string::ToString::to_string).collect();
                 if chain_names.len() >= 2 {
                     chains.push((chain_names, a.super_property.to_string()));
                 }
@@ -2792,7 +2765,7 @@ impl TableauExecutor {
     /// Delegates to the configured `BlockingChecker` (built once per run from the
     /// `ReasoningConfig::blocking_strategy`), then enforces two soundness guards:
     ///
-    /// 1. **Root and Nominal nodes are never blocked.** The root encodes TBox axioms
+    /// 1. **Root and Nominal nodes are never blocked.** The root encodes `TBox` axioms
     ///    (a meta-level artifact) and nominal nodes represent named individuals whose
     ///    labels must always be expanded; blocking them would be unsound for OWL 2 DL.
     ///    Nominal-aware blocking is handled in a later workstream (A2).
@@ -2835,13 +2808,14 @@ impl TableauExecutor {
 
             // A node blocked by the root would rely on TBox-encoding concepts as a witness;
             // reject such a block as unsound.
-            if let Some(blocker) = tableau.nodes[i].blocking_info.blocker {
-                if blocker < node_count && tableau.nodes[blocker].node_type == NodeType::Root {
-                    tableau.nodes[i].blocking_info.is_blocked = false;
-                    tableau.nodes[i].blocking_info.blocker = None;
-                    tableau.nodes[i].status.fully_expanded = false;
-                    continue;
-                }
+            if let Some(blocker) = tableau.nodes[i].blocking_info.blocker
+                && blocker < node_count
+                && tableau.nodes[blocker].node_type == NodeType::Root
+            {
+                tableau.nodes[i].blocking_info.is_blocked = false;
+                tableau.nodes[i].blocking_info.blocker = None;
+                tableau.nodes[i].status.fully_expanded = false;
+                continue;
             }
 
             // A blocked node needs no further expansion.
@@ -2898,9 +2872,9 @@ impl TableauExecutor {
         Ok(())
     }
 
-    /// Apply the RBox (role-axiom) rules over the current edge set (workstream A5).
+    /// Apply the `RBox` (role-axiom) rules over the current edge set (workstream A5).
     ///
-    /// This is the single enforcement point for the RBox in the active tableau. It covers:
+    /// This is the single enforcement point for the `RBox` in the active tableau. It covers:
     ///
     /// | Axiom | Effect |
     /// |-------|--------|
@@ -2975,7 +2949,11 @@ impl TableauExecutor {
                 }
                 Axiom::EquivalentObjectProperties(a) => {
                     // Equivalent properties are bidirectional role inclusions.
-                    let names: Vec<String> = a.properties.iter().map(|p| p.to_string()).collect();
+                    let names: Vec<String> = a
+                        .properties
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect();
                     for i in 0..names.len() {
                         for j in (i + 1)..names.len() {
                             inclusions.push((names[i].clone(), names[j].clone()));
@@ -2983,25 +2961,24 @@ impl TableauExecutor {
                         }
                     }
                 }
-                Axiom::SubObjectPropertyOf(a) => match &a.sub_property {
-                    ObjectPropertyExpression::PropertyChain(chain) => {
+                Axiom::SubObjectPropertyOf(a) => {
+                    if let ObjectPropertyExpression::PropertyChain(chain) = &a.sub_property {
                         let super_name = a.super_property.to_string();
                         if !matches!(a.super_property, ObjectPropertyExpression::PropertyChain(_)) {
                             let chain_names: Vec<String> =
-                                chain.iter().map(|p| p.to_string()).collect();
+                                chain.iter().map(std::string::ToString::to_string).collect();
                             if !chain_names.is_empty() {
                                 chains.push((chain_names, super_name));
                             }
                         }
-                    }
-                    _ => {
+                    } else {
                         let sub_name = a.sub_property.to_string();
                         let super_name = a.super_property.to_string();
                         if sub_name != super_name {
                             inclusions.push((sub_name, super_name));
                         }
                     }
-                },
+                }
                 Axiom::ObjectPropertyDomain(a) => {
                     domains.push((a.property.to_string(), a.domain.clone()));
                 }
@@ -3022,7 +2999,11 @@ impl TableauExecutor {
                     data_ranges.push((a.property.to_string(), a.range.clone()));
                 }
                 Axiom::DisjointObjectProperties(a) => {
-                    let names: Vec<String> = a.properties.iter().map(|p| p.to_string()).collect();
+                    let names: Vec<String> = a
+                        .properties
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect();
                     for i in 0..names.len() {
                         for j in (i + 1)..names.len() {
                             disjoint_pairs.push((names[i].clone(), names[j].clone()));
@@ -3064,8 +3045,8 @@ impl TableauExecutor {
                 .map(|e| (e.from, e.to))
                 .collect();
             for (x, y) in &p_edges {
-                for (_y2, z) in &p_edges {
-                    if y == _y2 && Self::ensure_edge(tableau, *x, *z, p)? {
+                for (y2, z) in &p_edges {
+                    if y == y2 && Self::ensure_edge(tableau, *x, *z, p)? {
                         changed = true;
                     }
                 }
@@ -3472,26 +3453,24 @@ impl TableauExecutor {
                     tableau.statistics.increment_clashes();
                     changed = true;
                 }
-                (Some(a), Some(b)) => {
-                    if Self::has_edge(tableau, a, b, &p) {
-                        let clash = Clash {
-                            clash_type: ClashType::ClauseViolation {
-                                clause_id: format!("negative_assertion({p})"),
-                                node: a,
-                                description: format!(
-                                    "NegativeObjectPropertyAssertion(¬{p}, {src_name}, {tgt_name}) violated: edge exists"
-                                ),
-                            },
-                            nodes: vec![a, b],
-                            dependencies: Arc::new(DependencySet::new()),
-                            explanation: format!(
-                                "¬{p}({src_name}, {tgt_name}) was asserted but the edge {p} was derived"
+                (Some(a), Some(b)) if Self::has_edge(tableau, a, b, &p) => {
+                    let clash = Clash {
+                        clash_type: ClashType::ClauseViolation {
+                            clause_id: format!("negative_assertion({p})"),
+                            node: a,
+                            description: format!(
+                                "NegativeObjectPropertyAssertion(¬{p}, {src_name}, {tgt_name}) violated: edge exists"
                             ),
-                        };
-                        tableau.clash_detector.add_clash(clash);
-                        tableau.statistics.increment_clashes();
-                        changed = true;
-                    }
+                        },
+                        nodes: vec![a, b],
+                        dependencies: Arc::new(DependencySet::new()),
+                        explanation: format!(
+                            "¬{p}({src_name}, {tgt_name}) was asserted but the edge {p} was derived"
+                        ),
+                    };
+                    tableau.clash_detector.add_clash(clash);
+                    tableau.statistics.increment_clashes();
+                    changed = true;
                 }
                 _ => {}
             }
@@ -3597,7 +3576,7 @@ impl TableauExecutor {
             // frontier: (current node, depth reached, path start node)
             let mut frontier: Vec<(NodeId, usize, NodeId)> = Vec::new();
             for edge in &tableau.edges {
-                if &edge.role.to_string() == &chain[0] {
+                if edge.role.to_string() == chain[0] {
                     frontier.push((edge.to, 1, edge.from));
                 }
             }
@@ -3625,7 +3604,7 @@ impl TableauExecutor {
     }
 
     /// The nominal value labels of the data successors of `node` for data role `role`.
-    /// Used by HasKey to detect shared data values between two individuals.
+    /// Used by `HasKey` to detect shared data values between two individuals.
     fn data_successor_value_labels(
         tableau: &super::Tableau,
         node: NodeId,
@@ -3668,10 +3647,10 @@ impl TableauExecutor {
         vec![(survivor, away), (away, survivor)]
     }
 
-    /// Merge two nodes forced equal by a functional / inverse-functional / HasKey rule.
+    /// Merge two nodes forced equal by a functional / inverse-functional / `HasKey` rule.
     ///
     /// Registers a clash when the pair is already known distinct (an inequality atom) — the
-    /// ontology asserts `a ≠ b` yet the RBox forces `a = b`. Otherwise pushes a
+    /// ontology asserts `a ≠ b` yet the `RBox` forces `a = b`. Otherwise pushes a
     /// [`super::Choice::FunctionalMerge`] choice point (so backtracking may retry the other
     /// survivor ordering) and performs the merge via the A3 `merge_nodes` machinery.
     ///
@@ -3896,8 +3875,8 @@ impl TableauExecutor {
     /// evaluated at the tableau level — against the edge set — because their body atoms
     /// range over node pairs. Returns `true` if a violation was turned into a clash.
     ///
-    /// This is the generic safety net for role clauses that the dedicated RBox rules do not
-    /// cover (e.g. SWRL-derived constraints or future clause compilations); the primary RBox
+    /// This is the generic safety net for role clauses that the dedicated `RBox` rules do not
+    /// cover (e.g. SWRL-derived constraints or future clause compilations); the primary `RBox`
     /// enforcement lives in [`Self::apply_role_rules`].
     fn check_role_clause_violations(tableau: &mut super::Tableau) -> Result<bool> {
         let Some(checker) = tableau.clause_checker.as_ref() else {
@@ -4142,8 +4121,7 @@ impl TableauExecutor {
                 for c in &node_concepts {
                     let self_disjoint = checker
                         .disjointness_map()
-                        .map(|disj| disj.are_disjoint(c, c))
-                        .unwrap_or(false);
+                        .is_some_and(|disj| disj.are_disjoint(c, c));
                     if self_disjoint {
                         let clash = Clash {
                             clash_type: ClashType::Concept {
@@ -4178,8 +4156,7 @@ impl TableauExecutor {
 
                         let are_disjoint = checker
                             .disjointness_map()
-                            .map(|disj| disj.are_disjoint(c1, c2))
-                            .unwrap_or(false);
+                            .is_some_and(|disj| disj.are_disjoint(c1, c2));
 
                         if are_disjoint {
                             let clash = Clash {

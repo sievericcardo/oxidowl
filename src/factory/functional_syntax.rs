@@ -4,8 +4,23 @@
 //! Equivalent to OWL API v5's `OWLFunctionalSyntaxFactory`.
 //! All methods are static convenience constructors with short names.
 
-use crate::ontology::axioms::*;
-use crate::ontology::*;
+use crate::ontology::axioms::{
+    AnnotationAssertionAxiom, AsymmetricObjectPropertyAxiom, Axiom, ClassAssertionAxiom,
+    DataPropertyAssertionAxiom, DataPropertyDomainAxiom, DataPropertyRangeAxiom, DeclarationAxiom,
+    DifferentIndividualsAxiom, DisjointClassesAxiom, DisjointDataPropertiesAxiom,
+    DisjointObjectPropertiesAxiom, DisjointUnionAxiom, Entity, EquivalentClassesAxiom,
+    EquivalentDataPropertiesAxiom, EquivalentObjectPropertiesAxiom, FunctionalDataPropertyAxiom,
+    FunctionalObjectPropertyAxiom, HasKeyAxiom, InverseFunctionalObjectPropertyAxiom,
+    InverseObjectPropertiesAxiom, IrreflexiveObjectPropertyAxiom, ObjectPropertyAssertionAxiom,
+    ObjectPropertyDomainAxiom, ObjectPropertyRangeAxiom, ReflexiveObjectPropertyAxiom,
+    SameIndividualAxiom, SubClassOfAxiom, SubDataPropertyOfAxiom, SubObjectPropertyOfAxiom,
+    SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
+};
+use crate::ontology::{
+    AnnotationProperty, AnnotationSubject, AnnotationValue, Class, ClassExpression, DataProperty,
+    DataPropertyExpression, DataRange, Datatype, IRI, Individual, Literal, NamedIndividual,
+    ObjectProperty, ObjectPropertyExpression,
+};
 
 /// Static convenience factory for creating OWL entities, class expressions,
 /// and axioms with short, ergonomic method names.

@@ -1,6 +1,6 @@
-//! ReasoningActor — actor-pattern wrapper for the core reasoning state machine.
+//! `ReasoningActor` — actor-pattern wrapper for the core reasoning state machine.
 //!
-//! `ReasoningActor` owns all mutable state (Reasoner, CacheManager, SWRLRuleEngine)
+//! `ReasoningActor` owns all mutable state (Reasoner, `CacheManager`, `SWRLRuleEngine`)
 //! without any `Arc<RwLock<>>` wrapping. It runs an asynchronous event loop driven
 //! by `tokio::select!` over an `mpsc` request channel, an optional shutdown signal,
 //! and a periodic maintenance ticker.

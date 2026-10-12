@@ -1294,11 +1294,7 @@ impl LargeScaleMemoryManager {
         // For now, track checkpoints and estimate based on growth
 
         // Get base memory from checkpoints if available
-        let base_usage = self
-            .checkpoints
-            .first()
-            .map(|cp| cp.memory_usage)
-            .unwrap_or(0);
+        let base_usage = self.checkpoints.first().map_or(0, |cp| cp.memory_usage);
 
         // Estimate growth based on number of checkpoints
         // Each checkpoint adds roughly 100MB on average for large ontologies

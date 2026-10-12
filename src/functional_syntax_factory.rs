@@ -5,7 +5,12 @@
 //! All methods delegate to `DataFactory` internally.
 
 use crate::factory::DataFactory;
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::{
+    AsymmetricObjectPropertyAxiom, ClassAssertionAxiom, DeclarationAxiom, DisjointClassesAxiom,
+    Entity, EquivalentClassesAxiom, FunctionalObjectPropertyAxiom, InverseObjectPropertiesAxiom,
+    IrreflexiveObjectPropertyAxiom, ReflexiveObjectPropertyAxiom, SubClassOfAxiom,
+    SubObjectPropertyOfAxiom, SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
+};
 use crate::ontology::concepts::ClassExpression;
 use crate::ontology::{
     Annotation, Class, DataProperty, DataPropertyExpression, DataRange, IRI, ObjectProperty,

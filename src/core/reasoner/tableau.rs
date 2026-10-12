@@ -12,8 +12,8 @@ use std::collections::HashMap;
 
 /// A read-only snapshot of a completed tableau, used by the semantic entailment
 /// checks (workstream A7) to answer property-axiom and assertion entailments
-/// from the materialised closure: edges, nominal merging (SameIndividual /
-/// functional / HasKey), and data values.
+/// from the materialised closure: edges, nominal merging (`SameIndividual` /
+/// functional / `HasKey`), and data values.
 ///
 /// This is the reasoner-API surface accessor for the completed tableau. It is
 /// derived entirely from the *public* node/edge accessors of the tableau module
@@ -29,8 +29,8 @@ pub struct TableauSnapshot {
     /// Object-property edges `(from, to, role_name)` where `role_name` is the
     /// canonical Display form (`IRI` or `inv(IRI)`).
     pub edges: Vec<(usize, usize, String)>,
-    /// Individual Display name → canonical node id after SameIndividual /
-    /// functional / HasKey merging. Reconstructed from the `Nominal` labels of
+    /// Individual Display name → canonical node id after `SameIndividual` /
+    /// functional / `HasKey` merging. Reconstructed from the `Nominal` labels of
     /// every node, which the executor keeps consistent across merges.
     pub individual_nodes: HashMap<String, usize>,
     /// Data-property edges `(from_node, role_name, literal value)` — an edge
@@ -59,7 +59,7 @@ impl TableauSnapshot {
     }
 
     /// The canonical node id of an individual in the completed tableau, if it
-    /// appears in the ontology's ABox (nominal merging applied).
+    /// appears in the ontology's `ABox` (nominal merging applied).
     #[must_use]
     pub fn node_of(&self, individual: &Individual) -> Option<usize> {
         self.individual_nodes.get(&individual.to_string()).copied()
@@ -152,7 +152,7 @@ impl TableauAlgorithmInstance {
 
     /// Whether the node carries a concept label equal to the given class
     /// expression. The tableau materialises class labels as
-    /// `ConceptLabel::Complex(expr)` (from ClassAssertion, Domain/Range
+    /// `ConceptLabel::Complex(expr)` (from `ClassAssertion`, Domain/Range
     /// propagation, concept unfolding) or `ConceptLabel::Atomic(name)` for
     /// atomic classes.
     #[must_use]

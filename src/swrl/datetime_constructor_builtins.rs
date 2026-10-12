@@ -2,14 +2,7 @@
 //!
 //! This module implements constructor built-ins for creating date, time, and duration values.
 
-// Datetime operations use intentional numeric casts (e.g., seconds/microseconds fields
-// are always within valid range; truncation and sign handling are deliberate).
-#![allow(
-    dead_code,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_precision_loss
-)]
+#![allow(dead_code)]
 
 use crate::error::{Error, Result};
 use crate::ontology::{IRI, Literal};
@@ -107,8 +100,7 @@ fn extract_integer(value: &SWRLValue) -> Result<i64> {
             if lit
                 .datatype
                 .as_ref()
-                .map(|dt| dt.as_str().contains("integer"))
-                .unwrap_or(false) =>
+                .is_some_and(|dt| dt.as_str().contains("integer")) =>
         {
             lit.value
                 .parse::<i64>()
@@ -198,7 +190,7 @@ impl SWRLBuiltIn for DateBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#date"
     }
 
@@ -247,7 +239,7 @@ impl SWRLBuiltIn for DateTimeBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#dateTime"
     }
 
@@ -290,7 +282,7 @@ impl SWRLBuiltIn for TimeBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#time"
     }
 
@@ -335,7 +327,7 @@ impl SWRLBuiltIn for YearMonthDurationBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#yearMonthDuration"
     }
 
@@ -386,7 +378,7 @@ impl SWRLBuiltIn for DayTimeDurationBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#dayTimeDuration"
     }
 
@@ -448,7 +440,7 @@ impl SWRLBuiltIn for DateTimeStampBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#dateTimeStamp"
     }
 
@@ -489,7 +481,7 @@ impl SWRLBuiltIn for GYearBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#gYear"
     }
 
@@ -535,7 +527,7 @@ impl SWRLBuiltIn for GYearMonthBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#gYearMonth"
     }
 

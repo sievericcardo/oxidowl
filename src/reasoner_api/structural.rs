@@ -29,7 +29,7 @@ use std::collections::{HashMap, HashSet};
 pub struct StructuralReasoner {
     ontology: OntologyRef,
     index: AxiomIndex,
-    /// Precomputed SameAs / DifferentAs components (snapshot at construction).
+    /// Precomputed `SameAs` / `DifferentAs` components (snapshot at construction).
     individual_equality: IndividualEquality,
 }
 

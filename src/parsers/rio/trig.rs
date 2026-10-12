@@ -1,4 +1,4 @@
-//! TriG Parser and Renderer — Turtle with named graphs.
+//! `TriG` Parser and Renderer — Turtle with named graphs.
 
 use crate::Result;
 use crate::ontology::Ontology;

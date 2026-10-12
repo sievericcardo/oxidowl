@@ -2,7 +2,10 @@
 //! Like N-Triples but with named graph support.
 
 use crate::Result;
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::{
+    Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom, DeclarationAxiom, Entity,
+    ObjectPropertyAssertionAxiom,
+};
 use crate::ontology::{
     Class, DataProperty, DataPropertyExpression, Individual, ObjectProperty,
     ObjectPropertyExpression,
@@ -173,10 +176,10 @@ impl NQuadsParser {
 
             let (subject, _) = parse_term(&subject_str);
             let (predicate, _) = parse_term(&predicate_str);
-            let (object, is_literal) = parse_term(&object_str);
+            let (rhs_term, literal_flag) = parse_term(&object_str);
 
             if predicate == RDF_TYPE {
-                match object.as_str() {
+                match rhs_term.as_str() {
                     OWL_CLASS => {
                         o.add_axiom(Axiom::Declaration(DeclarationAxiom {
                             id: axiom_id(),
@@ -199,7 +202,7 @@ impl NQuadsParser {
                         let individual = Individual::Named(NamedIndividual {
                             iri: IRI::new(&subject),
                         });
-                        let class = Class::new(IRI::new(&object));
+                        let class = Class::new(IRI::new(&rhs_term));
                         o.add_axiom(Axiom::ClassAssertion(ClassAssertionAxiom {
                             id: axiom_id(),
                             individual,
@@ -208,7 +211,7 @@ impl NQuadsParser {
                         }));
                     }
                 }
-            } else if is_literal {
+            } else if literal_flag {
                 let (value, lang, datatype) = parse_quoted_literal(&object_str);
                 let individual = Individual::Named(NamedIndividual {
                     iri: IRI::new(&subject),
@@ -233,7 +236,7 @@ impl NQuadsParser {
                     iri: IRI::new(&subject),
                 });
                 let target = Individual::Named(NamedIndividual {
-                    iri: IRI::new(&object),
+                    iri: IRI::new(&rhs_term),
                 });
                 let prop = ObjectProperty::new(IRI::new(&predicate))?;
                 o.add_axiom(Axiom::ObjectPropertyAssertion(

@@ -41,7 +41,7 @@ pub enum CompletionRule {
     Nominal,
     /// Self rule (∃R.Self)
     Self_,
-    /// Has-value rule (∃R.{a} / ObjectHasValue) and data has-value
+    /// Has-value rule (∃R.{a} / `ObjectHasValue`) and data has-value
     HasValue,
     /// Choose rule (disjunction)
     Choose,
@@ -749,8 +749,7 @@ impl CompletionRuleSet {
                 current_node.clone(),
                 nominal
                     .iri()
-                    .map(super::super::ontology::IRI::as_str)
-                    .unwrap_or("unknown")
+                    .map_or("unknown", super::super::ontology::IRI::as_str)
                     .to_string(),
                 Arc::clone(&application.dependencies),
             ));
@@ -1076,9 +1075,9 @@ impl CompletionRuleSet {
                     true
                 }
             }
-            "http://www.w3.org/2001/XMLSchema#pattern" => Regex::new(&restriction.value.value)
-                .map(|re| re.is_match(&literal.value))
-                .unwrap_or(false),
+            "http://www.w3.org/2001/XMLSchema#pattern" => {
+                Regex::new(&restriction.value.value).is_ok_and(|re| re.is_match(&literal.value))
+            }
             "http://www.w3.org/2001/XMLSchema#minInclusive" => {
                 if let (Ok(lit_val), Ok(rest_val)) = (
                     literal.value.parse::<f64>(),
@@ -1147,7 +1146,7 @@ impl CompletionRuleSet {
     }
 
     /// Apply concept unfolding
-    #[allow(clippy::only_used_in_recursion)]
+    #[allow(clippy::only_used_in_recursion)] // recursive helper: self threaded only through recursion
     fn apply_unfold_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
 
@@ -1565,7 +1564,7 @@ impl CompletionRuleSet {
     }
 
     /// Extract meta-assertion components from a concept
-    /// Returns (triple_id, meta_property, meta_value) if found
+    /// Returns (`triple_id`, `meta_property`, `meta_value`) if found
     fn extract_meta_assertion(
         &self,
         concept: &ClassExpression,
@@ -1640,7 +1639,7 @@ impl CompletionRuleSet {
     }
 
     /// Check for conflicting meta-assertions on the same quoted triple
-    /// Returns a ClashInfo if a conflict is detected
+    /// Returns a `ClashInfo` if a conflict is detected
     fn check_meta_assertion_conflicts(
         &self,
         _node: &str,
@@ -1785,7 +1784,7 @@ impl RuleApplication {
     /// Create a role-based rule application
     #[must_use]
     pub fn role(
-        rule: CompletionRule,
+        rule_kind: CompletionRule,
         role: Role,
         source: String,
         target: String,
@@ -1793,7 +1792,7 @@ impl RuleApplication {
         dependencies: Arc<DependencySet>,
     ) -> Self {
         Self::new(
-            rule,
+            rule_kind,
             source.clone(),
             RuleContext::Role {
                 role,

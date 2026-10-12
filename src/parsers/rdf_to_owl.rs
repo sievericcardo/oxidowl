@@ -22,7 +22,20 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::Result;
-use crate::ontology::*;
+use crate::ontology::{
+    Annotation, AnnotationAssertionAxiom, AnnotationProperty, AnnotationSubject, AnnotationValue,
+    AnonymousIndividual, AsymmetricObjectPropertyAxiom, Axiom, Class, ClassAssertionAxiom,
+    ClassExpression, DataProperty, DataPropertyAssertionAxiom, DataPropertyDomainAxiom,
+    DataPropertyExpression, DataPropertyRangeAxiom, DataRange, DeclarationAxiom,
+    DifferentIndividualsAxiom, DisjointClassesAxiom, DisjointUnionAxiom, Entity,
+    EquivalentClassesAxiom, FacetRestriction, FunctionalObjectPropertyAxiom, HasKeyAxiom, IRI,
+    Individual, InverseFunctionalObjectPropertyAxiom, InverseObjectPropertiesAxiom,
+    IrreflexiveObjectPropertyAxiom, Literal, NamedIndividual, ObjectProperty,
+    ObjectPropertyAssertionAxiom, ObjectPropertyDomainAxiom, ObjectPropertyExpression,
+    ObjectPropertyRangeAxiom, Ontology, ReflexiveObjectPropertyAxiom, SameIndividualAxiom,
+    SubClassOfAxiom, SubDataPropertyOfAxiom, SubObjectPropertyOfAxiom,
+    SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
+};
 use crate::semantics::owl_rdf_mapping;
 use crate::semantics::{RdfTerm, Triple as RdfTriple};
 
@@ -166,6 +179,7 @@ fn bare_literal_parts(s: &str) -> (String, Option<url::Url>) {
 }
 
 /// Check if a subject IRI is declared as a `DatatypeProperty`.
+#[must_use]
 pub fn is_data_property(iri: &str, ontology: &Ontology) -> bool {
     ontology.axioms().iter().any(|a| {
         if let Axiom::Declaration(d) = a
@@ -178,6 +192,7 @@ pub fn is_data_property(iri: &str, ontology: &Ontology) -> bool {
 }
 
 /// Check if a predicate IRI is a well-known or declared `AnnotationProperty`.
+#[must_use]
 pub fn is_annotation_property(iri: &str, ontology: &Ontology) -> bool {
     if matches!(
         iri,
@@ -240,6 +255,7 @@ pub fn ensure_annotation_property_declared(iri: &str, ontology: &mut Ontology) {
 /// Structural RDF/OWL predicates (restriction internals, RDF lists, list-valued
 /// axioms).  They must never fall through to a property-assertion default arm —
 /// they are consumed by the blank-node / list resolvers instead.
+#[must_use]
 pub fn is_structural_owl_predicate(predicate: &str) -> bool {
     matches!(
         predicate,
@@ -677,23 +693,23 @@ pub fn process_triple(
                 let sub_prop = DataProperty {
                     iri: IRI::new(subject),
                 };
-                let sup_prop = DataProperty {
+                let super_property = DataProperty {
                     iri: IRI::new(object),
                 };
                 let axiom = SubDataPropertyOfAxiom {
                     id: generate_axiom_id(),
                     sub_property: DataPropertyExpression::DataProperty(sub_prop),
-                    super_property: DataPropertyExpression::DataProperty(sup_prop),
+                    super_property: DataPropertyExpression::DataProperty(super_property),
                     annotations: vec![],
                 };
                 ontology.add_axiom(Axiom::SubDataPropertyOf(axiom));
             } else {
                 let sub_prop = ObjectProperty::new(IRI::new(subject))?;
-                let sup_prop = ObjectProperty::new(IRI::new(object))?;
+                let super_property = ObjectProperty::new(IRI::new(object))?;
                 let axiom = SubObjectPropertyOfAxiom {
                     id: generate_axiom_id(),
                     sub_property: ObjectPropertyExpression::ObjectProperty(sub_prop),
-                    super_property: ObjectPropertyExpression::ObjectProperty(sup_prop),
+                    super_property: ObjectPropertyExpression::ObjectProperty(super_property),
                     annotations: vec![],
                 };
                 ontology.add_axiom(Axiom::SubObjectPropertyOf(axiom));
@@ -1082,10 +1098,9 @@ impl<'a> BNodeIndex<'a> {
             if let (RdfTerm::Iri(subj), RdfTerm::Iri(pred), RdfTerm::Iri(obj)) =
                 (&t.subject, &t.predicate, &t.object)
                 && pred.as_str() == RDF_TYPE
+                && obj.as_str() == OWL_DATATYPE_PROPERTY
             {
-                if obj.as_str() == OWL_DATATYPE_PROPERTY {
-                    data_properties.insert(subj.as_str());
-                }
+                data_properties.insert(subj.as_str());
             }
         }
         Self {
@@ -1298,12 +1313,12 @@ fn resolve_restriction(id: &str, index: &BNodeIndex<'_>, depth: usize) -> Option
     }
 
     // ── hasSelf ─────────────────────────────────────────────────────────
-    if let Some(true_term) = index.find(id, OWL_HAS_SELF) {
-        if matches!(true_term, RdfTerm::Literal { value, .. } if value == "true") {
-            return Some(ClassExpression::ObjectHasSelf {
-                property: object_property,
-            });
-        }
+    if let Some(true_term) = index.find(id, OWL_HAS_SELF)
+        && matches!(true_term, RdfTerm::Literal { value, .. } if value == "true")
+    {
+        return Some(ClassExpression::ObjectHasSelf {
+            property: object_property,
+        });
     }
 
     // ── cardinalities ───────────────────────────────────────────────────
@@ -1404,7 +1419,7 @@ fn resolve_data_range(term: &RdfTerm, index: &BNodeIndex<'_>, depth: usize) -> O
                     } = value
                     {
                         restrictions.push(FacetRestriction {
-                            facet: IRI::new(*facet_pred),
+                            facet: IRI::new(facet_pred),
                             value: rdf_term_literal_to_literal(lit_value, lit_dt, lit_lang),
                         });
                     } else {
@@ -1471,7 +1486,7 @@ fn resolve_data_range(term: &RdfTerm, index: &BNodeIndex<'_>, depth: usize) -> O
 /// Blank-node subjects that are *not* consumed as expressions become
 /// anonymous-individual assertions (nested node support); structural
 /// restriction internals are skipped.
-pub fn map_rdf_triples<'a>(triples: &'a [RdfTriple], ontology: &mut Ontology) -> Result<()> {
+pub fn map_rdf_triples(triples: &[RdfTriple], ontology: &mut Ontology) -> Result<()> {
     let index = BNodeIndex::build(triples);
     let mut processed = vec![false; triples.len()];
 
@@ -1641,7 +1656,7 @@ pub fn map_rdf_triples<'a>(triples: &'a [RdfTriple], ontology: &mut Ontology) ->
                                     subclass: sub_ce,
                                     superclass: obj_ce,
                                     annotations: vec![],
-                                }))
+                                }));
                             }
                             OWL_EQUIVALENT_CLASS => {
                                 ontology.add_axiom(Axiom::EquivalentClasses(

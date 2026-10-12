@@ -900,6 +900,8 @@ impl SyntaxValidator {
 
     /// Validate RDF/XML syntax
     pub fn validate_rdf_xml(&self, content: &str) -> Result<()> {
+        use quick_xml::{Reader, events::Event};
+
         if !self.strict_mode {
             return Ok(());
         }
@@ -919,7 +921,6 @@ impl SyntaxValidator {
         }
 
         // Validate RDF/XML structure using quick-xml
-        use quick_xml::{Reader, events::Event};
         let mut reader = Reader::from_str(content);
         let mut inside_rdf_root = false;
         let mut depth: i32 = 0;
@@ -1847,11 +1848,8 @@ impl SyntaxValidator {
                     // Reject lines with multiple words that aren't valid keywords
                     if words.len() > 1 {
                         let first_word = words[0];
-                        let looks_like_keyword = first_word
-                            .chars()
-                            .next()
-                            .map(char::is_uppercase)
-                            .unwrap_or(false);
+                        let looks_like_keyword =
+                            first_word.chars().next().is_some_and(char::is_uppercase);
 
                         // Check if first word is a known keyword
                         let is_known = valid_keywords.iter().any(|&kw| {

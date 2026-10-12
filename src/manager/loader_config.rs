@@ -1,4 +1,4 @@
-//! OntologyLoaderConfiguration — consolidated loader settings.
+//! `OntologyLoaderConfiguration` — consolidated loader settings.
 
 use std::time::Duration;
 

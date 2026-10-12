@@ -7,7 +7,20 @@ pub mod cnf;
 pub mod expressivity;
 pub mod nnf;
 
-use crate::ontology::axioms::*;
+use crate::ontology::axioms::{
+    AnnotationAssertionAxiom, AnnotationPropertyDomainAxiom, AnnotationPropertyRangeAxiom,
+    AsymmetricObjectPropertyAxiom, Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom,
+    DataPropertyDomainAxiom, DataPropertyRangeAxiom, DeclarationAxiom, DifferentIndividualsAxiom,
+    DisjointClassesAxiom, DisjointDataPropertiesAxiom, DisjointObjectPropertiesAxiom,
+    DisjointUnionAxiom, Entity, EntityType, EquivalentClassesAxiom, EquivalentDataPropertiesAxiom,
+    EquivalentObjectPropertiesAxiom, FunctionalDataPropertyAxiom, FunctionalObjectPropertyAxiom,
+    HasKeyAxiom, InverseFunctionalObjectPropertyAxiom, InverseObjectPropertiesAxiom,
+    IrreflexiveObjectPropertyAxiom, NegativeDataPropertyAssertionAxiom,
+    NegativeObjectPropertyAssertionAxiom, ObjectPropertyAssertionAxiom, ObjectPropertyDomainAxiom,
+    ObjectPropertyRangeAxiom, ReflexiveObjectPropertyAxiom, SameIndividualAxiom,
+    SubAnnotationPropertyOfAxiom, SubClassOfAxiom, SubDataPropertyOfAxiom,
+    SubObjectPropertyOfAxiom, SymmetricObjectPropertyAxiom, TransitiveObjectPropertyAxiom,
+};
 use crate::ontology::{
     Annotation, AnnotationProperty, AnnotationSubject, AnnotationValue, ClassExpression,
     DataPropertyExpression, DataRange, IRI, Individual, ObjectPropertyExpression, OntologyRef,
@@ -48,6 +61,7 @@ impl OWLObjectTransformer {
     }
 
     /// Transform an axiom, applying all registered functions to sub-objects.
+    #[must_use]
     pub fn transform_axiom(&self, axiom: &Axiom) -> Option<Axiom> {
         Some(match axiom {
             Axiom::Declaration(d) => Axiom::Declaration(DeclarationAxiom {
@@ -1124,7 +1138,9 @@ impl OWLEntityRenamer {
                                 .unwrap_or_else(|| iri.clone()),
                         )
                     }
-                    other => other.clone(),
+                    crate::ontology::AnnotationSubject::AnonymousIndividual(other) => {
+                        crate::ontology::AnnotationSubject::AnonymousIndividual(other.clone())
+                    }
                 };
                 let property = if let Some(new_iri) =
                     self.lookup(&a.property.iri, EntityType::AnnotationProperty)
@@ -2476,7 +2492,7 @@ impl OWLEntityRemover {
         self.entities_to_remove.insert((iri, entity_type));
     }
 
-    /// Generate RemoveAxiom changes for all axioms mentioning target entities.
+    /// Generate `RemoveAxiom` changes for all axioms mentioning target entities.
     pub fn remove_entities(&self, ontology: &OntologyRef) -> Result<Vec<OntologyChange>> {
         let guard = ontology.read().map_err(|e| crate::Error::Internal {
             message: format!("{e}"),

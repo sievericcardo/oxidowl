@@ -45,7 +45,7 @@ enum FaultQueryMsg {
 /// Main fault tolerance coordinator — actor handle
 #[derive(Clone)]
 pub struct FaultTolerance {
-    /// Configuration (kept in handle for execute_with_retry logic)
+    /// Configuration (kept in handle for `execute_with_retry` logic)
     config: crate::distributed::FaultToleranceConfig,
     /// State queries channel
     query_tx: mpsc::Sender<FaultQueryMsg>,
@@ -393,8 +393,7 @@ impl FaultTolerance {
                         FaultQueryMsg::ShouldAttempt { node_id, tx } => {
                             let should = circuit_breakers
                                 .get(&node_id)
-                                .map(CircuitBreaker::should_attempt)
-                                .unwrap_or(true);
+                                .is_none_or(CircuitBreaker::should_attempt);
                             let _ = tx.send(should);
                         }
                         FaultQueryMsg::RecordSuccess { node_id } => {
@@ -411,8 +410,7 @@ impl FaultTolerance {
                         FaultQueryMsg::GetCircuitBreaker { node_id, tx } => {
                             let state = circuit_breakers
                                 .get(&node_id)
-                                .map(CircuitBreaker::get_state)
-                                .unwrap_or(CircuitBreakerState::Closed);
+                                .map_or(CircuitBreakerState::Closed, CircuitBreaker::get_state);
                             let _ = tx.send(state);
                         }
                         FaultQueryMsg::StartRecovery { failure, tx } => {

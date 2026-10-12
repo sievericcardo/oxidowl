@@ -1,4 +1,4 @@
-//! ShortFormProvider system — renders entities and IRIs in human-readable
+//! `ShortFormProvider` system — renders entities and IRIs in human-readable
 //! compact forms (e.g., fragment, prefix:name, or annotation label).
 //!
 //! Also provides bidirectional (entity ↔ short form) resolution

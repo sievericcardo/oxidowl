@@ -1,4 +1,4 @@
-//! Built-in OWL 2 ABox classification SPARQL INSERT-WHERE rules.
+//! Built-in OWL 2 `ABox` classification SPARQL INSERT-WHERE rules.
 //!
 //! Expose the rule set so external projects that manage their own Oxigraph store
 //! can run exactly the same rules without duplicating the queries:
@@ -76,14 +76,15 @@
 //! `prp-irp`, `prp-asyp`, `prp-pdw`, `prp-adp`, `prp-key` (single-key), `cls-nothing2` and
 //! `cax-dw`; the marker triple they derive is `<urn:oxidowl:inconsistency>` and is never
 //! re-imported by `run_sparql_abox_classification`. The primary enforcement of every rule in
-//! this list lives in the tableau RBox pass (`TableauExecutor::apply_role_rules`); the SPARQL
+//! this list lives in the tableau `RBox` pass (`TableauExecutor::apply_role_rules`); the SPARQL
 //! rules keep the RL materializer consistent with it. `eq-diff1/2/3` (sameAs ∧ differentFrom
 //! per-pair) are handled by the tableau's inequality-vs-merge clash logic, `cls-com`,
 //! `cls-maxc1/2`, `cls-maxqc1–4` and `prp-npa1/2` by the concept/negative-assertion clash
-//! handling, and arbitrary-length `prp-key` by the tableau HasKey rule.
+//! handling, and arbitrary-length `prp-key` by the tableau `HasKey` rule.
 
-/// Returns the complete set of built-in OWL 2 ABox classification SPARQL
+/// Returns the complete set of built-in OWL 2 `ABox` classification SPARQL
 /// INSERT-WHERE rules that oxidowl applies during `run_sparql_abox_classification`.
+#[must_use]
 pub fn abox_classification_rules() -> &'static [&'static str] {
     &[
         // Rule 1: hasValue restriction — C ≡ (p hasValue v)

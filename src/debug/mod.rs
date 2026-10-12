@@ -269,7 +269,7 @@ impl ExplanationService {
         })
     }
 
-    /// Use the debugger's DefinitionTracker to find explanations
+    /// Use the debugger's `DefinitionTracker` to find explanations
     /// for a specific subsumption entailment.
     pub fn explain_subsumption_via_debugger(
         &self,

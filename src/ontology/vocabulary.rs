@@ -1,7 +1,7 @@
 //! OWL 2 Vocabulary Constants and Namespaces Registry.
 //!
 //! Provides static constants for all OWL 2, RDF, RDFS, XSD built-in
-//! entities, plus a comprehensive namespace registry with PrefixManager.
+//! entities, plus a comprehensive namespace registry with `PrefixManager`.
 
 use crate::ontology::IRI;
 use std::collections::HashMap;
@@ -518,7 +518,7 @@ impl PrefixManager {
         }
     }
 
-    /// Expand a prefixed name: "owl:Thing" → "http://www.w3.org/2002/07/owl#Thing"
+    /// Expand a prefixed name: "owl:Thing" → "<http://www.w3.org/2002/07/owl#Thing>"
     #[must_use]
     pub fn expand(&self, prefixed: &str) -> Option<String> {
         let (pref, local) = prefixed.split_once(':')?;
@@ -526,7 +526,7 @@ impl PrefixManager {
         Some(format!("{ns}{local}"))
     }
 
-    /// Shorten an IRI: "http://www.w3.org/2002/07/owl#Thing" → "owl:Thing"
+    /// Shorten an IRI: "<http://www.w3.org/2002/07/owl#Thing>" → "owl:Thing"
     #[must_use]
     pub fn shorten(&self, iri: &str) -> Option<String> {
         // Try custom prefixes first, then known

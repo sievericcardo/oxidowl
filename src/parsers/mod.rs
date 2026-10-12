@@ -361,10 +361,11 @@ fn detect_rdf_version_from_content(content: &str) -> RdfCompatibilityMode {
 /// extension is unambiguous always parses the way `parse_file_auto` routes
 /// it (CR-011 F-3: an XML-shaped HTML fragment in `page.html` used to be
 /// content-sniffed as OWL/XML and silently yielded 0 axioms; it now parses
-/// as RDFa, exactly as `parse_file_auto` does).
+/// as `RDFa`, exactly as `parse_file_auto` does).
 ///
 /// Returns `None` for extensions that must fall through to content
 /// sniffing: `owl`, `owx`, `xml`, `txt`, and unknown/absent extensions.
+#[must_use]
 pub fn format_from_extension(extension: &str) -> Option<OntologyFormat> {
     match extension.to_lowercase().as_str() {
         "rdf" => Some(OntologyFormat::RdfXml),
@@ -419,7 +420,7 @@ pub fn parse_file_auto<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 
 /// Parse a UTF-8 ontology document in the given (already resolved) format.
 ///
-/// Handles CrossSyntax section extraction and RDF-version sniffing before
+/// Handles `CrossSyntax` section extraction and RDF-version sniffing before
 /// dispatching to the format's parser.  Shared by [`parse_file_auto`],
 /// [`parse_bytes`] and the [`ParserFactory`] bridge.
 pub fn parse_str(content: &str, format: OntologyFormat) -> Result<Ontology> {
@@ -542,7 +543,7 @@ pub fn parse_str(content: &str, format: OntologyFormat) -> Result<Ontology> {
 /// Parse raw bytes in the given format.
 ///
 /// `BinaryRdf` and `Hdt` are consumed as bytes and never go through a UTF-8
-/// decode (their payloads are genuinely binary: BinaryRDF varints ≥ 0x80,
+/// decode (their payloads are genuinely binary: `BinaryRDF` varints ≥ 0x80,
 /// HDT control/dictionary/bitmap sections).  Every other format must be
 /// valid UTF-8 and is parsed from its decoded text via [`parse_str`].
 pub fn parse_bytes(bytes: &[u8], format: OntologyFormat) -> Result<Ontology> {
@@ -558,7 +559,7 @@ pub fn parse_bytes(bytes: &[u8], format: OntologyFormat) -> Result<Ontology> {
 }
 
 /// Public wrapper for format detection from content and path hint.
-/// Used by the OntologyLoader and other consumers.
+/// Used by the `OntologyLoader` and other consumers.
 ///
 /// The path is no longer a mere hint: unambiguous extensions are resolved
 /// through the shared [`format_from_extension`] table first — exactly what

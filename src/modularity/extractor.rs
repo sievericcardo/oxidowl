@@ -64,8 +64,8 @@ impl ModuleExtractor {
     /// Extract a module from the ontology for the given signature.
     ///
     /// Algorithm varies by module type:
-    /// - UpperBound: ⊥-locality (bottom), iterate to fixpoint
-    /// - LowerBound: ⊤-locality (top), iterate to fixpoint
+    /// - `UpperBound`: ⊥-locality (bottom), iterate to fixpoint
+    /// - `LowerBound`: ⊤-locality (top), iterate to fixpoint
     /// - Star: alternating ⊥/⊤-locality passes, iterate to fixpoint
     #[must_use]
     pub fn extract_module(

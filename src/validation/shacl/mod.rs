@@ -1,7 +1,7 @@
 //! SHACL (Shapes Constraint Language) implementation.
 //!
 //! Implements the full W3C SHACL Core and SHACL-SPARQL specifications
-//! (https://www.w3.org/TR/shacl/).
+//! (<https://www.w3.org/TR/shacl>/).
 //!
 //! # Module layout
 //!

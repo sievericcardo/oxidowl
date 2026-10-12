@@ -36,6 +36,10 @@ impl ObjectProperty {
     }
 
     /// Create the top object property (owl:topObjectProperty)
+    ///
+    /// # Panics
+    ///
+    /// Panics if the hardcoded `owl:topObjectProperty` IRI is invalid.
     #[must_use]
     pub fn top() -> Self {
         Self::new(crate::ontology::IRI::from(
@@ -45,6 +49,10 @@ impl ObjectProperty {
     }
 
     /// Create the bottom object property (owl:bottomObjectProperty)
+    ///
+    /// # Panics
+    ///
+    /// Panics if the hardcoded `owl:bottomObjectProperty` IRI is invalid.
     #[must_use]
     pub fn bottom() -> Self {
         Self::new(crate::ontology::IRI::from(
@@ -202,6 +210,10 @@ impl ObjectPropertyExpression {
 
     /// Get the simple object property at the core of this expression
     /// For property chains, this returns the first property in the chain
+    ///
+    /// # Panics
+    ///
+    /// Panics if the property chain is empty.
     #[must_use]
     pub fn get_named_property(&self) -> &ObjectProperty {
         match self {

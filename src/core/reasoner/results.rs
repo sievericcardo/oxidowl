@@ -360,33 +360,30 @@ impl ClassificationResult {
                     }
                 };
 
-                match next_child {
-                    Some((child_iri, child_name)) => {
-                        // Cycle guard: never re-enter a node that is already
-                        // on the current path.  Reflexive entries (A ⊑ A) and
-                        // equivalent-class cycles (A ⊑ B ⊑ A) would otherwise
-                        // make this DFS descend forever and exhaust memory
-                        // (SIGKILL while printing the HermiT-style hierarchy).
-                        if stack.iter().any(|(iri, _, _, _)| *iri == child_iri) {
-                            continue;
-                        }
-                        stack.push((child_iri, child_name, 0, Vec::new()));
+                if let Some((child_iri, child_name)) = next_child {
+                    // Cycle guard: never re-enter a node that is already
+                    // on the current path.  Reflexive entries (A ⊑ A) and
+                    // equivalent-class cycles (A ⊑ B ⊑ A) would otherwise
+                    // make this DFS descend forever and exhaust memory
+                    // (SIGKILL while printing the HermiT-style hierarchy).
+                    if stack.iter().any(|(iri, _, _, _)| *iri == child_iri) {
+                        continue;
                     }
-                    None => {
-                        // All children of this node have been processed: pop and assemble.
-                        let (iri, name, _, built) = stack.pop().unwrap();
-                        // Children are already in pre-sorted order from the index.
-                        let node = ClassNode {
-                            name,
-                            iri,
-                            children: built,
-                        };
-                        if let Some(parent_frame) = stack.last_mut() {
-                            parent_frame.3.push(node);
-                        } else {
-                            output.push(node);
-                            break;
-                        }
+                    stack.push((child_iri, child_name, 0, Vec::new()));
+                } else {
+                    // All children of this node have been processed: pop and assemble.
+                    let (iri, name, _, built) = stack.pop().unwrap();
+                    // Children are already in pre-sorted order from the index.
+                    let node = ClassNode {
+                        name,
+                        iri,
+                        children: built,
+                    };
+                    if let Some(parent_frame) = stack.last_mut() {
+                        parent_frame.3.push(node);
+                    } else {
+                        output.push(node);
+                        break;
                     }
                 }
             }
