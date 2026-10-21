@@ -1668,15 +1668,22 @@ impl TurtleParser {
                     return Err(Error::ontology_parsing("No owl:hasValue found"));
                 };
 
-            // RDF 1.1: an untagged plain literal *is* `xsd:string` — never
-            // `datatype: None`, so it cannot compare unequal merely for lack
-            // of a datatype tag.
-            let datatype_spec = datatype_spec.unwrap_or_else(|| "xsd:string".to_string());
-            let datatype_iri = self.resolve_datatype_spec(&datatype_spec, state);
+            // RDF 1.1 plain literals and explicit `xsd:string` are the same
+            // value, and this crate normalises that equivalence to
+            // `datatype: None` (see `rdf_to_owl::normalize_literal`); the
+            // legacy ABox object path also leaves untagged literals as `None`.
+            // Restriction literals must follow the same convention, or
+            // `literal_values_equal`'s `(Some, None)` arm would make an
+            // untagged `owl:hasValue "x"` stop matching an untagged ABox `"x"`.
+            // An explicit `^^datatype` tag is still preserved.
+            let datatype = datatype_spec.and_then(|spec| {
+                let datatype_iri = self.resolve_datatype_spec(&spec, state);
+                IRI::new(&datatype_iri).to_url().ok()
+            });
 
             let literal = Literal {
                 value: self.decode_escape_sequences(&value_str),
-                datatype: IRI::new(&datatype_iri).to_url().ok(),
+                datatype,
                 language: None,
             };
 
@@ -1997,13 +2004,18 @@ impl TurtleParser {
         let value_raw = parts[1..].join(" ");
         let (raw_value, datatype_spec) = Self::split_literal_datatype(&value_raw);
 
-        // RDF 1.1: an untagged plain literal *is* `xsd:string`.
-        let datatype_spec = datatype_spec.unwrap_or_else(|| "xsd:string".to_string());
-        let datatype_iri = self.resolve_datatype_spec(&datatype_spec, state);
+        // RDF 1.1 plain literals and explicit `xsd:string` are the same value,
+        // and this crate normalises that equivalence to `datatype: None` (see
+        // `rdf_to_owl::normalize_literal`). Restriction literals follow the
+        // same convention; an explicit `^^datatype` tag is preserved.
+        let datatype = datatype_spec.and_then(|spec| {
+            let datatype_iri = self.resolve_datatype_spec(&spec, state);
+            IRI::new(&datatype_iri).to_url().ok()
+        });
 
         let literal = Literal {
             value: self.decode_escape_sequences(&raw_value),
-            datatype: IRI::new(&datatype_iri).to_url().ok(),
+            datatype,
             language: None,
         };
 
@@ -3355,10 +3367,11 @@ ast:Operational rdfs:subClassOf ast:Pump .
         );
     }
 
-    /// Edge cases: an untagged restriction literal defaults to `xsd:string`
-    /// (RDF 1.1 plain-literal semantics, never `datatype: None`), a full-IRI
-    /// `^^<…>` tag resolves, and a `^^` *inside* the quoted value is not
-    /// mistaken for a datatype tag.
+    /// Edge cases: an untagged restriction literal defaults to `datatype: None`
+    /// — the crate's convention for RDF 1.1 plain literals (shared with
+    /// `rdf_to_owl::normalize_literal` and the legacy ABox object path), a
+    /// full-IRI `^^<…>` tag resolves, and a `^^` *inside* the quoted value is
+    /// not mistaken for a datatype tag.
     #[test]
     fn test_restriction_literal_default_and_iri_datatypes() {
         let content = r#"
@@ -3377,19 +3390,19 @@ ast:Operational rdfs:subClassOf ast:Pump .
             .parse_string(content)
             .expect("restriction ontology should parse");
 
-        // Untagged values default to xsd:string rather than datatype: None.
+        // Untagged values default to datatype: None — the crate's RDF 1.1
+        // plain-literal convention — so they keep matching untagged ABox
+        // literals through literal_values_equal's (None, None) arm.
         let (facet_c, has_value_c) = restriction_literals(&ontology, "http://example.org/C");
         assert_eq!(facet_c.value, "30");
         assert_eq!(
-            facet_c.datatype.as_ref().map(url::Url::as_str),
-            Some("http://www.w3.org/2001/XMLSchema#string"),
-            "untagged facet value must default to xsd:string; got {facet_c:?}"
+            facet_c.datatype, None,
+            "untagged facet value must default to datatype: None; got {facet_c:?}"
         );
         assert_eq!(has_value_c.value, "plain");
         assert_eq!(
-            has_value_c.datatype.as_ref().map(url::Url::as_str),
-            Some("http://www.w3.org/2001/XMLSchema#string"),
-            "untagged owl:hasValue must default to xsd:string; got {has_value_c:?}"
+            has_value_c.datatype, None,
+            "untagged owl:hasValue must default to datatype: None; got {has_value_c:?}"
         );
 
         // Full-IRI datatype tags resolve; `^^` inside the quotes is preserved.
@@ -3401,9 +3414,8 @@ ast:Operational rdfs:subClassOf ast:Pump .
         );
         assert_eq!(has_value_d.value, "a^^b");
         assert_eq!(
-            has_value_d.datatype.as_ref().map(url::Url::as_str),
-            Some("http://www.w3.org/2001/XMLSchema#string"),
-            "\"a^^b\" is one untagged value, not value `a` tagged `b`; got {has_value_d:?}"
+            has_value_d.datatype, None,
+            "\"a^^b\" is one untagged value (→ None), not value `a` tagged `b`; got {has_value_d:?}"
         );
     }
 }

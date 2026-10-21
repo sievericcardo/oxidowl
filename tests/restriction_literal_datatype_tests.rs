@@ -12,9 +12,14 @@
 //! the ABox literal `"true"^^xsd:boolean`, the whole `ObjectIntersectionOf`
 //! conjunction failed, and `realize()` never derived the defined class.
 //!
-//! RDF 1.1 additionally defines an *untagged* plain literal as `xsd:string`, so
-//! restriction literals without an explicit tag now default to `xsd:string`
-//! rather than `datatype: None`.
+//! RDF 1.1 plain literals and explicit `xsd:string` are the same value, and
+//! this crate normalises that equivalence to `datatype: None` (see
+//! `rdf_to_owl::normalize_literal`; the legacy Turtle ABox object path leaves
+//! untagged literals as `None` too). Restriction literals without an explicit
+//! tag therefore default to `datatype: None` as well — otherwise an untagged
+//! `owl:hasValue "x"` would hit `literal_values_equal`'s `(Some, None)` arm
+//! and silently stop matching an untagged ABox `"x"`. Only *explicit* `^^`
+//! tags are preserved (the actual defect fix).
 
 use oxidowl::{
     Reasoner, ReasonerConfig,
@@ -66,6 +71,39 @@ const ONTOLOGY: &str = r#"
 :svc2 rdf:type owl:NamedIndividual ;
       :latencyMs "45.0"^^xsd:double ;
       :degraded "false"^^xsd:boolean .
+"#;
+
+/// `Plainish ≡ (status = "active") ⊓ (tier = "gold")` — every literal
+/// (restriction *and* ABox) untagged, exactly like `greenhouse.ttl`-style
+/// ontologies.
+const UNTAGGED_ONTOLOGY: &str = r#"
+@prefix : <http://example.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+:status rdf:type owl:DatatypeProperty .
+:tier rdf:type owl:DatatypeProperty .
+
+:Plainish rdf:type owl:Class ;
+          owl:equivalentClass [ owl:intersectionOf ( [ rdf:type owl:Restriction ;
+                                                       owl:onProperty :status ;
+                                                       owl:hasValue "active"
+                                                     ]
+                                                     [ rdf:type owl:Restriction ;
+                                                       owl:onProperty :tier ;
+                                                       owl:hasValue "gold"
+                                                     ]
+                                                   ) ;
+                                rdf:type owl:Class
+                              ] .
+
+:a1 rdf:type owl:NamedIndividual ;
+    :status "active" ;
+    :tier "gold" .
+
+:a2 rdf:type owl:NamedIndividual ;
+    :status "active" ;
+    :tier "silver" .
 "#;
 
 fn realise(source: &str) -> oxidowl::Result<RealisationResult> {
@@ -130,5 +168,28 @@ fn realise_does_not_derive_class_for_non_members() {
     assert!(
         !svc2.contains(&format!("{EX}Slowish")),
         "svc2 (degraded = false) must not be realised as Slowish; got types: {svc2:?}"
+    );
+}
+
+/// Regression lock for the parser/reasoner convention mismatch: an **untagged**
+/// `owl:hasValue "x"` and an **untagged** ABox literal `"x"` must both parse as
+/// `datatype: None` (this crate's RDF 1.1 plain-literal convention), so
+/// `literal_values_equal`'s `(None, None)` arm matches and the defined class is
+/// still derived — the pre-fix behaviour that an `xsd:string` default would
+/// have silently broken (e.g. `greenhouse.ttl`-style ontologies).
+#[test]
+fn realise_derives_class_for_untagged_has_value_and_plain_literal() {
+    let result = realise(UNTAGGED_ONTOLOGY).expect("realisation should succeed");
+
+    let a1 = realised_type_iris(&result, &format!("{EX}a1"));
+    assert!(
+        a1.contains(&format!("{EX}Plainish")),
+        "a1 (status \"active\", tier \"gold\") must be realised as Plainish; got types: {a1:?}"
+    );
+
+    let a2 = realised_type_iris(&result, &format!("{EX}a2"));
+    assert!(
+        !a2.contains(&format!("{EX}Plainish")),
+        "a2 (tier \"silver\") must not be realised as Plainish; got types: {a2:?}"
     );
 }
