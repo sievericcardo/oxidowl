@@ -1656,42 +1656,27 @@ impl TurtleParser {
                 iri: IRI::new(&property_iri),
             };
 
-            // Extract the value - look for quoted string or unquoted value
-            let value_str = if let Some(val_start) = restriction_str.find("owl:hasValue") {
-                let after_val = &restriction_str[val_start + 12..].trim_start();
-
-                // Check if it's a quoted string
-                if let Some(quote_start) = after_val.find('"') {
-                    // Find the closing quote
-                    let after_quote = &after_val[quote_start + 1..];
-                    if let Some(quote_end) = after_quote.find('"') {
-                        after_quote[..quote_end].to_string()
-                    } else {
-                        // No closing quote found, take until semicolon or bracket
-                        after_val
-                            .split(&[';', ']'][..])
-                            .next()
-                            .unwrap_or("")
-                            .trim()
-                            .trim_matches('"')
-                            .to_string()
-                    }
+            // Extract the value — quoted string or unquoted — together with any
+            // explicit `^^datatype` tag that follows it (the tag used to be
+            // silently dropped here, so `DataHasValue` never matched a typed
+            // ABox literal in `DatatypeValidator::literal_values_equal`).
+            let (value_str, datatype_spec) =
+                if let Some(val_start) = restriction_str.find("owl:hasValue") {
+                    let after_val = restriction_str[val_start + 12..].trim_start();
+                    Self::split_literal_datatype(after_val)
                 } else {
-                    // Unquoted value - take until semicolon or bracket
-                    after_val
-                        .split(&[';', ']'][..])
-                        .next()
-                        .unwrap_or("")
-                        .trim()
-                        .to_string()
-                }
-            } else {
-                return Err(Error::ontology_parsing("No owl:hasValue found"));
-            };
+                    return Err(Error::ontology_parsing("No owl:hasValue found"));
+                };
+
+            // RDF 1.1: an untagged plain literal *is* `xsd:string` — never
+            // `datatype: None`, so it cannot compare unequal merely for lack
+            // of a datatype tag.
+            let datatype_spec = datatype_spec.unwrap_or_else(|| "xsd:string".to_string());
+            let datatype_iri = self.resolve_datatype_spec(&datatype_spec, state);
 
             let literal = Literal {
-                value: value_str,
-                datatype: None,
+                value: self.decode_escape_sequences(&value_str),
+                datatype: IRI::new(&datatype_iri).to_url().ok(),
                 language: None,
             };
 
@@ -2006,20 +1991,19 @@ impl TurtleParser {
 
         let facet_iri = self.resolve_token(&facet_token, state)?;
 
-        // Extract value (remove quotes and datatype annotation)
-        // The value might be like "80.0"^^xsd:double or just "80.0"
-        let value_part = parts[1];
-        let value_str = value_part
-            .split("^^")
-            .next()
-            .unwrap_or(value_part)
-            .trim_matches('"')
-            .trim_matches('\\') // Remove escape characters if present
-            .to_string();
+        // Extract the value and its optional `^^datatype` tag — everything
+        // after the facet name (the value may contain spaces; a `^^` inside
+        // the quotes of e.g. `"a^^b"` must not be mistaken for a tag).
+        let value_raw = parts[1..].join(" ");
+        let (raw_value, datatype_spec) = Self::split_literal_datatype(&value_raw);
+
+        // RDF 1.1: an untagged plain literal *is* `xsd:string`.
+        let datatype_spec = datatype_spec.unwrap_or_else(|| "xsd:string".to_string());
+        let datatype_iri = self.resolve_datatype_spec(&datatype_spec, state);
 
         let literal = Literal {
-            value: value_str,
-            datatype: None,
+            value: self.decode_escape_sequences(&raw_value),
+            datatype: IRI::new(&datatype_iri).to_url().ok(),
             language: None,
         };
 
@@ -2027,6 +2011,80 @@ impl TurtleParser {
             facet: IRI::new(&facet_iri),
             value: literal,
         })
+    }
+
+    /// Split a literal object into `(lexical form, optional `^^datatype` tag)`.
+    ///
+    /// Handles quoted strings — including escaped quotes and `^^` *inside* the
+    /// quotes (so `"a^^b"` is never mistaken for a tagged literal) — as well as
+    /// bare values such as `30.0^^xsd:double`. The returned datatype is the raw
+    /// specification (`xsd:double`, `<http://…>`, …); callers resolve it with
+    /// [`Self::resolve_datatype_spec`].
+    fn split_literal_datatype(raw: &str) -> (String, Option<String>) {
+        let trimmed = raw.trim();
+
+        // Quoted literal: scan for the closing quote, skipping `\"` escapes.
+        if let Some(rest) = trimmed.strip_prefix('"') {
+            let bytes = rest.as_bytes();
+            let mut end = 0usize;
+            while end < bytes.len() {
+                match bytes[end] {
+                    b'\\' => end += 2,
+                    b'"' => break,
+                    _ => end += 1,
+                }
+            }
+            let closed = end < bytes.len();
+            let value = rest[..end.min(bytes.len())].to_string();
+            let datatype = if closed {
+                rest[end + 1..]
+                    .trim_start()
+                    .strip_prefix("^^")
+                    .and_then(Self::first_datatype_token)
+            } else {
+                None
+            };
+            return (value, datatype);
+        }
+
+        // Bare value: bound it at `;`/`]`/`,` first so a later `^^`-tagged
+        // literal in the same restriction never becomes this value's tag.
+        let token = trimmed.split([';', ']', ',']).next().unwrap_or("").trim();
+        match token.find("^^") {
+            Some(pos) => {
+                let datatype = Self::first_datatype_token(&token[pos + 2..]);
+                (token[..pos].trim().to_string(), datatype)
+            }
+            None => (token.to_string(), None),
+        }
+    }
+
+    /// First delimiter-delimited token of a `^^datatype` suffix (delimiters are
+    /// exactly those that can legally follow a datatype IRI in a restriction).
+    fn first_datatype_token(rest: &str) -> Option<String> {
+        let token = rest
+            .split([' ', '\t', '\n', '\r', ';', ']', ',', ')'])
+            .next()
+            .unwrap_or("")
+            .trim();
+        (!token.is_empty()).then(|| token.to_string())
+    }
+
+    /// Resolve a raw `^^datatype` specification (`xsd:double`, `<http://…>`, a
+    /// full IRI or a bare name) to an absolute IRI string, reusing the shared
+    /// prefix machinery ([`Self::expand_prefixed_name`]) instead of
+    /// reimplementing prefix lookup.
+    ///
+    /// A specification that cannot be expanded falls back to itself, so a
+    /// malformed tag degrades instead of failing the whole parse.
+    fn resolve_datatype_spec(&self, spec: &str, state: &ParseState) -> String {
+        // A full IRI without angle brackets is already absolute.
+        if spec.starts_with("http://") || spec.starts_with("https://") {
+            return spec.to_string();
+        }
+        // Prefixed name, `<…>` IRI or bare name (expanded against the base).
+        self.expand_prefixed_name(spec, state)
+            .unwrap_or_else(|_| spec.to_string())
     }
 
     /// Enhanced tokenization
@@ -3205,6 +3263,147 @@ ast:Operational rdfs:subClassOf ast:Pump .
             subclass_count >= 2,
             "Should have created at least 2 SubClassOf axioms, found: {}",
             subclass_count
+        );
+    }
+
+    /// Collect `(facet value, hasValue literal)` from the `EquivalentClasses`
+    /// axiom that defines `class_iri` as an `owl:intersectionOf` of a
+    /// `DataSomeValuesFrom` facet restriction and a `DataHasValue` restriction.
+    fn restriction_literals(ontology: &Ontology, class_iri: &str) -> (Literal, Literal) {
+        let mut facet_values = Vec::new();
+        let mut has_values = Vec::new();
+        for axiom in ontology.axioms() {
+            let Axiom::EquivalentClasses(eq) = axiom else {
+                continue;
+            };
+            if !eq.classes.iter().any(
+                |expr| matches!(expr, ClassExpression::Class(c) if c.iri.as_str() == class_iri),
+            ) {
+                continue;
+            }
+            for expr in &eq.classes {
+                let ClassExpression::ObjectIntersectionOf(members) = expr else {
+                    continue;
+                };
+                for member in members {
+                    match member {
+                        ClassExpression::DataSomeValuesFrom { filler, .. } => {
+                            if let DataRange::DatatypeRestriction { restrictions, .. } = filler {
+                                for fr in restrictions {
+                                    facet_values.push(fr.value.clone());
+                                }
+                            }
+                        }
+                        ClassExpression::DataHasValue { value, .. } => {
+                            has_values.push(value.clone());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            facet_values.len(),
+            1,
+            "expected exactly one facet restriction on {class_iri}"
+        );
+        assert_eq!(
+            has_values.len(),
+            1,
+            "expected exactly one hasValue restriction on {class_iri}"
+        );
+        (facet_values.remove(0), has_values.remove(0))
+    }
+
+    /// `^^datatype` tags on restriction literals must survive parsing.
+    ///
+    /// Regression: `parse_facet` and the `owl:hasValue` branch used to build
+    /// literals with `datatype: None`; `DatatypeValidator::literal_values_equal`
+    /// treats `(Some, None)` as unequal, so the `DataHasValue` conjunct never
+    /// matched the typed ABox literal and `realize()` never derived the
+    /// defined class (see `tests/restriction_literal_datatype_tests.rs`).
+    #[test]
+    fn test_restriction_literals_keep_datatype_tags() {
+        let content = r#"
+@prefix : <http://example.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:C owl:equivalentClass [ owl:intersectionOf ( [ owl:onProperty :p ; owl:someValuesFrom [ owl:onDatatype xsd:double ; owl:withRestrictions ( [ xsd:minInclusive "30.0"^^xsd:double ] ) ] ] [ owl:onProperty :q ; owl:hasValue "true"^^xsd:boolean ] ) ] .
+"#;
+
+        let ontology = TurtleParser::new()
+            .parse_string(content)
+            .expect("restriction ontology should parse");
+
+        let (facet_value, has_value) = restriction_literals(&ontology, "http://example.org/C");
+
+        assert_eq!(facet_value.value, "30.0");
+        assert_eq!(
+            facet_value.datatype.as_ref().map(url::Url::as_str),
+            Some("http://www.w3.org/2001/XMLSchema#double"),
+            "facet value must keep its ^^xsd:double tag; got {facet_value:?}"
+        );
+
+        assert_eq!(has_value.value, "true");
+        assert_eq!(
+            has_value.datatype.as_ref().map(url::Url::as_str),
+            Some("http://www.w3.org/2001/XMLSchema#boolean"),
+            "owl:hasValue must keep its ^^xsd:boolean tag; got {has_value:?}"
+        );
+    }
+
+    /// Edge cases: an untagged restriction literal defaults to `xsd:string`
+    /// (RDF 1.1 plain-literal semantics, never `datatype: None`), a full-IRI
+    /// `^^<…>` tag resolves, and a `^^` *inside* the quoted value is not
+    /// mistaken for a datatype tag.
+    #[test]
+    fn test_restriction_literal_default_and_iri_datatypes() {
+        let content = r#"
+@prefix : <http://example.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:C owl:equivalentClass [ owl:intersectionOf ( [ owl:onProperty :p ; owl:someValuesFrom [ owl:onDatatype xsd:double ; owl:withRestrictions ( [ xsd:minInclusive "30" ] ) ] ] [ owl:onProperty :q ; owl:hasValue "plain" ] ) ] .
+
+:D owl:equivalentClass [ owl:intersectionOf ( [ owl:onProperty :r ; owl:someValuesFrom [ owl:onDatatype xsd:double ; owl:withRestrictions ( [ xsd:minInclusive "7"^^<http://www.w3.org/2001/XMLSchema#integer> ] ) ] ] [ owl:onProperty :s ; owl:hasValue "a^^b" ] ) ] .
+"#;
+
+        let ontology = TurtleParser::new()
+            .parse_string(content)
+            .expect("restriction ontology should parse");
+
+        // Untagged values default to xsd:string rather than datatype: None.
+        let (facet_c, has_value_c) = restriction_literals(&ontology, "http://example.org/C");
+        assert_eq!(facet_c.value, "30");
+        assert_eq!(
+            facet_c.datatype.as_ref().map(url::Url::as_str),
+            Some("http://www.w3.org/2001/XMLSchema#string"),
+            "untagged facet value must default to xsd:string; got {facet_c:?}"
+        );
+        assert_eq!(has_value_c.value, "plain");
+        assert_eq!(
+            has_value_c.datatype.as_ref().map(url::Url::as_str),
+            Some("http://www.w3.org/2001/XMLSchema#string"),
+            "untagged owl:hasValue must default to xsd:string; got {has_value_c:?}"
+        );
+
+        // Full-IRI datatype tags resolve; `^^` inside the quotes is preserved.
+        let (facet_d, has_value_d) = restriction_literals(&ontology, "http://example.org/D");
+        assert_eq!(
+            facet_d.datatype.as_ref().map(url::Url::as_str),
+            Some("http://www.w3.org/2001/XMLSchema#integer"),
+            "^^<…#integer> facet tag must resolve; got {facet_d:?}"
+        );
+        assert_eq!(has_value_d.value, "a^^b");
+        assert_eq!(
+            has_value_d.datatype.as_ref().map(url::Url::as_str),
+            Some("http://www.w3.org/2001/XMLSchema#string"),
+            "\"a^^b\" is one untagged value, not value `a` tagged `b`; got {has_value_d:?}"
         );
     }
 }
