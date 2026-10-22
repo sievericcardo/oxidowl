@@ -376,7 +376,7 @@ dependencies = [
  "tokenizers",
  "yoke",
  "zerocopy",
- "zip 8.6.0",
+ "zip",
 ]
 
 [[package]]
@@ -2366,9 +2366,9 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "lzma-rust2"
-version = "0.18.1"
+version = "0.16.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "243cb2271683c2855cad62142cbf38199db439b1b1e1ccdd5a011342894dd7cc"
+checksum = "ca93e534d1142d1d0dcca6d25fe302508a5dfb40b302802904577725ea0b695b"
 dependencies = [
  "sha2 0.11.0",
 ]
@@ -2779,7 +2779,7 @@ dependencies = [
  "warp",
  "windows",
  "xz2",
- "zip 9.0.0-pre3",
+ "zip",
 ]
 
 [[package]]
@@ -5707,18 +5707,6 @@ name = "zip"
 version = "8.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
-dependencies = [
- "crc32fast",
- "indexmap 2.14.0",
- "memchr",
- "typed-path",
-]
-
-[[package]]
-name = "zip"
-version = "9.0.0-pre3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58e8082c6efe6dbccc7e8ea3ebf6afe46a04847f2e0bcf772c8aebc933dd2ccf"
 dependencies = [
  "aes",
  "bzip2",
