@@ -77,15 +77,15 @@ oxigraph = { version = "0.5.9", features = ["rocksdb"], optional = true }
 # dependency tree (oxrdf 0.3.3, oxrdfio 0.2.5, oxjsonld 0.2.5) — never a
 # second copy of any ox crate. Non-optional: `parsers/rio` (incl. jsonld) is
 # compiled unconditionally, so these must be too.
-oxrdf = "=0.3.3"
-oxrdfio = "=0.2.5"
-oxjsonld = "=0.2.5"
+oxrdf = "0.3.3"
+oxrdfio = "0.2.5"
+oxjsonld = "0.2.5"
 # N3 (B5 Slice 2): the oxttl N3 parser (`oxttl::n3::N3Parser`) is the engine
 # behind `oxrdfio::RdfFormat::N3`, so the version is exactly the one already
 # in Cargo.lock via `oxrdfio`.  No extra features are needed: the `n3` module
 # is always compiled in oxttl (`rdf-12`/`async-tokio` stay off, matching the
 # rest of the workspace).
-oxttl = "=0.2.3"
+oxttl = "0.2.3"
 # RDFa 1.1 (B5 Slice 4): real HTML5 DOM parsing + RDFa core processing.
 # html5ever 0.39 is the WHATWG-conformant HTML5 tokenizer/tree-builder;
 # markup5ever 0.39 holds its shared vocabulary/QualName types.  The DOM is
@@ -95,9 +95,9 @@ oxttl = "=0.2.3"
 # nodes intact, all of which the RDFa evaluation (xml:lang, xmlns prefix
 # declarations, <base href> pre-scan, descendant text concatenation) needs;
 # `scraper` presents a selector-oriented subset of the tree.  Pinned to the
-# 0.39 line so all three crates stay on one markup5ever version.
-html5ever = "0.39"
-markup5ever = "0.39"
+# 0.40 line so all three crates stay on one markup5ever version.
+html5ever = "0.40.1"
+markup5ever = "0.40.0"
 markup5ever_rcdom = "0.39"
 # HDT (B5 Slice 5): spec-compliant Header Dictionary Triples read/write via
 # the `hdt` crate (hdt-rs by KonradHoeffner, v0.7.3).  The `nt` feature
@@ -132,7 +132,7 @@ tokio-tungstenite = { version = "0.30.0", optional = true }
 warp = { version = "0.4.3", features = ["server"], optional = true }
 bytes = { version = "1.12.1", optional = true }
 futures = { version = "0.3.34", optional = true }
-quick-xml = { version = "0.41.0", features = ["serialize"] }
+quick-xml = { version = "0.42.0", features = ["serialize"] }
 
 # JSON and XML parsing for ontology formats
 roxmltree = "0.21.1"
