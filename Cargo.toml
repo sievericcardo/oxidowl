@@ -70,22 +70,22 @@ curie = "0.1.4"         # Prefix mapping support for horned-owl
 # sophia = { version = "0.8", optional = true }   # May need specific version
 
 # SPARQL and RDF graph support
-oxigraph = { version = "0.5.9", features = ["rocksdb"], optional = true }
+oxigraph = { version = "=0.5.13", features = ["rocksdb"], optional = true }
 
 # RDF/JSON-LD I/O (B5 Slice 1 — JSON-LD 1.1 parse/serialize).
 # Exact pins = the versions already present in Cargo.lock via the oxigraph
 # dependency tree (oxrdf 0.3.3, oxrdfio 0.2.5, oxjsonld 0.2.5) — never a
 # second copy of any ox crate. Non-optional: `parsers/rio` (incl. jsonld) is
 # compiled unconditionally, so these must be too.
-oxrdf = "0.3.3"
-oxrdfio = "0.2.5"
-oxjsonld = "0.2.5"
+oxrdf = "=0.3.5"
+oxrdfio = "=0.2.7"
+oxjsonld = "=0.2.7"
 # N3 (B5 Slice 2): the oxttl N3 parser (`oxttl::n3::N3Parser`) is the engine
 # behind `oxrdfio::RdfFormat::N3`, so the version is exactly the one already
 # in Cargo.lock via `oxrdfio`.  No extra features are needed: the `n3` module
 # is always compiled in oxttl (`rdf-12`/`async-tokio` stay off, matching the
 # rest of the workspace).
-oxttl = "0.2.3"
+oxttl = "=0.2.5"
 # RDFa 1.1 (B5 Slice 4): real HTML5 DOM parsing + RDFa core processing.
 # html5ever 0.39 is the WHATWG-conformant HTML5 tokenizer/tree-builder;
 # markup5ever 0.39 holds its shared vocabulary/QualName types.  The DOM is
