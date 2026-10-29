@@ -249,14 +249,14 @@ impl RdfXmlParser {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(ref e)) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name().as_ref().to_string();
                     _current_element = Some(name.clone());
 
                     // Parse attributes
                     current_attributes.clear();
                     for attr in e.attributes().flatten() {
-                        let key = String::from_utf8_lossy(attr.key.as_ref());
-                        let value = String::from_utf8_lossy(&attr.value);
+                        let key = attr.key.as_ref().to_string();
+                        let value = attr.value.to_string();
                         current_attributes.insert(key.to_string(), value.to_string());
                     }
 
@@ -278,13 +278,13 @@ impl RdfXmlParser {
                     }
                 }
                 Ok(Event::Empty(ref e)) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name().as_ref().to_string();
 
                     // Parse attributes for self-closing elements
                     current_attributes.clear();
                     for attr in e.attributes().flatten() {
-                        let key = String::from_utf8_lossy(attr.key.as_ref());
-                        let value = String::from_utf8_lossy(&attr.value);
+                        let key = attr.key.as_ref().to_string();
+                        let value = attr.value.to_string();
                         current_attributes.insert(key.to_string(), value.to_string());
                     }
 
@@ -297,7 +297,7 @@ impl RdfXmlParser {
                 }
                 Ok(Event::Text(ref e)) => {
                     // Handle text content if needed for class declarations
-                    let _text = String::from_utf8_lossy(e).to_string();
+                    let _text = e.as_ref().to_string();
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
@@ -478,11 +478,11 @@ impl RdfXmlParser {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(ref e)) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name().as_ref().to_string();
                     let mut attrs = HashMap::new();
                     for attr in e.attributes().flatten() {
-                        let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
-                        let value = String::from_utf8_lossy(&attr.value).to_string();
+                        let key = attr.key.as_ref().to_string();
+                        let value = attr.value.to_string();
                         attrs.insert(key, value);
                     }
                     depth += 1;
@@ -508,11 +508,11 @@ impl RdfXmlParser {
                     }
                 }
                 Ok(Event::Empty(ref e)) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name().as_ref().to_string();
                     let mut attrs = HashMap::new();
                     for attr in e.attributes().flatten() {
-                        let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
-                        let value = String::from_utf8_lossy(&attr.value).to_string();
+                        let key = attr.key.as_ref().to_string();
+                        let value = attr.value.to_string();
                         attrs.insert(key, value);
                     }
                     if subject.is_some() && depth == subj_depth {

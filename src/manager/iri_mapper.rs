@@ -253,7 +253,10 @@ impl ZipIRIMapper {
     /// or `.omn` is considered a potential ontology file.
     #[must_use]
     pub fn new(zip_path: PathBuf) -> Self {
-        let mappings = HashMap::new();
+        // `mut` is only required under the `zip-imports` feature (where the
+        // mapping table is populated); suppress the lint for the other config.
+        #[allow(unused_mut)]
+        let mut mappings = HashMap::new();
 
         if let Ok(file) = std::fs::File::open(&zip_path) {
             #[cfg(feature = "zip-imports")]

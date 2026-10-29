@@ -12,5 +12,6 @@ pub mod n3;
 pub mod nquads;
 pub mod rdf_json;
 pub mod rdfa;
+mod rcdom;
 pub mod trig;
 pub mod trix;

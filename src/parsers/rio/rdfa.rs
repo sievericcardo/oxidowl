@@ -159,7 +159,7 @@
 //!   ontology annotations are emitted as visible HTML comments; collection
 //!   cells are re-minted on re-parse).
 //!
-//! [`RcDom`]: markup5ever_rcdom::RcDom
+//! [`RcDom`]: super::rcdom::RcDom
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -167,8 +167,9 @@ use std::rc::Rc;
 
 use html5ever::tendril::stream::TendrilSink;
 use html5ever::{ParseOpts, parse_document};
-use markup5ever_rcdom::{Handle, NodeData, RcDom};
 use url::Url;
+
+use super::rcdom::{Handle, NodeData, RcDom};
 
 use crate::Error;
 use crate::Result;
@@ -644,7 +645,7 @@ impl DocumentScan {
                 && !self.base_found
                 && let Some(attr) = attrs
                     .iter()
-                    .find(|a| a.name.local.as_ref().eq_ignore_ascii_case("href"))
+                    .find(|a| (&*a.name.local).eq_ignore_ascii_case("href"))
             {
                 match fallback.join(attr.value.trim()) {
                     Ok(url) => {

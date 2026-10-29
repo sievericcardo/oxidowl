@@ -65,7 +65,7 @@ mimalloc = { version = "0.1.52", default-features = false, optional = true }
 # We'll enable SIMD via std::simd when stable
 
 # OWL integration and reasoning infrastructure
-horned-owl = "3.0.0"  # Core OWL ontology model and parsing
+horned-owl = "4.0.0"  # Core OWL ontology model and parsing
 curie = "0.1.4"         # Prefix mapping support for horned-owl
 # sophia = { version = "0.8", optional = true }   # May need specific version
 
@@ -87,18 +87,17 @@ oxjsonld = "=0.2.7"
 # rest of the workspace).
 oxttl = "=0.2.5"
 # RDFa 1.1 (B5 Slice 4): real HTML5 DOM parsing + RDFa core processing.
-# html5ever 0.39 is the WHATWG-conformant HTML5 tokenizer/tree-builder;
-# markup5ever 0.39 holds its shared vocabulary/QualName types.  The DOM is
-# markup5ever_rcdom 0.39 (`+unofficial` build metadata, matching the
-# html5ever 0.39 release exactly) — chosen over `scraper` because it keeps
+# html5ever 0.40 is the WHATWG-conformant HTML5 tokenizer/tree-builder;
+# markup5ever 0.40 holds its shared vocabulary/QualName types.  The DOM is a
+# small vendored `RcDom` (`src/parsers/rio/rcdom.rs`) — a subset of the
+# html5ever project's `markup5ever_rcdom`, because that crate has no
+# 0.40-compatible release (its only published version, 0.39, pins
+# html5ever/markup5ever to 0.39).  The vendored DOM keeps
 # namespace-qualified attribute names, doctype/comment nodes and raw text
 # nodes intact, all of which the RDFa evaluation (xml:lang, xmlns prefix
-# declarations, <base href> pre-scan, descendant text concatenation) needs;
-# `scraper` presents a selector-oriented subset of the tree.  Pinned to the
-# 0.40 line so all three crates stay on one markup5ever version.
+# declarations, <base href> pre-scan, descendant text concatenation) needs.
 html5ever = "0.40.1"
 markup5ever = "0.40.0"
-markup5ever_rcdom = "0.39"
 # HDT (B5 Slice 5): spec-compliant Header Dictionary Triples read/write via
 # the `hdt` crate (hdt-rs by KonradHoeffner, v0.7.3).  The `nt` feature
 # (experimental upstream, but the only N-Triples/in-memory -> HDT conversion

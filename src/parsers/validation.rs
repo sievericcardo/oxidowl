@@ -929,7 +929,7 @@ impl SyntaxValidator {
             match reader.read_event() {
                 Ok(Event::Start(ref e)) => {
                     let name_bytes = e.name();
-                    let name = String::from_utf8_lossy(name_bytes.as_ref());
+                    let name = name_bytes.as_ref().to_string();
                     if name == "rdf:RDF" || name == "RDF" {
                         inside_rdf_root = true;
                         depth = 0;
@@ -939,7 +939,7 @@ impl SyntaxValidator {
                 }
                 Ok(Event::End(ref e)) => {
                     let name_bytes = e.name();
-                    let name = String::from_utf8_lossy(name_bytes.as_ref());
+                    let name = name_bytes.as_ref().to_string();
                     if name == "rdf:RDF" || name == "RDF" {
                         inside_rdf_root = false;
                     } else if inside_rdf_root && depth > 0 {
@@ -949,7 +949,7 @@ impl SyntaxValidator {
                 Ok(Event::Text(ref e))
                     // Check if there's significant text content directly under rdf:RDF
                     if inside_rdf_root && depth == 0 => {
-                        let text = String::from_utf8_lossy(e);
+                        let text = e.as_ref().to_string();
                         let trimmed_text = text.trim();
                         // If there's non-whitespace text directly in rdf:RDF, it's invalid
                         if !trimmed_text.is_empty() {
@@ -991,7 +991,7 @@ impl SyntaxValidator {
                 match reader.read_event() {
                     Ok(Event::Start(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:unionOf" {
                             in_union = true;
                             union_class_count = 0;
@@ -1001,7 +1001,7 @@ impl SyntaxValidator {
                     }
                     Ok(Event::End(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:unionOf" {
                             if union_class_count < 2 {
                                 return Err(Error::ontology_parsing(
@@ -1033,7 +1033,7 @@ impl SyntaxValidator {
                 match reader.read_event() {
                     Ok(Event::Start(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:oneOf" {
                             in_one_of = true;
                             one_of_item_count = 0;
@@ -1046,7 +1046,7 @@ impl SyntaxValidator {
                     Ok(Event::Empty(ref e)) => {
                         // Handle self-closing tags like <owl:oneOf rdf:parseType="Collection"/>
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:oneOf" {
                             return Err(Error::ontology_parsing(
                                 "owl:oneOf must contain at least 1 individual",
@@ -1055,7 +1055,7 @@ impl SyntaxValidator {
                     }
                     Ok(Event::End(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:oneOf" {
                             if one_of_item_count == 0 {
                                 return Err(Error::ontology_parsing(
@@ -1096,7 +1096,7 @@ impl SyntaxValidator {
                 match reader.read_event() {
                     Ok(Event::Start(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:propertyChainAxiom" {
                             in_chain = true;
                             chain_property_count = 0;
@@ -1108,7 +1108,7 @@ impl SyntaxValidator {
                     }
                     Ok(Event::End(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:propertyChainAxiom" {
                             if chain_property_count < 2 {
                                 return Err(Error::ontology_parsing(
@@ -1146,7 +1146,7 @@ impl SyntaxValidator {
                 match reader.read_event() {
                     Ok(Event::Start(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:Restriction" {
                             in_restriction = true;
                             has_qualified_card = false;
@@ -1166,7 +1166,7 @@ impl SyntaxValidator {
                     }
                     Ok(Event::End(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:Restriction" {
                             if has_qualified_card && !has_on_class {
                                 return Err(Error::ontology_parsing(

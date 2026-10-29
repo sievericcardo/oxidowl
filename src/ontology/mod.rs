@@ -1764,22 +1764,29 @@ impl Ontology {
 
     /// Load an ontology from a file using horned-owl for robust parsing
     pub fn from_file_with_horned_owl<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
-        use horned_owl::io::ParserConfiguration;
+        use horned_owl::io::{ParserConfiguration, RDFParserConfiguration};
+        use horned_owl::model::{Build, RcAnnotatedComponent, RcStr};
         use std::fs::File;
         use std::io::{BufReader, Read};
 
         let file = File::open(path.as_ref()).map_err(|e| Error::io(e.to_string()))?;
         let mut reader = BufReader::new(file);
-        let config = ParserConfiguration::default();
+        // horned-owl 4.0: the config now carries the interning `Build`, and
+        // `read` is generic over the annotation-component type, so both must
+        // be specified explicitly (mirroring the previous concrete return
+        // type `ConcreteRcRDFOntology`).
+        let config = RDFParserConfiguration::from(ParserConfiguration::new(Build::new_rc()));
 
         // Use horned-owl's RDF parser for all file types (most compatible)
-        let result = horned_owl::io::rdf::reader::read(&mut reader, config)
-            .map_err(|e| Error::ontology_parsing(format!("Horned-owl parsing error: {e}")))?;
+        let result = horned_owl::io::rdf::reader::read::<RcStr, RcAnnotatedComponent, _, _>(
+            &mut reader, config,
+        )
+        .map_err(|e| Error::ontology_parsing(format!("Horned-owl parsing error: {e}")))?;
 
         // Convert the horned-owl ontology to oxidowl ontology using enhanced adapter
         let mut adapter = crate::adapter::HornedOwlAdapter::new();
         let mut ontology =
-            adapter.convert_basic_ontology::<std::rc::Rc<str>, std::rc::Rc<str>, _>(&result.0)?;
+            adapter.convert_basic_ontology::<RcStr, RcAnnotatedComponent, _>(&result.0)?;
 
         // Try to extract ontology IRI from the file by re-reading it
         // This is a workaround since horned-owl's API is complex
