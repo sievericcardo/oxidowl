@@ -3,7 +3,10 @@
 //! This module provides validation functionality for SWRL rules,
 //! ensuring they are well-formed, safe, and semantically correct.
 
-use crate::ontology::*;
+use crate::ontology::{
+    ClassExpression, DataPropertyExpression, IRI, ObjectPropertyExpression, SWRLAtom,
+    SWRLDArgument, SWRLIArgument, SWRLRule, SWRLVariable,
+};
 use crate::{Error, Result};
 use log::debug;
 use std::collections::{HashMap, HashSet};

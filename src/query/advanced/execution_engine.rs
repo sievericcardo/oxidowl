@@ -10,7 +10,7 @@
 
 use super::actors::{MLStrategyHandle, MonitorHandle, OptimizerHandle, TaskCoordinatorHandle};
 use super::conjunctive::{ConjunctiveQuery, QueryAtom, QueryVariable};
-use super::cost_optimizer::CostBasedOptimizer;
+use super::cost_optimizer::{CostBasedOptimizer, CostBasedOptimizerConfig};
 use super::execution::{AdvancedQueryError, ConjunctiveQueryResult};
 use super::ml_core::{
     MLHeuristicsConfig as MLConfig, MLHeuristicsEngine as MLEngine, StrategyRecommendation,
@@ -36,7 +36,7 @@ pub struct AdvancedExecutionEngine {
     /// Actor that owns `CostBasedOptimizer` + `ExecutionStrategySelector`.
     optimizer: OptimizerHandle,
 
-    /// Query result cache (tokio async RwLock — no blocking).
+    /// Query result cache (tokio async `RwLock` — no blocking).
     result_cache: Arc<AsyncRwLock<QueryResultCache>>,
 
     /// Actor that owns the ML strategy engine.
@@ -871,10 +871,15 @@ impl AdvancedExecutionEngine {
         let optimizer_inner = CostBasedOptimizer::new(
             ontology.clone(),
             reasoning_service.clone(),
-            Default::default(),
+            CostBasedOptimizerConfig::default(),
         );
         let strategy_selector = ExecutionStrategySelector::new();
-        let optimizer = OptimizerHandle::spawn(optimizer_inner, strategy_selector);
+        let optimizer = OptimizerHandle::spawn(
+            optimizer_inner,
+            strategy_selector,
+            ontology.clone(),
+            reasoning_service.clone(),
+        );
 
         let result_cache = Arc::new(AsyncRwLock::new(QueryResultCache::new(
             CacheConfig::default(),
@@ -914,6 +919,18 @@ impl AdvancedExecutionEngine {
     ) -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
         let execution_id = ExecutionId(Uuid::new_v4().to_string());
         let start_time = Instant::now();
+
+        // Validate the query before doing any work.
+        if query.body_atoms.is_empty() {
+            return Err(AdvancedQueryError::InvalidQuery(
+                "Query has no body atoms".to_string(),
+            ));
+        }
+        if !query.is_well_formed() {
+            return Err(AdvancedQueryError::InvalidQuery(
+                "Query is not well-formed".to_string(),
+            ));
+        }
 
         // Step 1: Check cache if enabled
         if self.config.enable_caching
@@ -1523,7 +1540,7 @@ impl Default for CacheConfig {
         Self {
             max_size_bytes: 512 * 1024 * 1024, // 512 MB
             max_entries: 10000,
-            default_ttl: Duration::from_secs(1 * 3600), // 1 hour
+            default_ttl: Duration::from_hours(1), // 1 hour
             enable_compression: true,
             compression_threshold: 1024, // 1 KB
             enable_statistics: true,
@@ -1622,12 +1639,21 @@ impl Default for ExecutionStrategySelector {
 impl ExecutionStrategySelector {
     #[must_use]
     pub fn new() -> Self {
-        Self {
+        let mut selector = Self {
             strategies: HashMap::new(),
             performance_history: HashMap::new(),
             selection_model: StrategySelectionModel::new(),
             learning_config: StrategyLearningConfig::default(),
+        };
+        for (name, strategy) in super::strategies::default_strategies() {
+            selector.register_strategy(name, strategy);
         }
+        selector
+    }
+
+    /// Register an execution strategy under a name.
+    pub fn register_strategy(&mut self, name: &str, strategy: Box<dyn ExecutionStrategy>) {
+        self.strategies.insert(name.to_string(), strategy);
     }
 
     pub fn select_strategy(
@@ -1904,8 +1930,13 @@ impl ExecutionStrategySelector {
     }
 
     pub fn get_strategy(&self, name: &str) -> Result<&dyn ExecutionStrategy, AdvancedQueryError> {
-        // Get strategy implementation by name
-        Err(AdvancedQueryError::strategy_not_found(name.to_string()))
+        // Look up the strategy by name, falling back to the default strategy so
+        // that any name produced by the rule-based or ML selectors resolves.
+        self.strategies
+            .get(name)
+            .map(Box::as_ref)
+            .or_else(|| self.strategies.get("default").map(Box::as_ref))
+            .ok_or_else(|| AdvancedQueryError::strategy_not_found(name.to_string()))
     }
 
     pub fn update_performance_history(
@@ -1939,7 +1970,8 @@ impl StrategySelectionModel {
 /// Default ranking model implementation
 #[derive(Debug)]
 pub struct DefaultRankingModel {
-    // Simple rule-based model as placeholder
+    // Rule-based query ranking model using heuristic features:
+    // query complexity, atom count, join selectivity, and concept specificity.
 }
 
 impl Default for DefaultRankingModel {
@@ -2013,7 +2045,7 @@ impl Default for StrategyLearningConfig {
             enable_online_learning: true,
             learning_rate: 0.01,
             batch_size: 32,
-            retraining_interval: Duration::from_secs(1 * 3600),
+            retraining_interval: Duration::from_hours(1),
             min_training_samples: 100,
         }
     }
@@ -2075,7 +2107,7 @@ impl ExecutionPerformanceMonitor {
         // Complete execution tracking
         if let Some(trace) = self.active_executions.remove(execution_id) {
             let total_duration = trace.start_time.elapsed();
-            let result_size = result.as_ref().map(|r| r.bindings.len()).unwrap_or(0);
+            let result_size = result.as_ref().map_or(0, |r| r.bindings.len());
 
             // Record detailed timing in profiler
             let timing = QueryTiming::new(
@@ -2337,7 +2369,7 @@ impl Default for ParallelExecutionConfig {
             enable_parallel_execution: true,
             max_worker_threads: num_cpus::get(),
             work_queue_size: 1000,
-            task_timeout: Duration::from_secs(5 * 60), // 5 minutes
+            task_timeout: Duration::from_mins(5), // 5 minutes
             enable_work_stealing: true,
             enable_resource_monitoring: true,
         }

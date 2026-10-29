@@ -506,7 +506,7 @@ impl TemporalValue {
 }
 
 pub mod utils {
-    use super::*;
+    use super::{TemporalError, TemporalValue};
 
     /// Add day-time duration to a temporal value
     pub fn add_day_time_duration(

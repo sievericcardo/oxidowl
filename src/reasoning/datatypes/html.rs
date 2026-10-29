@@ -12,7 +12,7 @@ use crate::error::Error;
 pub struct HtmlValueSpace;
 
 impl ValueSpaceHandler for HtmlValueSpace {
-    fn datatype_iri(&self) -> &str {
+    fn datatype_iri(&self) -> &'static str {
         "http://www.w3.org/1999/02/22-rdf-syntax-ns#HTML"
     }
 

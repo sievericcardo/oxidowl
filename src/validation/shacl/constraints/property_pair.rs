@@ -14,7 +14,10 @@ use crate::validation::shacl::{
     model::{ShaclMessage, ShaclPath, ShaclSeverity},
     paths::resolve_values,
     report::ShaclValidationResult,
-    vocabulary::*,
+    vocabulary::{
+        SH_DISJOINT_CONSTRAINT_COMPONENT, SH_EQUALS_CONSTRAINT_COMPONENT,
+        SH_LESS_THAN_CONSTRAINT_COMPONENT, SH_LESS_THAN_OR_EQUALS_CONSTRAINT_COMPONENT,
+    },
 };
 
 fn make_result(
@@ -189,7 +192,7 @@ fn compare_pairs(
     for a in values {
         for b in &other_values {
             let ord = compare_terms(a, b);
-            let passes = ord.map(&check).unwrap_or(false);
+            let passes = ord.is_some_and(&check);
             if !passes {
                 out.push(make_result(
                     focus_node,

@@ -45,7 +45,7 @@ enum FaultQueryMsg {
 /// Main fault tolerance coordinator — actor handle
 #[derive(Clone)]
 pub struct FaultTolerance {
-    /// Configuration (kept in handle for execute_with_retry logic)
+    /// Configuration (kept in handle for `execute_with_retry` logic)
     config: crate::distributed::FaultToleranceConfig,
     /// State queries channel
     query_tx: mpsc::Sender<FaultQueryMsg>,
@@ -393,8 +393,7 @@ impl FaultTolerance {
                         FaultQueryMsg::ShouldAttempt { node_id, tx } => {
                             let should = circuit_breakers
                                 .get(&node_id)
-                                .map(CircuitBreaker::should_attempt)
-                                .unwrap_or(true);
+                                .is_none_or(CircuitBreaker::should_attempt);
                             let _ = tx.send(should);
                         }
                         FaultQueryMsg::RecordSuccess { node_id } => {
@@ -405,14 +404,13 @@ impl FaultTolerance {
                         FaultQueryMsg::RecordFailure { node_id } => {
                             let breaker = circuit_breakers
                                 .entry(node_id)
-                                .or_insert_with(|| CircuitBreaker::new(5, Duration::from_secs(1 * 60)));
+                                .or_insert_with(|| CircuitBreaker::new(5, Duration::from_mins(1)));
                             breaker.record_failure();
                         }
                         FaultQueryMsg::GetCircuitBreaker { node_id, tx } => {
                             let state = circuit_breakers
                                 .get(&node_id)
-                                .map(CircuitBreaker::get_state)
-                                .unwrap_or(CircuitBreakerState::Closed);
+                                .map_or(CircuitBreakerState::Closed, CircuitBreaker::get_state);
                             let _ = tx.send(state);
                         }
                         FaultQueryMsg::StartRecovery { failure, tx } => {

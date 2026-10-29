@@ -65,7 +65,7 @@ fn test_datatype_manager() {
 
 #[test]
 fn test_manchester_syntax_parsing() {
-    let manchester_content = r#"
+    let manchester_content = r"
 Prefix: ex: <http://example.org/>
 Prefix: owl: <http://www.w3.org/2002/07/owl#>
 
@@ -92,46 +92,57 @@ ObjectProperty: ex:hasParent
 
 Individual: ex:john
     Types: ex:Person
-"#;
+";
 
     let mut parser = ManchesterParser::default();
     let ontology = parser
         .parse_string(manchester_content)
         .expect("Test operation failed");
 
-    // Check that basic ontology was created (simplified implementation)
-    // Note: The current implementation is simplified and doesn't fully parse all Manchester syntax
+    // Manchester parser now fully parses all frame types
     let axioms = ontology.axioms();
-    assert_eq!(axioms.len(), 0); // Simplified implementation returns empty ontology
+    assert!(
+        axioms.len() >= 10,
+        "Expected at least 10 axioms, got {}",
+        axioms.len()
+    );
 
-    // Should have declarations for Person, Student, Parent, Animal, Course, hasChild, hasParent, enrolledIn, john
-    // Note: Simplified implementation doesn't actually parse these
+    // Should have declarations
     let declarations: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::Declaration(_)))
         .collect();
-    assert_eq!(declarations.len(), 0); // Simplified implementation
+    assert!(declarations.len() >= 3, "Expected at least 3 declarations");
 
     // Should have SubClassOf axioms
     let subclass_axioms: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::SubClassOf(_)))
         .collect();
-    assert_eq!(subclass_axioms.len(), 0); // Simplified implementation
+    assert!(
+        !subclass_axioms.is_empty(),
+        "Expected at least 1 SubClassOf"
+    );
 
     // Should have EquivalentClasses axiom
     let equiv_axioms: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::EquivalentClasses(_)))
         .collect();
-    assert_eq!(equiv_axioms.len(), 0); // Simplified implementation
+    assert!(
+        !equiv_axioms.is_empty(),
+        "Expected at least 1 EquivalentClasses"
+    );
 
     // Should have property characteristic axioms
     let functional_axioms: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::FunctionalObjectProperty(_)))
         .collect();
-    assert_eq!(functional_axioms.len(), 0); // Simplified implementation
+    assert!(
+        !functional_axioms.is_empty(),
+        "Expected at least 1 FunctionalObjectProperty"
+    );
 
     let inv_functional_axioms: Vec<_> = axioms
         .iter()
@@ -142,14 +153,20 @@ Individual: ex:john
             )
         })
         .collect();
-    assert_eq!(inv_functional_axioms.len(), 0); // Simplified implementation
+    assert!(
+        !inv_functional_axioms.is_empty(),
+        "Expected at least 1 InverseFunctionalObjectProperty"
+    );
 
     // Should have ClassAssertion axiom for john
     let class_assertions: Vec<_> = axioms
         .iter()
         .filter(|axiom| matches!(axiom, oxidowl::ontology::Axiom::ClassAssertion(_)))
         .collect();
-    assert_eq!(class_assertions.len(), 0); // Simplified implementation
+    assert!(
+        !class_assertions.is_empty(),
+        "Expected at least 1 ClassAssertion"
+    );
 }
 
 #[test]
@@ -332,7 +349,7 @@ fn test_enhanced_swrl_builtins() {
 #[test]
 fn test_integration_manchester_and_validation() {
     // Test that Manchester-parsed ontologies can be validated
-    let manchester_content = r#"
+    let manchester_content = r"
 Prefix: ex: <http://example.org/>
 
 Class: ex:Person
@@ -344,7 +361,7 @@ ObjectProperty: ex:hasChild
     Domain: ex:Person
     Range: ex:Person
     Characteristics: Transitive
-"#;
+";
 
     let mut parser = ManchesterParser::default();
     let ontology = parser
@@ -363,11 +380,11 @@ ObjectProperty: ex:hasChild
 #[test]
 fn test_enhanced_parser_error_handling() {
     // Test that parsers handle malformed input gracefully with strict validation
-    let invalid_manchester = r#"
+    let invalid_manchester = r"
 Invalid: syntax here
 Class: 
 ObjectProperty without name:
-"#;
+";
 
     let mut parser = ManchesterParser::default();
     let result = parser.parse_string(invalid_manchester);
@@ -495,11 +512,12 @@ fn test_complete_owl2_feature_coverage() {
             .is_ok()
     );
 
-    // 3. Test validation support
+    // 3. Test validation support: an empty ontology is valid OWL 2 DL.
     let ontology = Ontology::new();
-    let _validator = OWL2DLValidator::new(ontology);
-    // Just verify the validator can be created and has the expected interface
-    assert!(true); // Placeholder for more comprehensive validation tests
+    let mut validator = OWL2DLValidator::new(ontology);
+    let report = validator.validate().expect("DL validation should succeed");
+    assert!(report.is_valid, "Empty ontology should be valid OWL 2 DL");
+    assert!(report.errors.is_empty());
 
     // 4. Test enhanced axiom support (this would be expanded with actual axiom tests)
     // The axiom types are already well-covered in the existing implementation
@@ -570,7 +588,7 @@ fn verify_owl2_compliance_status() -> (usize, usize) {
         "ProfileDetection",
     ];
 
-    let missing_features = vec![
+    let missing_features = [
         "CompleteSWRLBuiltins",
         "OWL2Profiles",
         "EnhancedImportSupport",
@@ -589,10 +607,7 @@ fn test_implementation_completeness() {
     // We should have significantly more implemented than missing features
     assert!(implemented > missing * 5); // At least 5:1 ratio
 
-    println!(
-        "Implementation status: {} implemented, {} missing",
-        implemented, missing
-    );
+    println!("Implementation status: {implemented} implemented, {missing} missing");
     println!(
         "Completion rate: {:.1}%",
         (implemented as f64 / (implemented + missing) as f64) * 100.0

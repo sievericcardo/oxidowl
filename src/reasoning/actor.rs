@@ -1,6 +1,6 @@
-//! ReasoningActor — actor-pattern wrapper for the core reasoning state machine.
+//! `ReasoningActor` — actor-pattern wrapper for the core reasoning state machine.
 //!
-//! `ReasoningActor` owns all mutable state (Reasoner, CacheManager, SWRLRuleEngine)
+//! `ReasoningActor` owns all mutable state (Reasoner, `CacheManager`, `SWRLRuleEngine`)
 //! without any `Arc<RwLock<>>` wrapping. It runs an asynchronous event loop driven
 //! by `tokio::select!` over an `mpsc` request channel, an optional shutdown signal,
 //! and a periodic maintenance ticker.
@@ -148,8 +148,24 @@ pub enum ReasoningRequest {
         class: ClassExpression,
         reply: oneshot::Sender<Result<bool>>,
     },
+    /// Synchronous bridge: used by `get_object_property_assertions_sync`
+    GetObjectPropertyAssertionsSync {
+        property: ObjectPropertyExpression,
+        reply: oneshot::Sender<Result<Vec<(Individual, Individual)>>>,
+    },
+    /// Synchronous bridge: used by `get_data_property_assertions_sync`
+    GetDataPropertyAssertionsSync {
+        property: DataPropertyExpression,
+        reply: oneshot::Sender<Result<Vec<(Individual, crate::ontology::Literal)>>>,
+    },
     InvalidateAllCaches {
         reply: oneshot::Sender<Result<()>>,
+    },
+    /// Batch subsumption check — tests all (subclass, superclass) pairs in a
+    /// single actor turn, avoiding N-1 extra channel round-trips.
+    BatchSubsumptionCheck {
+        pairs: Vec<(ClassExpression, ClassExpression)>,
+        reply: oneshot::Sender<Result<Vec<bool>>>,
     },
 }
 
@@ -187,7 +203,7 @@ impl ReasoningActor {
     /// Main event loop. Returns when all senders are dropped or the shutdown
     /// signal fires.
     pub async fn run(mut self, mut shutdown: oneshot::Receiver<()>) {
-        const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(1 * 60);
+        const MAINTENANCE_INTERVAL: Duration = Duration::from_mins(1);
         let mut maintenance = tokio::time::interval(MAINTENANCE_INTERVAL);
         // Skip the immediate first tick so maintenance doesn't fire at t=0.
         maintenance.tick().await;
@@ -356,9 +372,18 @@ impl ReasoningActor {
             } => {
                 let _ = reply.send(self.reasoner.is_instance_of(&individual, &class));
             }
+            ReasoningRequest::GetObjectPropertyAssertionsSync { property, reply } => {
+                let _ = reply.send(self.reasoner.get_object_property_assertions(&property));
+            }
+            ReasoningRequest::GetDataPropertyAssertionsSync { property, reply } => {
+                let _ = reply.send(self.reasoner.get_data_property_assertions(&property));
+            }
             ReasoningRequest::InvalidateAllCaches { reply } => {
                 tracing::debug!("All caches invalidated via actor request");
                 let _ = reply.send(Ok(()));
+            }
+            ReasoningRequest::BatchSubsumptionCheck { pairs, reply } => {
+                let _ = reply.send(self.handle_batch_subsumption_check(&pairs));
             }
         }
     }
@@ -464,6 +489,21 @@ impl ReasoningActor {
 
         log::info!("Subsumption check completed in {:?}", start.elapsed());
         Ok(result)
+    }
+
+    /// Batch subsumption check — processes N pairs in one actor turn.
+    ///
+    /// Each pair delegates to `handle_is_subsumed_by` so caching and timeout
+    /// logic is applied consistently.  The first `Err` from any pair is
+    /// propagated and the remaining pairs are skipped.
+    fn handle_batch_subsumption_check(
+        &mut self,
+        pairs: &[(ClassExpression, ClassExpression)],
+    ) -> Result<Vec<bool>> {
+        pairs
+            .iter()
+            .map(|(sub, sup)| self.handle_is_subsumed_by(sub, sup))
+            .collect()
     }
 
     fn handle_get_superclasses(
@@ -780,9 +820,15 @@ impl ReasoningActor {
 
         self.check_timeout(start, "Axiom addition")?;
 
-        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
-            self.cache_manager.clear_all()?;
-        }
+        // Version-stamped cache invalidation (Phase 3.3):
+        // Read the ontology's new version stamp and propagate it to the cache
+        // manager.  `update_ontology_version` clears all caches only when the
+        // version has advanced — avoiding a needless clear if (somehow) the
+        // version did not change.  This replaces the old TTL-only, single-feature
+        // guard and ensures *every* cache is invalidated after any mutation,
+        // regardless of which `CacheFeature` flags are enabled.
+        let ont_version = self.read_ontology_version();
+        self.cache_manager.update_ontology_version(ont_version)?;
 
         log::info!("Axioms added in {:?}", start.elapsed());
         Ok(())
@@ -803,12 +849,29 @@ impl ReasoningActor {
 
         self.check_timeout(start, "Axiom removal")?;
 
-        if self.config.cache.is_enabled(CacheFeature::Satisfiability) {
-            self.cache_manager.clear_all()?;
-        }
+        // Version-stamped cache invalidation (Phase 3.3): see handle_add_axioms.
+        let ont_version = self.read_ontology_version();
+        self.cache_manager.update_ontology_version(ont_version)?;
 
         log::info!("Axioms removed in {:?}", start.elapsed());
         Ok(())
+    }
+
+    /// Read the current version stamp from the loaded ontology.
+    ///
+    /// Returns `0` if no ontology is loaded or the read lock cannot be
+    /// acquired (both are treated as "version unknown" by the cache manager,
+    /// which then falls back to a full `clear_all`).
+    fn read_ontology_version(&self) -> u64 {
+        if let Some(ont_ref) = self.reasoner.get_ontology()
+            && let Ok(guard) = crate::core::lock_helpers::read_lock(
+                ont_ref,
+                "actor: reading ontology version for cache invalidation",
+            )
+        {
+            return guard.version();
+        }
+        0
     }
 
     fn handle_get_statistics(&mut self) -> Result<ReasoningStatistics> {
@@ -840,7 +903,7 @@ impl ReasoningActor {
         if let Some(ont_ref) = self.reasoner.get_ontology().cloned() {
             let ontology =
                 crate::core::lock_helpers::read_lock(&ont_ref, "actor: serializing ontology")?;
-            TurtleSerializer
+            TurtleSerializer::new()
                 .serialize(&ontology)
                 .map_err(|e| Error::reasoning(format!("Turtle serialization failed: {e}")))
         } else {

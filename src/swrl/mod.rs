@@ -48,7 +48,7 @@ pub use crate::ontology::axioms::{
     SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule, SWRLRuleAxiom, SWRLVariable,
 };
 
-use crate::ontology::*;
+use crate::ontology::Axiom;
 use crate::{Error, Result};
 use std::collections::HashMap;
 

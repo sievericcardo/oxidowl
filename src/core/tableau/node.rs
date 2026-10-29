@@ -33,7 +33,10 @@ pub struct TableauNode {
     pub concept_dependencies: HashMap<ConceptLabel, Arc<DependencySet>>,
 
     /// Role successors for this node
-    pub role_successors: HashMap<String, HashSet<NodeId>>,
+    ///
+    /// Keys are interned `Arc<str>` so multiple edges using the same role
+    /// name share a single allocation instead of duplicating the string.
+    pub role_successors: HashMap<Arc<str>, HashSet<NodeId>>,
 
     /// Status flags
     pub status: NodeStatus,
@@ -79,6 +82,15 @@ pub enum ConceptLabel {
 
     /// Nominal (individual)
     Nominal(String),
+
+    /// Concrete data value (workstream A4).
+    ///
+    /// Carried by data-successor nodes to record the actual literal value minted by a
+    /// `DataSomeValuesFrom`/`DataMinCardinality` expansion or asserted by `DataHasValue` /
+    /// an `ABox` `DataPropertyAssertion`. Value-space matching (`data_node_matches_range`)
+    /// inspects this label to decide range membership; two nodes with value-equal labels
+    /// denote the same data value and are deduplicated by the ≤-rule.
+    DataValue(crate::ontology::Literal),
 
     /// Intersection of concepts (conjunction)
     Intersection(Vec<ConceptLabel>),
@@ -327,6 +339,9 @@ impl std::fmt::Display for ConceptLabel {
             ConceptLabel::Nominal(individual) => {
                 write!(f, "{{{individual}}}") // Nominals are shown in curly braces
             }
+            ConceptLabel::DataValue(literal) => {
+                write!(f, "{{{literal}}}")
+            }
             ConceptLabel::QuotedTriple(id) => {
                 // RDF-star quoted triple shown with angle brackets
                 write!(f, "{id}")
@@ -426,7 +441,7 @@ impl TableauNode {
     /// Add a role successor
     pub fn add_role_successor(&mut self, role: String, successor: NodeId) {
         self.role_successors
-            .entry(role)
+            .entry(Arc::from(role.as_str()))
             .or_default()
             .insert(successor);
     }
@@ -438,7 +453,7 @@ impl TableauNode {
     }
 
     /// Get all role successors
-    pub fn all_role_successors(&self) -> impl Iterator<Item = (&String, &HashSet<NodeId>)> {
+    pub fn all_role_successors(&self) -> impl Iterator<Item = (&Arc<str>, &HashSet<NodeId>)> {
         self.role_successors.iter()
     }
 
@@ -561,7 +576,7 @@ mod tests {
         // Test nested quoted triple structure
         // << << :a :b :c >> :d :e >> :f :g
         let inner_qt_id = "<<http://ex.org/a http://ex.org/b http://ex.org/c>>".to_string();
-        let outer_qt_id = format!("<<{} http://ex.org/d http://ex.org/e>>", inner_qt_id);
+        let outer_qt_id = format!("<<{inner_qt_id} http://ex.org/d http://ex.org/e>>");
 
         let mut node = TableauNode::new(3, NodeType::Individual);
 

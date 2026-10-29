@@ -2,7 +2,10 @@
 
 use crate::ontology::axioms::AxiomTrait;
 use crate::ontology::concepts::ClassExpression;
-use crate::ontology::{ObjectPropertyExpression, Ontology, axioms::*};
+use crate::ontology::{
+    ObjectPropertyExpression, Ontology,
+    axioms::{Axiom, Entity},
+};
 use crate::{Error, error::OxidowlError};
 use std::collections::{HashMap, HashSet};
 
@@ -92,6 +95,39 @@ pub enum ValidationErrorType {
     InvalidDirectionalLiteral,
     /// RDF 1.2: Malformed blank node label
     InvalidBlankNodeLabel,
+    // ── Non-Simple Property Restrictions (OWL 2 Section 11.1) ──
+    NonSimplePropertyInFunctionalProperty,
+    NonSimplePropertyInInverseFunctionalProperty,
+    NonSimplePropertyInIrreflexiveProperty,
+    NonSimplePropertyInAsymmetricProperty,
+    NonSimplePropertyInDisjointProperties,
+    NonSimplePropertyInObjectHasSelf,
+    // ── Property Chain / Cycle ──
+    UseOfPropertyInChainCausesCycle,
+    LastPropertyInChainNotInImposedRange,
+    // ── IRI Validation ──
+    UseOfNonAbsoluteIRI,
+    OntologyIRINotAbsolute,
+    OntologyVersionIRINotAbsolute,
+    // ── Illegal Punning ──
+    IllegalPunning,
+    DatatypeIRIAlsoUsedAsClassIRI,
+    // ── Reserved Vocabulary ──
+    UseOfReservedVocabularyForClassIRI,
+    UseOfReservedVocabularyForObjectPropertyIRI,
+    UseOfReservedVocabularyForDataPropertyIRI,
+    UseOfReservedVocabularyForAnnotationPropertyIRI,
+    UseOfReservedVocabularyForIndividualIRI,
+    UseOfReservedVocabularyForOntologyIRI,
+    UseOfReservedVocabularyForVersionIRI,
+    // ── Expression Position Violations ──
+    UseOfNonSubClassExpression,
+    UseOfNonSuperClassExpression,
+    UseOfNonEquivalentClassExpression,
+    // ── Other DL Restrictions ──
+    UseOfTopDataPropertyAsSubProperty,
+    LexicalNotInLexicalSpace,
+    UseOfBuiltInDatatypeInDatatypeDefinition,
 }
 
 impl std::fmt::Display for ValidationErrorType {
@@ -199,6 +235,87 @@ impl std::fmt::Display for ValidationErrorType {
             ValidationErrorType::InvalidBlankNodeLabel => {
                 write!(f, "Invalid blank node label")
             }
+            ValidationErrorType::NonSimplePropertyInFunctionalProperty => {
+                write!(f, "Non-simple property in functional property axiom")
+            }
+            ValidationErrorType::NonSimplePropertyInInverseFunctionalProperty => {
+                write!(
+                    f,
+                    "Non-simple property in inverse-functional property axiom"
+                )
+            }
+            ValidationErrorType::NonSimplePropertyInIrreflexiveProperty => {
+                write!(f, "Non-simple property in irreflexive property axiom")
+            }
+            ValidationErrorType::NonSimplePropertyInAsymmetricProperty => {
+                write!(f, "Non-simple property in asymmetric property axiom")
+            }
+            ValidationErrorType::NonSimplePropertyInDisjointProperties => {
+                write!(f, "Non-simple property in disjoint property axiom")
+            }
+            ValidationErrorType::NonSimplePropertyInObjectHasSelf => {
+                write!(f, "Non-simple property in ObjectHasSelf restriction")
+            }
+            ValidationErrorType::UseOfPropertyInChainCausesCycle => {
+                write!(f, "Property in chain causes cycle")
+            }
+            ValidationErrorType::LastPropertyInChainNotInImposedRange => {
+                write!(f, "Last property in property chain not in imposed range")
+            }
+            ValidationErrorType::UseOfNonAbsoluteIRI => {
+                write!(f, "Use of non-absolute IRI")
+            }
+            ValidationErrorType::OntologyIRINotAbsolute => {
+                write!(f, "Ontology IRI is not absolute")
+            }
+            ValidationErrorType::OntologyVersionIRINotAbsolute => {
+                write!(f, "Ontology version IRI is not absolute")
+            }
+            ValidationErrorType::IllegalPunning => {
+                write!(f, "Illegal punning detected")
+            }
+            ValidationErrorType::DatatypeIRIAlsoUsedAsClassIRI => {
+                write!(f, "Datatype IRI also used as class IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForClassIRI => {
+                write!(f, "Use of reserved vocabulary for class IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForObjectPropertyIRI => {
+                write!(f, "Use of reserved vocabulary for object property IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForDataPropertyIRI => {
+                write!(f, "Use of reserved vocabulary for data property IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForAnnotationPropertyIRI => {
+                write!(f, "Use of reserved vocabulary for annotation property IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForIndividualIRI => {
+                write!(f, "Use of reserved vocabulary for individual IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForOntologyIRI => {
+                write!(f, "Use of reserved vocabulary for ontology IRI")
+            }
+            ValidationErrorType::UseOfReservedVocabularyForVersionIRI => {
+                write!(f, "Use of reserved vocabulary for version IRI")
+            }
+            ValidationErrorType::UseOfNonSubClassExpression => {
+                write!(f, "Invalid expression in subclass position")
+            }
+            ValidationErrorType::UseOfNonSuperClassExpression => {
+                write!(f, "Invalid expression in superclass position")
+            }
+            ValidationErrorType::UseOfNonEquivalentClassExpression => {
+                write!(f, "Invalid expression in equivalent class position")
+            }
+            ValidationErrorType::UseOfTopDataPropertyAsSubProperty => {
+                write!(f, "Use of top data property as sub-property")
+            }
+            ValidationErrorType::LexicalNotInLexicalSpace => {
+                write!(f, "Lexical form not in lexical space of datatype")
+            }
+            ValidationErrorType::UseOfBuiltInDatatypeInDatatypeDefinition => {
+                write!(f, "Use of built-in datatype in datatype definition")
+            }
         }
     }
 }
@@ -224,9 +341,16 @@ pub enum OWL2Profile {
 /// Implements validation according to Section 11 of the OWL 2 Specification
 pub struct OWL2DLValidator {
     ontology: Ontology,
-    simple_properties: HashSet<crate::ontology::IRI>,
+    /// Property hierarchy edges: sub-property IRI -> list of super-property IRIs
+    /// (used for cycle detection). Named-property level only.
     property_hierarchy: HashMap<crate::ontology::IRI, Vec<crate::ontology::IRI>>,
-    transitive_properties: HashSet<crate::ontology::IRI>,
+    /// The set of non-simple object property expressions (Section 11.1).
+    ///
+    /// A property expression is non-simple if it is transitive, occurs in the
+    /// body of a complex role inclusion (property chain), is the inverse of a
+    /// non-simple property expression, or is a super-property of a non-simple
+    /// property expression. Computed as a least fixpoint over the `RBox`.
+    non_simple_properties: HashSet<ObjectPropertyExpression>,
     defined_datatypes: HashSet<String>,
     validation_cache: HashMap<String, ValidationReport>,
 }
@@ -236,15 +360,14 @@ impl OWL2DLValidator {
     pub fn new(ontology: Ontology) -> Self {
         let mut validator = Self {
             ontology,
-            simple_properties: HashSet::new(),
             property_hierarchy: HashMap::new(),
-            transitive_properties: HashSet::new(),
+            non_simple_properties: HashSet::new(),
             defined_datatypes: HashSet::new(),
             validation_cache: HashMap::new(),
         };
 
         validator.analyze_property_hierarchy();
-        validator.compute_simple_properties();
+        validator.compute_non_simple_properties();
         validator
     }
 
@@ -273,6 +396,7 @@ impl OWL2DLValidator {
 
         // 5. Additional OWL 2 DL checks
         errors.extend(self.validate_entity_declarations()?);
+        errors.extend(self.validate_punning()?);
         errors.extend(self.validate_property_assertions()?);
 
         // 6. RDF-star and RDF 1.2 validation (Phase 8)
@@ -352,6 +476,81 @@ impl OWL2DLValidator {
                         errors.extend(self.validate_class_expression_simple_roles(class_expr)?);
                     }
                 }
+                Axiom::DisjointObjectProperties(disjoint_axiom) => {
+                    // OWL 2 Section 11.1: all object properties in a
+                    // DisjointObjectProperties axiom must be simple.
+                    for prop in &disjoint_axiom.properties {
+                        if !self.is_simple_property_expression(prop) {
+                            errors.push(ValidationError {
+                                error_type:
+                                    ValidationErrorType::NonSimplePropertyInDisjointProperties,
+                                message: format!(
+                                    "Non-simple property {prop} used in DisjointObjectProperties axiom"
+                                ),
+                                severity: ValidationSeverity::Error,
+                                axiom_id: Some(disjoint_axiom.id.to_string()),
+                                location: None,
+                            });
+                        }
+                    }
+                }
+                Axiom::AsymmetricObjectProperty(asym_axiom) => {
+                    if !self.is_simple_property_expression(&asym_axiom.property) {
+                        errors.push(ValidationError {
+                            error_type: ValidationErrorType::NonSimplePropertyInAsymmetricProperty,
+                            message: format!(
+                                "Non-simple property {} used in AsymmetricObjectProperty axiom",
+                                asym_axiom.property
+                            ),
+                            severity: ValidationSeverity::Error,
+                            axiom_id: Some(asym_axiom.id.to_string()),
+                            location: None,
+                        });
+                    }
+                }
+                Axiom::IrreflexiveObjectProperty(irreflexive_axiom) => {
+                    if !self.is_simple_property_expression(&irreflexive_axiom.property) {
+                        errors.push(ValidationError {
+                            error_type: ValidationErrorType::NonSimplePropertyInIrreflexiveProperty,
+                            message: format!(
+                                "Non-simple property {} used in IrreflexiveObjectProperty axiom",
+                                irreflexive_axiom.property
+                            ),
+                            severity: ValidationSeverity::Error,
+                            axiom_id: Some(irreflexive_axiom.id.to_string()),
+                            location: None,
+                        });
+                    }
+                }
+                Axiom::FunctionalObjectProperty(functional_axiom) => {
+                    if !self.is_simple_property_expression(&functional_axiom.property) {
+                        errors.push(ValidationError {
+                            error_type: ValidationErrorType::NonSimplePropertyInFunctionalProperty,
+                            message: format!(
+                                "Non-simple property {} used in FunctionalObjectProperty axiom",
+                                functional_axiom.property
+                            ),
+                            severity: ValidationSeverity::Error,
+                            axiom_id: Some(functional_axiom.id.to_string()),
+                            location: None,
+                        });
+                    }
+                }
+                Axiom::InverseFunctionalObjectProperty(inverse_functional_axiom)
+                    if !self.is_simple_property_expression(&inverse_functional_axiom.property) =>
+                {
+                    errors.push(ValidationError {
+                        error_type:
+                            ValidationErrorType::NonSimplePropertyInInverseFunctionalProperty,
+                        message: format!(
+                            "Non-simple property {} used in InverseFunctionalObjectProperty axiom",
+                            inverse_functional_axiom.property
+                        ),
+                        severity: ValidationSeverity::Error,
+                        axiom_id: Some(inverse_functional_axiom.id.to_string()),
+                        location: None,
+                    });
+                }
                 _ => {}
             }
         }
@@ -368,34 +567,38 @@ impl OWL2DLValidator {
 
         match class_expr {
             ClassExpression::ObjectMinCardinality {
-                cardinality: _,
-                property,
-                filler: _,
+                property, filler, ..
             }
             | ClassExpression::ObjectMaxCardinality {
-                cardinality: _,
-                property,
-                filler: _,
+                property, filler, ..
             }
             | ClassExpression::ObjectExactCardinality {
-                cardinality: _,
-                property,
-                filler: _,
+                property, filler, ..
             } => {
-                if let ObjectPropertyExpression::ObjectProperty(prop) = property {
-                    let prop_iri = crate::ontology::IRI::from(prop.iri.to_string());
-                    if !self.simple_properties.contains(&prop_iri) {
-                        errors.push(ValidationError {
-                            error_type:
-                                ValidationErrorType::NonSimplePropertyInCardinalityRestriction,
-                            message: format!(
-                                "Non-simple property {prop_iri} used in cardinality restriction"
-                            ),
-                            severity: ValidationSeverity::Error,
-                            axiom_id: None,
-                            location: Some(prop_iri.to_string()),
-                        });
-                    }
+                if !self.is_simple_property_expression(property) {
+                    errors.push(ValidationError {
+                        error_type: ValidationErrorType::NonSimplePropertyInCardinalityRestriction,
+                        message: format!(
+                            "Non-simple property {property} used in cardinality restriction"
+                        ),
+                        severity: ValidationSeverity::Error,
+                        axiom_id: None,
+                        location: Some(property.to_string()),
+                    });
+                }
+                errors.extend(self.validate_class_expression_simple_roles(filler)?);
+            }
+            ClassExpression::ObjectHasSelf { property } => {
+                if !self.is_simple_property_expression(property) {
+                    errors.push(ValidationError {
+                        error_type: ValidationErrorType::NonSimplePropertyInObjectHasSelf,
+                        message: format!(
+                            "Non-simple property {property} used in ObjectHasSelf restriction"
+                        ),
+                        severity: ValidationSeverity::Error,
+                        axiom_id: None,
+                        location: Some(property.to_string()),
+                    });
                 }
             }
             ClassExpression::ObjectIntersectionOf(exprs)
@@ -407,14 +610,8 @@ impl OWL2DLValidator {
             ClassExpression::ObjectComplementOf(expr) => {
                 errors.extend(self.validate_class_expression_simple_roles(expr)?);
             }
-            ClassExpression::ObjectSomeValuesFrom {
-                property: _,
-                filler,
-            }
-            | ClassExpression::ObjectAllValuesFrom {
-                property: _,
-                filler,
-            } => {
+            ClassExpression::ObjectSomeValuesFrom { filler, .. }
+            | ClassExpression::ObjectAllValuesFrom { filler, .. } => {
                 errors.extend(self.validate_class_expression_simple_roles(filler)?);
             }
             _ => {}
@@ -489,20 +686,12 @@ impl OWL2DLValidator {
             Axiom::DataPropertyRange(range_axiom) => {
                 self.validate_data_range(&range_axiom.range, errors)?;
             }
-            Axiom::DataPropertyAssertion(assertion_axiom) => {
-                // Validate the literal value against the property's range
-                if let Some(range) = self.get_data_property_range(&assertion_axiom.property)
-                    && !self.is_literal_compatible_with_range(&assertion_axiom.value, &range)
-                {
-                    errors.push(ValidationError::new(
-                        ValidationErrorType::DatatypeMismatch,
-                        format!(
-                            "Literal {:?} is not compatible with data property range {}",
-                            assertion_axiom.value,
-                            self.format_data_range(&range)
-                        ),
-                    ));
-                }
+            Axiom::DataPropertyAssertion(_) => {
+                // OWL 2 DL structural validation does not check whether literal values
+                // are semantically compatible with the declared data property range.
+                // That is a model-level consistency check, not a structural restriction
+                // from OWL 2 Specification Section 11.  Doing so here generates
+                // hundreds of false-positive violations on valid ontologies.
             }
             Axiom::DatatypeDefinition(datatype_def) => {
                 // Validate the datatype definition itself
@@ -662,6 +851,223 @@ impl OWL2DLValidator {
         Ok(errors)
     }
 
+    /// Validate illegal punning between classes and datatypes
+    ///
+    /// OWL 2 DL (and the EL/QL/RL profiles) prohibit using a single IRI as
+    /// both a class and a datatype. Punning between a class and an individual
+    /// (or between a class and an object property, etc.) is permitted.
+    fn validate_punning(&self) -> Result<Vec<ValidationError>, OxidowlError> {
+        let mut errors = Vec::new();
+        let mut class_iris: HashSet<crate::ontology::IRI> = HashSet::new();
+        let mut datatype_iris: HashSet<crate::ontology::IRI> = HashSet::new();
+
+        for axiom in self.ontology.axioms() {
+            if let Axiom::Declaration(decl) = axiom {
+                match &decl.entity {
+                    Entity::Class(iri) => {
+                        class_iris.insert(iri.clone());
+                    }
+                    Entity::Datatype(iri) => {
+                        datatype_iris.insert(iri.clone());
+                    }
+                    _ => {}
+                }
+            }
+            self.collect_class_iris_from_axiom(axiom, &mut class_iris);
+            self.collect_datatype_iris_from_axiom(axiom, &mut datatype_iris);
+        }
+
+        for iri in class_iris.intersection(&datatype_iris) {
+            errors.push(ValidationError {
+                error_type: ValidationErrorType::DatatypeIRIAlsoUsedAsClassIRI,
+                message: format!(
+                    "IRI {iri} is used both as a class and as a datatype (illegal punning in OWL 2 DL)"
+                ),
+                severity: ValidationSeverity::Error,
+                axiom_id: None,
+                location: Some(iri.to_string()),
+            });
+        }
+
+        Ok(errors)
+    }
+
+    /// Collect every named class IRI occurring in an axiom.
+    fn collect_class_iris_from_axiom(
+        &self,
+        axiom: &Axiom,
+        out: &mut HashSet<crate::ontology::IRI>,
+    ) {
+        match axiom {
+            Axiom::SubClassOf(ax) => {
+                self.collect_class_iris_from_ce(&ax.subclass, out);
+                self.collect_class_iris_from_ce(&ax.superclass, out);
+            }
+            Axiom::EquivalentClasses(ax) => {
+                for ce in &ax.classes {
+                    self.collect_class_iris_from_ce(ce, out);
+                }
+            }
+            Axiom::DisjointClasses(ax) => {
+                for ce in &ax.classes {
+                    self.collect_class_iris_from_ce(ce, out);
+                }
+            }
+            Axiom::DisjointUnion(ax) => {
+                self.collect_class_iris_from_ce(&ax.class, out);
+                for ce in &ax.disjoint_classes {
+                    self.collect_class_iris_from_ce(ce, out);
+                }
+            }
+            Axiom::ClassAssertion(ax) => {
+                self.collect_class_iris_from_ce(&ax.class, out);
+            }
+            Axiom::ObjectPropertyDomain(ax) => {
+                self.collect_class_iris_from_ce(&ax.domain, out);
+            }
+            Axiom::ObjectPropertyRange(ax) => {
+                self.collect_class_iris_from_ce(&ax.range, out);
+            }
+            Axiom::DataPropertyDomain(ax) => {
+                self.collect_class_iris_from_ce(&ax.domain, out);
+            }
+            Axiom::HasKey(ax) => {
+                self.collect_class_iris_from_ce(&ax.class, out);
+            }
+            _ => {}
+        }
+    }
+
+    /// Recursively collect named class IRIs from a class expression.
+    fn collect_class_iris_from_ce(
+        &self,
+        ce: &ClassExpression,
+        out: &mut HashSet<crate::ontology::IRI>,
+    ) {
+        match ce {
+            ClassExpression::Class(c) => {
+                out.insert(c.iri.clone());
+            }
+            ClassExpression::ObjectIntersectionOf(exprs)
+            | ClassExpression::ObjectUnionOf(exprs) => {
+                for expr in exprs {
+                    self.collect_class_iris_from_ce(expr, out);
+                }
+            }
+            ClassExpression::ObjectComplementOf(expr) => {
+                self.collect_class_iris_from_ce(expr, out);
+            }
+            ClassExpression::ObjectSomeValuesFrom { filler, .. }
+            | ClassExpression::ObjectAllValuesFrom { filler, .. }
+            | ClassExpression::ObjectMinCardinality { filler, .. }
+            | ClassExpression::ObjectMaxCardinality { filler, .. }
+            | ClassExpression::ObjectExactCardinality { filler, .. } => {
+                self.collect_class_iris_from_ce(filler, out);
+            }
+            _ => {}
+        }
+    }
+
+    /// Collect every datatype IRI occurring in an axiom.
+    fn collect_datatype_iris_from_axiom(
+        &self,
+        axiom: &Axiom,
+        out: &mut HashSet<crate::ontology::IRI>,
+    ) {
+        match axiom {
+            Axiom::DataPropertyRange(ax) => {
+                self.collect_datatype_iris_from_range(&ax.range, out);
+            }
+            Axiom::DatatypeDefinition(ax) => {
+                out.insert(ax.datatype.clone());
+                self.collect_datatype_iris_from_range(&ax.data_range, out);
+            }
+            Axiom::SubClassOf(ax) => {
+                self.collect_datatype_iris_from_ce(&ax.subclass, out);
+                self.collect_datatype_iris_from_ce(&ax.superclass, out);
+            }
+            Axiom::EquivalentClasses(ax) => {
+                for ce in &ax.classes {
+                    self.collect_datatype_iris_from_ce(ce, out);
+                }
+            }
+            Axiom::DisjointClasses(ax) => {
+                for ce in &ax.classes {
+                    self.collect_datatype_iris_from_ce(ce, out);
+                }
+            }
+            Axiom::ClassAssertion(ax) => {
+                self.collect_datatype_iris_from_ce(&ax.class, out);
+            }
+            Axiom::DataPropertyAssertion(ax) => {
+                if let Some(datatype_url) = &ax.value.datatype {
+                    out.insert(crate::ontology::IRI::from(datatype_url.to_string()));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Recursively collect datatype IRIs from a class expression.
+    fn collect_datatype_iris_from_ce(
+        &self,
+        ce: &ClassExpression,
+        out: &mut HashSet<crate::ontology::IRI>,
+    ) {
+        match ce {
+            ClassExpression::DataSomeValuesFrom { filler, .. }
+            | ClassExpression::DataAllValuesFrom { filler, .. }
+            | ClassExpression::DataMinCardinality { filler, .. }
+            | ClassExpression::DataMaxCardinality { filler, .. }
+            | ClassExpression::DataExactCardinality { filler, .. } => {
+                self.collect_datatype_iris_from_range(filler, out);
+            }
+            ClassExpression::ObjectIntersectionOf(exprs)
+            | ClassExpression::ObjectUnionOf(exprs) => {
+                for expr in exprs {
+                    self.collect_datatype_iris_from_ce(expr, out);
+                }
+            }
+            ClassExpression::ObjectComplementOf(expr) => {
+                self.collect_datatype_iris_from_ce(expr, out);
+            }
+            ClassExpression::ObjectSomeValuesFrom { filler, .. }
+            | ClassExpression::ObjectAllValuesFrom { filler, .. }
+            | ClassExpression::ObjectMinCardinality { filler, .. }
+            | ClassExpression::ObjectMaxCardinality { filler, .. }
+            | ClassExpression::ObjectExactCardinality { filler, .. } => {
+                self.collect_datatype_iris_from_ce(filler, out);
+            }
+            _ => {}
+        }
+    }
+
+    /// Recursively collect datatype IRIs from a data range.
+    fn collect_datatype_iris_from_range(
+        &self,
+        range: &crate::ontology::DataRange,
+        out: &mut HashSet<crate::ontology::IRI>,
+    ) {
+        match range {
+            crate::ontology::DataRange::Datatype(iri) => {
+                out.insert(iri.clone());
+            }
+            crate::ontology::DataRange::DatatypeRestriction { datatype, .. } => {
+                out.insert(datatype.clone());
+            }
+            crate::ontology::DataRange::DataIntersectionOf(ranges)
+            | crate::ontology::DataRange::DataUnionOf(ranges) => {
+                for r in ranges {
+                    self.collect_datatype_iris_from_range(r, out);
+                }
+            }
+            crate::ontology::DataRange::DataComplementOf(r) => {
+                self.collect_datatype_iris_from_range(r, out);
+            }
+            crate::ontology::DataRange::DataOneOf(_) => {}
+        }
+    }
+
     /// Validate property assertions
     fn validate_property_assertions(&self) -> Result<Vec<ValidationError>, OxidowlError> {
         let errors = Vec::new();
@@ -792,19 +1198,33 @@ impl OWL2DLValidator {
                 Ok(())
             }
             crate::semantics::RdfTerm::BlankNode(id) => {
-                // Validate blank node label (RDF 1.2 well-formedness)
-                // Format: _:[A-Za-z0-9]+
+                // Validate blank node label per RDF 1.1/1.2 well-formedness rules.
+                //
+                // Grammar (RDF 1.1 §2.1 / Turtle §2.1):
+                //   BLANK_NODE_LABEL ::= '_:' (PN_CHARS_U | [0-9]) ((PN_CHARS | '.')* PN_CHARS)?
+                //
+                // PN_CHARS_U is [A-Za-z0-9_] (and Unicode letters/digits, but here we
+                // require only the ASCII subset for well-formedness on raw labels).
+                // PN_CHARS additionally allows '-' and '.'.
+                //
+                // The previous check required ONLY alphanumeric characters, which rejected
+                // valid labels like `_:b_annot_123` (contains '_') or `_:b-0` (contains '-').
+                fn is_valid_bnode_char(c: char) -> bool {
+                    c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.'
+                }
+
                 if let Some(label) = id.strip_prefix("_:") {
-                    if !label.chars().all(|c| c.is_ascii_alphanumeric()) {
+                    if label.is_empty() || !label.chars().all(is_valid_bnode_char) {
                         return Err(ValidationError::new(
                             ValidationErrorType::InvalidBlankNodeLabel,
                             format!(
-                                "Invalid blank node label '{id}' in {position} position (must contain only alphanumeric characters)"
+                                "Invalid blank node label '{id}' in {position} position \
+                                 (label must match [A-Za-z0-9_\\-.]+ after the '_:' prefix)"
                             ),
                         ));
                     }
-                } else if !id.chars().all(|c| c.is_ascii_alphanumeric()) {
-                    // Legacy format without _: prefix
+                } else if id.is_empty() || !id.chars().all(is_valid_bnode_char) {
+                    // Legacy bare label without the '_:' prefix
                     return Err(ValidationError::new(
                         ValidationErrorType::InvalidBlankNodeLabel,
                         format!("Invalid blank node label '{id}' in {position} position"),
@@ -863,95 +1283,125 @@ impl OWL2DLValidator {
     /// Analyze property hierarchy to build internal structures
     fn analyze_property_hierarchy(&mut self) {
         for axiom in self.ontology.axioms() {
+            if let Axiom::SubObjectPropertyOf(sub_prop_axiom) = axiom
+                && let ObjectPropertyExpression::ObjectProperty(sub_prop) =
+                    &sub_prop_axiom.sub_property
+                && let ObjectPropertyExpression::ObjectProperty(super_prop) =
+                    &sub_prop_axiom.super_property
+            {
+                self.property_hierarchy
+                    .entry(crate::ontology::IRI::from(sub_prop.iri.to_string()))
+                    .or_default()
+                    .push(crate::ontology::IRI::from(super_prop.iri.to_string()));
+            }
+        }
+    }
+
+    /// Compute the set of non-simple object property expressions (OWL 2
+    /// Structural Spec Section 11.1).
+    ///
+    /// A property expression is non-simple iff it is in the least set `N`
+    /// such that:
+    /// - every transitive object property expression is in `N`;
+    /// - every object property expression that occurs in the body of a
+    ///   complex role inclusion (property chain) is in `N`;
+    /// - the inverse of every expression in `N` is in `N`;
+    /// - every object property expression that has an expression from `N` as
+    ///   a sub-object-property-expression is in `N`.
+    ///
+    /// The last rule means that simplicity propagates *up* the property
+    /// hierarchy: if `S` is non-simple and `S ⊑ P`, then `P` is non-simple.
+    fn compute_non_simple_properties(&mut self) {
+        let mut non_simple: HashSet<ObjectPropertyExpression> = HashSet::new();
+        let mut queue: Vec<ObjectPropertyExpression> = Vec::new();
+
+        // Seed: transitive axioms and property-chain bodies (complex role inclusions).
+        for axiom in self.ontology.axioms() {
             match axiom {
-                Axiom::SubObjectPropertyOf(sub_prop_axiom) => {
-                    if let ObjectPropertyExpression::ObjectProperty(sub_prop) =
-                        &sub_prop_axiom.sub_property
-                        && let ObjectPropertyExpression::ObjectProperty(super_prop) =
-                            &sub_prop_axiom.super_property
+                Axiom::TransitiveObjectProperty(trans_axiom) => {
+                    if !trans_axiom.property.is_property_chain()
+                        && !non_simple.contains(&trans_axiom.property)
                     {
-                        self.property_hierarchy
-                            .entry(crate::ontology::IRI::from(sub_prop.iri.to_string()))
-                            .or_default()
-                            .push(crate::ontology::IRI::from(super_prop.iri.to_string()));
+                        non_simple.insert(trans_axiom.property.clone());
+                        queue.push(trans_axiom.property.clone());
                     }
                 }
-                Axiom::TransitiveObjectProperty(trans_axiom) => {
-                    if let ObjectPropertyExpression::ObjectProperty(prop) = &trans_axiom.property {
-                        self.transitive_properties
-                            .insert(crate::ontology::IRI::from(prop.iri.to_string()));
+                Axiom::SubObjectPropertyOf(sub_prop_axiom) => {
+                    if let ObjectPropertyExpression::PropertyChain(chain) =
+                        &sub_prop_axiom.sub_property
+                    {
+                        for member in chain {
+                            if !non_simple.contains(member) {
+                                non_simple.insert(member.clone());
+                                queue.push(member.clone());
+                            }
+                        }
                     }
                 }
                 _ => {}
             }
         }
-    }
 
-    /// Compute simple properties according to OWL 2 DL rules
-    fn compute_simple_properties(&mut self) {
-        // A property is simple if it is not transitive and does not have transitive sub-properties
-        let all_properties: HashSet<crate::ontology::IRI> = self
-            .ontology
-            .axioms()
-            .iter()
-            .filter_map(|axiom| match axiom {
-                Axiom::Declaration(decl) => {
-                    if let Entity::ObjectProperty(prop) = &decl.entity {
-                        Some(prop.clone())
-                    } else {
-                        None
+        // Hierarchy edges between simple property expressions (sub -> supers).
+        let mut hierarchy: HashMap<ObjectPropertyExpression, Vec<ObjectPropertyExpression>> =
+            HashMap::new();
+        for axiom in self.ontology.axioms() {
+            if let Axiom::SubObjectPropertyOf(sub_prop_axiom) = axiom
+                && !sub_prop_axiom.sub_property.is_property_chain()
+                && !sub_prop_axiom.super_property.is_property_chain()
+            {
+                hierarchy
+                    .entry(sub_prop_axiom.sub_property.clone())
+                    .or_default()
+                    .push(sub_prop_axiom.super_property.clone());
+            }
+        }
+
+        // Fixpoint: propagate inverse closure and non-simplicity up the hierarchy.
+        while let Some(expr) = queue.pop() {
+            // Inverse of a non-simple expression is non-simple.
+            let inverse = expr.get_inverse();
+            if !non_simple.contains(&inverse) {
+                non_simple.insert(inverse.clone());
+                queue.push(inverse);
+            }
+            // A super-property of a non-simple expression is non-simple.
+            if let Some(supers) = hierarchy.get(&expr) {
+                for super_expr in supers {
+                    if !non_simple.contains(super_expr) {
+                        non_simple.insert(super_expr.clone());
+                        queue.push(super_expr.clone());
                     }
                 }
-                _ => None,
-            })
-            .collect();
-
-        for property in all_properties {
-            if self.is_simple_property(&property) {
-                self.simple_properties.insert(property);
-            }
-        }
-    }
-
-    /// Check if a property is simple (not transitive, no transitive sub-properties)
-    fn is_simple_property(&self, property: &crate::ontology::IRI) -> bool {
-        // Property is not simple if it's transitive
-        if self.transitive_properties.contains(property) {
-            return false;
-        }
-
-        // Property is not simple if it has transitive sub-properties
-        if self.has_transitive_subproperty(property, &mut HashSet::new()) {
-            return false;
-        }
-
-        true
-    }
-
-    /// Check if property has transitive sub-properties
-    fn has_transitive_subproperty(
-        &self,
-        property: &crate::ontology::IRI,
-        visited: &mut HashSet<crate::ontology::IRI>,
-    ) -> bool {
-        if visited.contains(property) {
-            return false; // Avoid infinite recursion
-        }
-        visited.insert(property.clone());
-
-        // Check direct sub-properties
-        for (sub_prop, super_props) in &self.property_hierarchy {
-            if super_props.contains(property) {
-                if self.transitive_properties.contains(sub_prop) {
-                    return true;
-                }
-                if self.has_transitive_subproperty(sub_prop, visited) {
-                    return true;
-                }
             }
         }
 
-        false
+        self.non_simple_properties = non_simple;
+    }
+
+    /// Check whether an object property expression is simple per Section 11.1.
+    ///
+    /// A named property `P` is simple only if neither `P` nor `P⁻` is in the
+    /// non-simple set. Property chains are never simple.
+    fn is_simple_property_expression(&self, expr: &ObjectPropertyExpression) -> bool {
+        match expr {
+            ObjectPropertyExpression::ObjectProperty(prop) => {
+                !self
+                    .non_simple_properties
+                    .contains(&ObjectPropertyExpression::ObjectProperty(prop.clone()))
+                    && !self.non_simple_properties.contains(
+                        &ObjectPropertyExpression::InverseObjectProperty(prop.clone()),
+                    )
+            }
+            ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                !self.non_simple_properties.contains(
+                    &ObjectPropertyExpression::InverseObjectProperty(prop.clone()),
+                ) && !self
+                    .non_simple_properties
+                    .contains(&ObjectPropertyExpression::ObjectProperty(prop.clone()))
+            }
+            ObjectPropertyExpression::PropertyChain(_) => false,
+        }
     }
 
     /// Check for cyclic property hierarchy
@@ -980,20 +1430,36 @@ impl OWL2DLValidator {
     /// Validate property chain axiom
     fn validate_property_chain(
         &self,
-        _chain: &[ObjectPropertyExpression],
-        _super_property: &ObjectPropertyExpression,
+        chain: &[ObjectPropertyExpression],
+        super_property: &ObjectPropertyExpression,
     ) -> Result<Vec<ValidationError>, OxidowlError> {
-        let errors = Vec::new();
+        let mut errors = Vec::new();
 
-        // Implement property chain validation according to OWL 2 DL rules
-        // This is a complex validation that ensures property chain axioms
-        // don't violate the regularity conditions
+        // OWL 2 Section 11.1: the super-property of a complex role inclusion
+        // (property chain) must be a simple object property expression.
+        if !self.is_simple_property_expression(super_property) {
+            errors.push(ValidationError {
+                error_type: ValidationErrorType::SimpleRoleViolation,
+                message: format!(
+                    "Non-simple property {super_property} used as super-property of property chain {chain:?}"
+                ),
+                severity: ValidationSeverity::Error,
+                axiom_id: None,
+                location: Some(super_property.to_string()),
+            });
+        }
+
+        // Each property occurring in the body of the chain is non-simple; that
+        // is already reflected in `non_simple_properties` and enforced by the
+        // cardinality / ObjectHasSelf / Disjoint / Asymmetric / Irreflexive
+        // checks. Regularity conditions (no cycles) are checked separately via
+        // the property hierarchy cycle detection.
 
         Ok(errors)
     }
 
     /// Check if a datatype is valid
-    fn is_valid_datatype(&self, _data_range: &horned_owl::model::DataRange<String>) -> bool {
+    fn is_valid_datatype(&self, _data_range: &crate::ontology::DataRange) -> bool {
         // This will be enhanced when we implement the complete OWL 2 datatype map
         // For now, assume basic validation
         true
@@ -1324,25 +1790,16 @@ impl OWL2DLValidator {
 
         // Add to defined datatypes
         self.defined_datatypes
-            .insert(datatype_def.datatype.to_string());
+            .insert(datatype_def.datatype.as_str().to_string());
 
-        // Validate the datatype expression - proper conversion from horned_owl::DataRange to internal DataRange
-        if let Ok(internal_range) = self.convert_horned_owl_data_range(&datatype_def.data_range) {
-            self.validate_datatype_expression(&internal_range, errors)?;
-        } else {
-            errors.push(ValidationError::new(
-                ValidationErrorType::UnsupportedDatatype,
-                format!(
-                    "Cannot convert datatype expression for: {}",
-                    datatype_def.datatype
-                ),
-            ));
-        }
+        // Validate the datatype expression (already a native `DataRange`)
+        self.validate_datatype_expression(&datatype_def.data_range, errors)?;
 
-        // Check for circular datatype definitions - proper conversion and checking
-        if let Ok(internal_range) = self.convert_horned_owl_data_range(&datatype_def.data_range)
-            && self.has_circular_datatype_reference(datatype_def.datatype.as_ref(), &internal_range)
-        {
+        // Check for circular datatype definitions
+        if self.has_circular_datatype_reference(
+            datatype_def.datatype.as_str(),
+            &datatype_def.data_range,
+        ) {
             errors.push(ValidationError::new(
                 ValidationErrorType::CircularDatatypeDefinition,
                 format!(
@@ -1358,13 +1815,13 @@ impl OWL2DLValidator {
     /// Validate a datatype expression for OWL 2 DL compliance
     fn validate_datatype_expression(
         &self,
-        data_range: &crate::ontology::datatypes::DataRange,
+        data_range: &crate::ontology::DataRange,
         errors: &mut Vec<ValidationError>,
     ) -> Result<(), Error> {
         match data_range {
-            crate::ontology::datatypes::DataRange::Datatype(dt) => {
+            crate::ontology::DataRange::Datatype(dt) => {
                 // Check if datatype is known/supported
-                let dt_iri = dt.to_string();
+                let dt_iri = dt.as_str().to_string();
                 if !self.is_supported_datatype(&dt_iri) {
                     errors.push(ValidationError::new(
                         ValidationErrorType::UnsupportedDatatype,
@@ -1372,7 +1829,7 @@ impl OWL2DLValidator {
                     ));
                 }
             }
-            crate::ontology::datatypes::DataRange::DataIntersectionOf(ranges) => {
+            crate::ontology::DataRange::DataIntersectionOf(ranges) => {
                 // Validate each range in intersection
                 for range in ranges {
                     self.validate_datatype_expression(range, errors)?;
@@ -1386,7 +1843,7 @@ impl OWL2DLValidator {
                     ));
                 }
             }
-            crate::ontology::datatypes::DataRange::DataUnionOf(ranges) => {
+            crate::ontology::DataRange::DataUnionOf(ranges) => {
                 // Validate each range in union
                 for range in ranges {
                     self.validate_datatype_expression(range, errors)?;
@@ -1400,20 +1857,14 @@ impl OWL2DLValidator {
                     ));
                 }
             }
-            crate::ontology::datatypes::DataRange::DataComplementOf(range) => {
+            crate::ontology::DataRange::DataComplementOf(range) => {
                 // Validate the complemented range
                 self.validate_datatype_expression(range, errors)?;
             }
-            crate::ontology::datatypes::DataRange::DataOneOf(values) => {
-                // Validate each literal value
+            crate::ontology::DataRange::DataOneOf(values) => {
+                // Validate each literal value (native `ontology::Literal`)
                 for literal in values {
-                    // Convert horned_owl literal to string then to internal literal
-                    let literal_string = match literal {
-                        horned_owl::model::Literal::Simple { literal } => literal.clone(),
-                        horned_owl::model::Literal::Language { literal, .. } => literal.clone(),
-                        horned_owl::model::Literal::Datatype { literal, .. } => literal.clone(),
-                    };
-                    let internal_literal = crate::ontology::Literal::new(literal_string);
+                    let internal_literal = crate::ontology::Literal::new(literal.value.clone());
                     if !self.validate_literal_value(&internal_literal) {
                         errors.push(ValidationError::new(
                             ValidationErrorType::InvalidLiteral,
@@ -1430,9 +1881,12 @@ impl OWL2DLValidator {
                     ));
                 }
             }
-            crate::ontology::datatypes::DataRange::DatatypeRestriction { datatype, facets } => {
+            crate::ontology::DataRange::DatatypeRestriction {
+                datatype,
+                restrictions,
+            } => {
                 // Validate base datatype
-                let dt_iri = datatype.to_string();
+                let dt_iri = datatype.as_str().to_string();
                 if !self.is_supported_datatype(&dt_iri) {
                     errors.push(ValidationError::new(
                         ValidationErrorType::UnsupportedDatatype,
@@ -1441,7 +1895,7 @@ impl OWL2DLValidator {
                 }
 
                 // Validate facet restrictions
-                self.validate_facet_restrictions(&dt_iri, facets, errors)?;
+                self.validate_facet_restrictions(&dt_iri, restrictions, errors)?;
             }
         }
 
@@ -1514,28 +1968,33 @@ impl OWL2DLValidator {
     fn validate_facet_restrictions(
         &self,
         base_datatype: &str,
-        restrictions: &[crate::ontology::datatypes::FacetRestriction],
+        restrictions: &[crate::ontology::FacetRestriction],
         errors: &mut Vec<ValidationError>,
     ) -> Result<(), Error> {
         for restriction in restrictions {
-            // Check if facet is applicable to the base datatype
-            if !self.is_facet_applicable_to_datatype(&restriction.facet, base_datatype) {
+            // Map the native facet IRI to a typed constraining facet.
+            let Some(facet) = crate::ontology::ConstrainingFacet::from_iri(&restriction.facet)
+            else {
                 errors.push(ValidationError::new(
                     ValidationErrorType::InvalidFacetRestriction,
                     format!(
-                        "Facet {:?} not applicable to datatype {}",
-                        restriction.facet, base_datatype
+                        "Unknown facet {:?} on datatype {base_datatype}",
+                        restriction.facet
                     ),
+                ));
+                continue;
+            };
+
+            // Check if facet is applicable to the base datatype
+            if !self.is_facet_applicable_to_datatype(&facet, base_datatype) {
+                errors.push(ValidationError::new(
+                    ValidationErrorType::InvalidFacetRestriction,
+                    format!("Facet {facet:?} not applicable to datatype {base_datatype}"),
                 ));
             }
 
             // Validate the restriction value
-            let literal_string = match &restriction.literal {
-                horned_owl::model::Literal::Simple { literal } => literal.clone(),
-                horned_owl::model::Literal::Language { literal, .. } => literal.clone(),
-                horned_owl::model::Literal::Datatype { literal, .. } => literal.clone(),
-            };
-            let internal_literal = crate::ontology::Literal::new(literal_string);
+            let internal_literal = crate::ontology::Literal::new(restriction.value.value.clone());
             if !self.validate_literal_value(&internal_literal) {
                 errors.push(ValidationError::new(
                     ValidationErrorType::InvalidLiteral,
@@ -1659,106 +2118,11 @@ impl OWL2DLValidator {
         }
     }
 
-    /// Convert `horned_owl` data range to internal data range
-    fn convert_horned_owl_data_range(
-        &self,
-        range: &horned_owl::model::DataRange<String>,
-    ) -> Result<crate::ontology::datatypes::DataRange, Error> {
-        match range {
-            horned_owl::model::DataRange::Datatype(dt) => Ok(
-                crate::ontology::datatypes::DataRange::Datatype(dt.clone().into()),
-            ),
-            horned_owl::model::DataRange::DataIntersectionOf(ranges) => {
-                let converted_ranges: Result<Vec<_>, _> = ranges
-                    .iter()
-                    .map(|r| self.convert_horned_owl_data_range(r))
-                    .collect();
-                Ok(crate::ontology::datatypes::DataRange::DataIntersectionOf(
-                    converted_ranges?,
-                ))
-            }
-            horned_owl::model::DataRange::DataUnionOf(ranges) => {
-                let converted_ranges: Result<Vec<_>, _> = ranges
-                    .iter()
-                    .map(|r| self.convert_horned_owl_data_range(r))
-                    .collect();
-                Ok(crate::ontology::datatypes::DataRange::DataUnionOf(
-                    converted_ranges?,
-                ))
-            }
-            horned_owl::model::DataRange::DataComplementOf(range) => {
-                let converted_range = self.convert_horned_owl_data_range(range)?;
-                Ok(crate::ontology::datatypes::DataRange::DataComplementOf(
-                    Box::new(converted_range),
-                ))
-            }
-            horned_owl::model::DataRange::DataOneOf(literals) => {
-                let converted_literals: Vec<_> = literals
-                    .iter()
-                    .map(|lit| self.convert_horned_owl_literal(lit))
-                    .collect();
-                Ok(crate::ontology::datatypes::DataRange::DataOneOf(
-                    converted_literals,
-                ))
-            }
-            horned_owl::model::DataRange::DatatypeRestriction(datatype, restrictions) => {
-                let converted_restrictions: Result<Vec<_>, _> = restrictions
-                    .iter()
-                    .map(|fr| self.convert_horned_owl_facet_restriction(fr))
-                    .collect();
-                Ok(crate::ontology::datatypes::DataRange::DatatypeRestriction {
-                    datatype: datatype.clone().into(),
-                    facets: converted_restrictions?,
-                })
-            }
-        }
-    }
-
-    /// Convert `horned_owl` literal to internal literal
-    fn convert_horned_owl_literal(
-        &self,
-        literal: &horned_owl::model::Literal<String>,
-    ) -> horned_owl::model::Literal<String> {
-        // For now, just clone since they're compatible
-        literal.clone()
-    }
-
-    /// Convert `horned_owl` facet restriction to internal facet restriction
-    fn convert_horned_owl_facet_restriction(
-        &self,
-        fr: &horned_owl::model::FacetRestriction<String>,
-    ) -> Result<crate::ontology::datatypes::FacetRestriction, Error> {
-        // Convert facet by string representation since enum variants are private
-        let facet_str = format!("{:?}", fr.f);
-        let internal_facet = match facet_str.as_str() {
-            "Length" => crate::ontology::datatypes::ConstrainingFacet::Length,
-            "MinLength" => crate::ontology::datatypes::ConstrainingFacet::MinLength,
-            "MaxLength" => crate::ontology::datatypes::ConstrainingFacet::MaxLength,
-            "Pattern" => crate::ontology::datatypes::ConstrainingFacet::Pattern,
-            "MinInclusive" => crate::ontology::datatypes::ConstrainingFacet::MinInclusive,
-            "MaxInclusive" => crate::ontology::datatypes::ConstrainingFacet::MaxInclusive,
-            "MinExclusive" => crate::ontology::datatypes::ConstrainingFacet::MinExclusive,
-            "MaxExclusive" => crate::ontology::datatypes::ConstrainingFacet::MaxExclusive,
-            "TotalDigits" => crate::ontology::datatypes::ConstrainingFacet::TotalDigits,
-            "FractionDigits" => crate::ontology::datatypes::ConstrainingFacet::FractionDigits,
-            _ => {
-                return Err(Error::invalid_input(format!(
-                    "Unknown facet type: {facet_str}"
-                )));
-            }
-        };
-
-        Ok(crate::ontology::datatypes::FacetRestriction {
-            facet: internal_facet,
-            literal: fr.l.clone(),
-        })
-    }
-
     /// Check for circular datatype references
     fn has_circular_datatype_reference(
         &self,
         datatype: &str,
-        range: &crate::ontology::datatypes::DataRange,
+        range: &crate::ontology::DataRange,
     ) -> bool {
         let mut visited = HashSet::new();
         self.check_datatype_circularity(datatype, range, &mut visited)
@@ -1768,12 +2132,12 @@ impl OWL2DLValidator {
     fn check_datatype_circularity(
         &self,
         target_datatype: &str,
-        range: &crate::ontology::datatypes::DataRange,
+        range: &crate::ontology::DataRange,
         visited: &mut HashSet<String>,
     ) -> bool {
         match range {
-            crate::ontology::datatypes::DataRange::Datatype(dt) => {
-                let dt_iri = dt.as_ref();
+            crate::ontology::DataRange::Datatype(dt) => {
+                let dt_iri = dt.as_str();
                 if dt_iri == target_datatype {
                     return true;
                 }
@@ -1783,16 +2147,16 @@ impl OWL2DLValidator {
                 visited.insert(dt_iri.to_string());
                 false
             }
-            crate::ontology::datatypes::DataRange::DataIntersectionOf(ranges)
-            | crate::ontology::datatypes::DataRange::DataUnionOf(ranges) => ranges
+            crate::ontology::DataRange::DataIntersectionOf(ranges)
+            | crate::ontology::DataRange::DataUnionOf(ranges) => ranges
                 .iter()
                 .any(|r| self.check_datatype_circularity(target_datatype, r, visited)),
-            crate::ontology::datatypes::DataRange::DataComplementOf(range) => {
+            crate::ontology::DataRange::DataComplementOf(range) => {
                 self.check_datatype_circularity(target_datatype, range, visited)
             }
-            crate::ontology::datatypes::DataRange::DataOneOf(_) => false,
-            crate::ontology::datatypes::DataRange::DatatypeRestriction { datatype, .. } => {
-                let dt_iri = datatype.as_ref();
+            crate::ontology::DataRange::DataOneOf(_) => false,
+            crate::ontology::DataRange::DatatypeRestriction { datatype, .. } => {
+                let dt_iri = datatype.as_str();
                 if dt_iri == target_datatype {
                     return true;
                 }
@@ -1808,10 +2172,10 @@ impl OWL2DLValidator {
     /// Check for conflicting facet restrictions
     fn check_conflicting_facet_restrictions(
         &self,
-        restrictions: &[crate::ontology::datatypes::FacetRestriction],
+        restrictions: &[crate::ontology::FacetRestriction],
         errors: &mut Vec<ValidationError>,
     ) -> Result<(), Error> {
-        use crate::ontology::datatypes::ConstrainingFacet;
+        use crate::ontology::ConstrainingFacet;
 
         let mut min_inclusive: Option<&str> = None;
         let mut max_inclusive: Option<&str> = None;
@@ -1822,13 +2186,16 @@ impl OWL2DLValidator {
         let mut exact_length: Option<&str> = None;
 
         for restriction in restrictions {
-            let value_str = match &restriction.literal {
-                horned_owl::model::Literal::Simple { literal } => literal.as_str(),
-                horned_owl::model::Literal::Language { literal, .. } => literal.as_str(),
-                horned_owl::model::Literal::Datatype { literal, .. } => literal.as_str(),
+            let value_str = restriction.value.value.as_str();
+
+            // Map the native facet IRI to a typed constraining facet; unknown
+            // facets cannot conflict so they are skipped.
+            let Some(facet) = crate::ontology::ConstrainingFacet::from_iri(&restriction.facet)
+            else {
+                continue;
             };
 
-            match restriction.facet {
+            match facet {
                 ConstrainingFacet::MinInclusive => {
                     if min_inclusive.is_some() || min_exclusive.is_some() {
                         errors.push(ValidationError::new(

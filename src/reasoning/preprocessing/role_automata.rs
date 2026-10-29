@@ -2,7 +2,7 @@
 //!
 //! Inspired by Konclude's `CRoleChainAutomataTransformationPreProcess`.
 //!
-//! Complex role chains (SubObjectPropertyOf ObjectPropertyChain) and transitive
+//! Complex role chains (`SubObjectPropertyOf` `ObjectPropertyChain`) and transitive
 //! roles are compiled into finite automata so that tableau expansion rules can
 //! check role-chain satisfaction in O(1) via state transitions rather than by
 //! recursive lookup.
@@ -240,7 +240,7 @@ pub struct RoleAutomataStats {
 pub struct RoleAxioms {
     pub atomic_roles: Vec<String>,
     pub transitive_roles: Vec<String>,
-    /// (chain_name, vec_of_components)
+    /// (`chain_name`, `vec_of_components`)
     pub role_chains: Vec<(String, Vec<String>)>,
 }
 

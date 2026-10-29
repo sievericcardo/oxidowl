@@ -11,7 +11,7 @@ use crate::error::Error;
 pub struct JsonValueSpace;
 
 impl ValueSpaceHandler for JsonValueSpace {
-    fn datatype_iri(&self) -> &str {
+    fn datatype_iri(&self) -> &'static str {
         "http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON"
     }
 

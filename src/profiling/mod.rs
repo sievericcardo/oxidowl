@@ -51,11 +51,18 @@ impl PerformanceCounter {
 }
 
 /// Performance profiler for classification and reasoning operations
-#[derive(Debug)]
 pub struct PerformanceProfiler {
     counters: Arc<Mutex<HashMap<String, PerformanceCounter>>>,
     #[cfg(feature = "profiling")]
     profiler_guard: Option<ProfilerGuard<'static>>,
+}
+
+impl std::fmt::Debug for PerformanceProfiler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PerformanceProfiler")
+            .field("counters", &self.counters)
+            .finish_non_exhaustive()
+    }
 }
 
 impl PerformanceProfiler {
@@ -196,19 +203,16 @@ impl Drop for OperationTimer {
 /// Heap profiling support using dhat
 #[cfg(feature = "profiling")]
 pub mod heap {
-    use dhat::{Dhat, DhatAlloc};
-
-    #[global_allocator]
-    static ALLOCATOR: DhatAlloc = DhatAlloc;
+    use dhat::Profiler;
 
     pub struct HeapProfiler {
-        _dhat: Dhat,
+        _profiler: Profiler,
     }
 
     impl HeapProfiler {
         pub fn new() -> Self {
             Self {
-                _dhat: Dhat::start_heap_profiling(),
+                _profiler: Profiler::new_heap(),
             }
         }
     }

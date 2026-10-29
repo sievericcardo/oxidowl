@@ -7,12 +7,12 @@ use oxidowl::validation::shacl::ShaclValidator;
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-const PREFIXES: &str = r#"
+const PREFIXES: &str = r"
     @prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
     @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
     @prefix sh:   <http://www.w3.org/ns/shacl#> .
     @prefix ex:   <http://example.org/> .
-"#;
+";
 
 const SIMPLE_SHAPES: &str = r#"
     ex:PersonShape a sh:NodeShape ;

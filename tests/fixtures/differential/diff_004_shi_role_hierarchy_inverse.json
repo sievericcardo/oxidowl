@@ -1,0 +1,21 @@
+{
+  "id": "diff_004_shi_role_hierarchy_inverse",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff004#>)\nOntology(<http://example.org/diff004>\n  SubObjectPropertyOf(:r :s)\n  TransitiveObjectProperty(:s)\n  InverseObjectProperties(:u :v)\n  ObjectPropertyAssertion(:r :a :b)\n  ObjectPropertyAssertion(:s :b :c)\n  ObjectPropertyAssertion(:u :a :d)\n)",
+  "base": "http://example.org/diff004#",
+  "axioms": { "min": 6 },
+  "expected": {
+    "consistent": true,
+    "entailed": [
+      "ObjectPropertyAssertion(:s :a :b)",
+      "ObjectPropertyAssertion(:s :a :c)",
+      "ObjectPropertyAssertion(:v :d :a)"
+    ],
+    "notEntailed": [
+      "ObjectPropertyAssertion(:r :a :c)",
+      "ObjectPropertyAssertion(:u :b :c)"
+    ],
+    "profiles": { "el": false, "ql": false, "rl": true, "dl": true, "full": true }
+  },
+  "rationale": "SHI reasoning: r⊑s plus a r b entails a s b; s is transitive so a s b and b s c entail a s c. InverseObjectProperties(u,v) means u ≡ v⁻, so u(a,d) entails v(d,a). r is not transitive, so a r c is NOT entailed (a r b and b r c — there is no b r c); u(b,c) is not entailed since no u-edge from b. Profile verdicts: EL rejects InverseObjectProperties; QL rejects TransitiveObjectProperty; RL allows both; DL/Full allow both."
+}

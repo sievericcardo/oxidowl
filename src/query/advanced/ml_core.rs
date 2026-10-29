@@ -16,7 +16,8 @@ use crate::query::advanced::conjunctive::{ConjunctiveQuery, QueryAtom};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+#[allow(unused_imports)]
+use std::time::{Duration, Instant};
 
 #[cfg(feature = "ml")]
 use candle_core::{Device, Tensor};
@@ -58,10 +59,10 @@ impl Default for MLHeuristicsConfig {
     fn default() -> Self {
         Self {
             enable_online_learning: true,
-            model_update_interval: Duration::from_secs(1 * 3600), // 1 hour
+            model_update_interval: Duration::from_hours(1), // 1 hour
             training_batch_size: 32,
             learning_rate: 0.001,
-            checkpoint_interval: Duration::from_secs(2 * 3600), // 2 hours
+            checkpoint_interval: Duration::from_hours(2), // 2 hours
             enable_ensembling: false,
             model_storage_dir: PathBuf::from("./ml_models"),
             min_training_samples: 100,
@@ -228,11 +229,12 @@ impl MLHeuristicsEngine {
                 message: format!("Failed to acquire predictor lock: {}", e),
             })?;
 
-            let model = if let Some(m) = predictor.as_ref() {
-                m
-            } else {
-                predictor.get_or_insert(CostPredictionModel::new()?)
-            };
+            if predictor.is_none() {
+                *predictor = Some(CostPredictionModel::new()?);
+            }
+            let model = predictor.as_mut().ok_or_else(|| Error::Internal {
+                message: "Cost prediction model not initialized".to_string(),
+            })?;
             model.train(&training_samples, self.config.learning_rate)?
         };
 
@@ -1177,6 +1179,11 @@ impl CostPredictionModel {
         })
     }
 
+    /// Returns the input feature dimension (number of features in each input vector).
+    pub fn feature_dimension(&self) -> usize {
+        18
+    }
+
     pub fn predict(&self, features: &QueryFeatures) -> Result<CostPrediction, Error> {
         let feature_vec = features.to_vector();
         let input =
@@ -1251,7 +1258,7 @@ impl CostPredictionModel {
         let mut total_loss = 0.0;
         let mut epoch_losses = Vec::new();
 
-        for epoch in 0..epochs {
+        for _epoch in 0..epochs {
             let mut epoch_loss = 0.0;
             let mut batch_count = 0;
 
@@ -1266,7 +1273,7 @@ impl CostPredictionModel {
 
                 for sample in batch {
                     batch_features.extend(sample.features.to_vector());
-                    batch_targets.push(sample.actual_cost as f32);
+                    batch_targets.push(sample.actual_time as f32);
                 }
 
                 let input = Tensor::from_vec(batch_features, &[batch.len(), 18], &self.device)
@@ -1339,18 +1346,20 @@ impl CostPredictionModel {
                 })?;
 
                 // Update parameters using SGD
-                for (name, var) in self.varmap.all_vars() {
+                for var in self.varmap.all_vars() {
                     if let Some(grad) = grads.get(&var) {
+                        let lr_update = (grad * learning_rate).map_err(|e| Error::Internal {
+                            message: format!("Learning rate multiply failed: {}", e),
+                        })?;
                         let updated =
-                            var.sub(&(grad * learning_rate))
+                            var.as_tensor()
+                                .sub(&lr_update)
                                 .map_err(|e| Error::Internal {
-                                    message: format!("Parameter update failed for {}: {}", name, e),
+                                    message: format!("Parameter update failed: {}", e),
                                 })?;
-                        self.varmap
-                            .set_var(&name, &updated)
-                            .map_err(|e| Error::Internal {
-                                message: format!("Failed to set variable {}: {}", name, e),
-                            })?;
+                        var.set(&updated).map_err(|e| Error::Internal {
+                            message: format!("Failed to update variable: {}", e),
+                        })?;
                     }
                 }
 
@@ -1368,7 +1377,7 @@ impl CostPredictionModel {
         }
 
         let training_time = start_time.elapsed();
-        let avg_loss = total_loss / epochs as f64;
+        let _avg_loss = total_loss / epochs as f64;
 
         // Compute final metrics on all samples
         let (mae, rmse, r2) = self.compute_metrics(samples)?;
@@ -1390,7 +1399,7 @@ impl CostPredictionModel {
 
         for sample in samples {
             let pred = self.predict(&sample.features)?;
-            let actual = sample.actual_cost;
+            let actual = sample.actual_time;
 
             errors.push((pred.execution_time - actual).abs());
             actuals.push(actual);
@@ -1815,15 +1824,14 @@ impl StrategySelectionModel {
         let alternatives = self.get_alternative_strategies(&strategy, features);
 
         // Get performance profile
-        let expected_performance = self
-            .strategy_registry
-            .get(&strategy)
-            .map(|meta| meta.performance.clone())
-            .unwrap_or_else(|| PerformanceProfile {
+        let expected_performance = self.strategy_registry.get(&strategy).map_or_else(
+            || PerformanceProfile {
                 expected_time: 100.0,
                 expected_memory: 100.0,
                 scalability: ScalabilityClass::Linear,
-            });
+            },
+            |meta| meta.performance.clone(),
+        );
 
         Ok(StrategyRecommendation {
             strategy,
@@ -1842,7 +1850,7 @@ impl StrategySelectionModel {
         }
 
         // Chain pattern: moderate join count, linear structure
-        #[allow(clippy::float_cmp)]
+        #[allow(clippy::float_cmp)] // join_count is an integral f64 feature; exact compare intended
         if features.join_count >= 2.0
             && features.join_count <= 5.0
             && features.variable_count == features.join_count + 1.0

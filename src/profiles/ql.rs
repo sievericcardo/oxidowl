@@ -11,7 +11,10 @@
 //! This implementation provides full OWL 2 QL profile validation according to the W3C specification.
 
 use crate::error::OxidowlError;
-use crate::ontology::{Axiom, ClassExpression, DataRange, ObjectPropertyExpression, Ontology};
+use crate::ontology::axioms::AxiomTrait;
+use crate::ontology::{
+    Axiom, ClassExpression, DataRange, Entity, ObjectPropertyExpression, Ontology,
+};
 use crate::profiles::{
     OWL2Profile, ProfileValidationReport, ProfileValidator, ProfileViolation, ProfileViolationType,
 };
@@ -50,6 +53,38 @@ impl QLValidator {
 
         Self {
             prohibited_constructs,
+        }
+    }
+
+    /// Check for illegal punning between classes and datatypes.
+    ///
+    /// OWL 2 QL (like OWL 2 DL) disallows using a single IRI as both a class
+    /// and a datatype, although class/individual punning is permitted.
+    fn check_illegal_punning(&self, ontology: &Ontology, report: &mut ProfileValidationReport) {
+        let mut class_iris = std::collections::HashSet::new();
+        let mut datatype_iris = std::collections::HashSet::new();
+
+        for axiom in ontology.axioms() {
+            if let Axiom::Declaration(decl) = axiom {
+                match &decl.entity {
+                    Entity::Class(iri) => {
+                        class_iris.insert(iri.clone());
+                    }
+                    Entity::Datatype(iri) => {
+                        datatype_iris.insert(iri.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        for iri in class_iris.intersection(&datatype_iris) {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedAxiom("IllegalPunning".to_string()),
+                format!(
+                    "IRI {iri} is used both as a class and as a datatype (illegal punning in OWL 2 QL)"
+                ),
+            ));
         }
     }
 
@@ -134,6 +169,7 @@ impl QLValidator {
     }
 
     /// Validate property expressions in the ontology
+    #[allow(dead_code)]
     fn validate_property_expressions(
         &self,
         ontology: &Ontology,
@@ -357,7 +393,7 @@ impl QLValidator {
             ObjectPropertyExpression::InverseObjectProperty(_prop) => {
                 true // prop is already an ObjectProperty, so it's basic
             }
-            _ => false,
+            ObjectPropertyExpression::PropertyChain(_) => false,
         }
     }
 
@@ -494,20 +530,27 @@ impl ProfileValidator for QLValidator {
     fn validate(&self, ontology: &Ontology) -> Result<ProfileValidationReport, OxidowlError> {
         let mut report = ProfileValidationReport::new(OWL2Profile::QL);
 
-        // Validate all axioms in the ontology
+        // Primary validation pass via is_axiom_allowed()
         for axiom in ontology.axioms() {
             if !self.is_axiom_allowed(axiom) {
                 report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
-                    format!("Axiom type not supported in OWL 2 QL profile: {axiom:?}"),
+                    ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom.axiom_type())),
+                    format!(
+                        "Axiom not allowed in OWL 2 QL profile: {:?}",
+                        axiom.axiom_type()
+                    ),
                 ));
             }
         }
 
-        // Additional validation for complex constructs
+        // Additional expression-level checks not covered by is_axiom_allowed.
+        // (validate_property_expressions is intentionally omitted to avoid
+        // double-counting SubObjectPropertyOf violations already caught above.)
         self.validate_class_expressions(ontology, &mut report)?;
-        self.validate_property_expressions(ontology, &mut report)?;
         self.validate_data_ranges(ontology, &mut report)?;
+
+        // OWL 2 QL disallows punning a single IRI as both a class and a datatype.
+        self.check_illegal_punning(ontology, &mut report);
 
         Ok(report)
     }
@@ -612,24 +655,28 @@ impl ProfileValidator for QLValidator {
             Axiom::DisjointUnion(_) => false, // Disjoint unions not allowed in QL
 
             // Object property axioms
+            // SubObjectPropertyOf with a property chain is NOT in OWL 2 QL
             Axiom::SubObjectPropertyOf(subprop_axiom) => {
-                self.is_property_expression_allowed(&subprop_axiom.sub_property)
-                    && self.is_property_expression_allowed(&subprop_axiom.super_property)
+                !matches!(
+                    &subprop_axiom.sub_property,
+                    ObjectPropertyExpression::PropertyChain(_)
+                ) && self.is_ql_property_expression(&subprop_axiom.sub_property)
+                    && self.is_ql_property_expression(&subprop_axiom.super_property)
             }
             Axiom::EquivalentObjectProperties(equiv_axiom) => equiv_axiom
                 .properties
                 .iter()
-                .all(|p| self.is_property_expression_allowed(p)),
+                .all(|p| self.is_ql_property_expression(p)),
             Axiom::DisjointObjectProperties(disjoint_axiom) => disjoint_axiom
                 .properties
                 .iter()
-                .all(|p| self.is_property_expression_allowed(p)),
+                .all(|p| self.is_ql_property_expression(p)),
             Axiom::ObjectPropertyDomain(domain_axiom) => {
-                self.is_property_expression_allowed(&domain_axiom.property)
+                self.is_ql_property_expression(&domain_axiom.property)
                     && self.is_ql_basic_class_expression(&domain_axiom.domain)
             }
             Axiom::ObjectPropertyRange(range_axiom) => {
-                self.is_property_expression_allowed(&range_axiom.property)
+                self.is_ql_property_expression(&range_axiom.property)
                     && self.is_ql_basic_class_expression(&range_axiom.range)
             }
             Axiom::InverseObjectProperties(_) => false, // Not allowed in QL
@@ -656,7 +703,7 @@ impl ProfileValidator for QLValidator {
                 self.is_ql_basic_class_expression(&class_axiom.class)
             }
             Axiom::ObjectPropertyAssertion(prop_axiom) => {
-                self.is_property_expression_allowed(&prop_axiom.property)
+                self.is_ql_property_expression(&prop_axiom.property)
             }
             Axiom::NegativeObjectPropertyAssertion(_) => false, // Not allowed in QL
             Axiom::DataPropertyAssertion(_) => true,
@@ -772,16 +819,18 @@ mod tests {
         let validator = QLValidator::new();
         let mut ontology = Ontology::new();
 
-        // Add a non-QL axiom (functional property)
+        // Add a non-QL axiom (functional property).  `set_axioms` (not a bare
+        // field push) keeps the incremental axiom index in sync — direct
+        // `axioms` mutation leaves it stale (CR-011 NR-1).
         let prop = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop"))
             .expect("Failed to create ObjectProperty for test: prop");
-        ontology.axioms.push(Axiom::FunctionalObjectProperty(
+        ontology.set_axioms(vec![Axiom::FunctionalObjectProperty(
             crate::ontology::axioms::FunctionalObjectPropertyAxiom {
                 id: 0,
                 property: crate::ontology::ObjectPropertyExpression::ObjectProperty(prop),
                 annotations: Vec::new(),
             },
-        ));
+        )]);
 
         let report = validator
             .validate(&ontology)

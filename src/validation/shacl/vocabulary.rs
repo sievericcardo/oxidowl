@@ -8,6 +8,7 @@ pub const SH_NS: &str = "http://www.w3.org/ns/shacl#";
 
 /// Helper: prepend the SHACL namespace to a local name.
 #[inline]
+#[must_use]
 pub fn sh(local: &str) -> String {
     format!("{SH_NS}{local}")
 }

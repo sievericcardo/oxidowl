@@ -64,6 +64,7 @@ impl CycleDetector {
     /// `max_depth` is typically set to the number of named concepts in the
     /// ontology plus a small constant. Values in the range 512–4096 are
     /// reasonable for most practical ontologies.
+    #[must_use]
     pub fn new(max_depth: u32) -> Self {
         Self {
             concept_state: DashMap::new(),
@@ -156,8 +157,7 @@ impl CycleDetector {
     pub fn is_on_stack(&self, concept_iri: &str) -> bool {
         self.concept_state
             .get(concept_iri)
-            .map(|s| s.on_stack)
-            .unwrap_or(false)
+            .is_some_and(|s| s.on_stack)
     }
 
     /// Returns the number of distinct concepts visited so far.

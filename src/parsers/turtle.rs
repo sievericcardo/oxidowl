@@ -7,18 +7,21 @@ use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::{
-        Class, ClassExpression, DataProperty, DataPropertyExpression, DataRange, FacetRestriction,
-        IRI, Individual, Literal, NamedIndividual, ObjectProperty, ObjectPropertyExpression,
-        Ontology,
+        Annotation, AnnotationProperty, AnnotationSubject, AnnotationValue, Class, ClassExpression,
+        DataProperty, DataPropertyExpression, DataRange, FacetRestriction, IRI, Individual,
+        Literal, NamedIndividual, ObjectProperty, ObjectPropertyExpression, Ontology,
         axioms::{
-            Axiom, ClassAssertionAxiom, DataPropertyAssertionAxiom, DeclarationAxiom,
-            DisjointUnionAxiom, Entity, EquivalentClassesAxiom, ObjectPropertyAssertionAxiom,
-            SubClassOfAxiom,
+            AnnotationAssertionAxiom, Axiom, DataPropertyAssertionAxiom, DeclarationAxiom,
+            DisjointUnionAxiom, Entity, EquivalentClassesAxiom, SubClassOfAxiom,
         },
     },
     semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple},
 };
 use std::{collections::HashMap, fs::File, io::Read, path::Path};
+
+/// Absolute IRI of `rdf:type` — the expansion of Turtle's predefined
+/// keyword `a` in predicate position (Turtle spec §2.3 / §4.1.2).
+const RDF_TYPE_IRI: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 
 /// Generate a unique axiom ID
 fn generate_axiom_id() -> u64 {
@@ -378,31 +381,73 @@ impl TurtleParser {
         let mut paren_depth = 0;
         let mut angle_depth = 0; // Track < > brackets for IRIs
 
-        for ch in content.chars() {
+        // Collect chars for lookahead on '.'
+        let chars: Vec<char> = content.chars().collect();
+        let len = chars.len();
+        let mut i = 0;
+
+        while i < len {
+            let ch = chars[i];
             match ch {
-                '"' => in_string = !in_string,
-                '[' if !in_string => bracket_depth += 1,
-                ']' if !in_string => bracket_depth -= 1,
-                '(' if !in_string => paren_depth += 1,
-                ')' if !in_string => paren_depth -= 1,
+                '"' => {
+                    in_string = !in_string;
+                    current_statement.push(ch);
+                }
+                '[' if !in_string => {
+                    bracket_depth += 1;
+                    current_statement.push(ch);
+                }
+                ']' if !in_string => {
+                    bracket_depth -= 1;
+                    current_statement.push(ch);
+                }
+                '(' if !in_string => {
+                    paren_depth += 1;
+                    current_statement.push(ch);
+                }
+                ')' if !in_string => {
+                    paren_depth -= 1;
+                    current_statement.push(ch);
+                }
                 '<' if !in_string => {
                     angle_depth += 1;
+                    current_statement.push(ch);
                 }
                 '>' if !in_string => {
                     angle_depth -= 1;
+                    current_statement.push(ch);
                 }
                 '.' if !in_string && bracket_depth == 0 && paren_depth == 0 && angle_depth == 0 => {
-                    current_statement.push(ch);
-                    let stmt = current_statement.trim().to_string();
-                    if !stmt.is_empty() {
-                        statements.push(stmt);
+                    // Fix 1.6: A '.' is a statement terminator ONLY when followed by
+                    // whitespace, '#', or end-of-input.  If the next character is a
+                    // non-whitespace/non-comment character (e.g. a digit or letter in a
+                    // local name like bedreflyt:C71.2) treat the dot as an embedded
+                    // character within the token, NOT as a statement boundary.
+                    let next_is_continuation = if i + 1 < len {
+                        let next = chars[i + 1];
+                        !next.is_whitespace() && next != '#'
+                    } else {
+                        false
+                    };
+
+                    if next_is_continuation {
+                        // Embedded period in a prefixed-name local part
+                        current_statement.push(ch);
+                    } else {
+                        // Statement-ending period
+                        current_statement.push(ch);
+                        let stmt = current_statement.trim().to_string();
+                        if !stmt.is_empty() {
+                            statements.push(stmt);
+                        }
+                        current_statement.clear();
                     }
-                    current_statement.clear();
-                    continue;
                 }
-                _ => {}
+                _ => {
+                    current_statement.push(ch);
+                }
             }
-            current_statement.push(ch);
+            i += 1;
         }
 
         if !current_statement.trim().is_empty() {
@@ -519,8 +564,12 @@ impl TurtleParser {
 
         if tokens.len() >= 3 {
             let subject = self.resolve_token(&tokens[0], state)?;
-            let predicate = self.resolve_token(&tokens[1], state)?;
-            let object = self.resolve_token(&tokens[2], state)?;
+            let predicate = self.resolve_predicate(&tokens[1], state)?;
+            let object = if matches!(&tokens[2], Token::Literal(_)) {
+                format!("\"{}\"", self.resolve_token(&tokens[2], state)?)
+            } else {
+                self.resolve_token(&tokens[2], state)?
+            };
 
             self.process_enhanced_triple(ontology, subject, predicate, object)?;
         }
@@ -655,7 +704,7 @@ impl TurtleParser {
             } else {
                 // Parse new predicate
                 let pred = self
-                    .resolve_token(&tokens[start_index], state)
+                    .resolve_predicate(&tokens[start_index], state)
                     .map_err(|e| {
                         Error::ontology_parsing(format!(
                             "Failed to resolve predicate token at index {start_index}: {e}"
@@ -745,7 +794,8 @@ impl TurtleParser {
                         continue;
                     }
                     Token::Literal(lit_value) => {
-                        // Handle literal values as data property assertions
+                        // Handle literal values – data property assertion OR
+                        // annotation assertion (Fix 1.4)
                         let literal_value = lit_value.clone();
                         start_index += 1; // Move past literal
 
@@ -800,32 +850,70 @@ impl TurtleParser {
                             (None, None)
                         };
 
-                        // Create DataPropertyAssertion
-                        let subject_ind = Individual::Named(NamedIndividual {
-                            iri: IRI::new(&subject),
-                        });
-                        let data_property = DataProperty {
-                            iri: IRI::new(&predicate),
-                        };
+                        let literal_str =
+                            self.decode_escape_sequences(literal_value.trim_matches('"'));
                         let literal = Literal {
-                            value: self.decode_escape_sequences(literal_value.trim_matches('"')),
-                            language,
-                            datatype,
+                            value: literal_str,
+                            language: language.clone(),
+                            datatype: datatype.clone(),
                         };
 
-                        let axiom = DataPropertyAssertionAxiom {
-                            id: generate_axiom_id(),
-                            property: crate::ontology::DataPropertyExpression::DataProperty(
-                                data_property,
-                            ),
-                            individual: subject_ind,
-                            value: literal,
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::DataPropertyAssertion(axiom));
+                        // Fix 1.4: check if predicate is an annotation property
+                        let is_ap = self.is_annotation_property(&predicate, ontology);
+                        if is_ap {
+                            let annotation_value = AnnotationValue::Literal(literal);
+                            if ontology.get_iri().map(super::super::ontology::IRI::as_str)
+                                == Some(subject.as_str())
+                            {
+                                // Ontology-level annotation
+                                let annotation = Annotation {
+                                    property: AnnotationProperty {
+                                        iri: IRI::new(&predicate),
+                                    },
+                                    value: annotation_value,
+                                    annotations: vec![],
+                                };
+                                ontology.annotations.push(annotation);
+                            } else {
+                                // Fix 1.8: auto-declare annotation property
+                                self.ensure_annotation_property_declared(&predicate, ontology);
+                                let axiom = AnnotationAssertionAxiom {
+                                    id: generate_axiom_id(),
+                                    subject: AnnotationSubject::IRI(IRI::new(&subject)),
+                                    property: AnnotationProperty {
+                                        iri: IRI::new(&predicate),
+                                    },
+                                    value: annotation_value,
+                                    annotations: vec![],
+                                };
+                                ontology.add_axiom(Axiom::AnnotationAssertion(axiom));
+                            }
+                        } else {
+                            // DataPropertyAssertion
+                            let subject_ind = Individual::Named(NamedIndividual {
+                                iri: IRI::new(&subject),
+                            });
+                            let data_property = DataProperty {
+                                iri: IRI::new(&predicate),
+                            };
+
+                            let axiom = DataPropertyAssertionAxiom {
+                                id: generate_axiom_id(),
+                                property: crate::ontology::DataPropertyExpression::DataProperty(
+                                    data_property,
+                                ),
+                                individual: subject_ind,
+                                value: literal,
+                                annotations: vec![],
+                            };
+                            ontology.add_axiom(Axiom::DataPropertyAssertion(axiom));
+                        }
                         continue;
                     }
                     _ => {} // Continue with normal processing
+                            // Note: Token::Keyword bare-literals (integers, booleans, decimals)
+                            // fall through here and are handled via resolve_token +
+                            // process_enhanced_triple which uses the is_bare_literal() check.
                 }
             }
 
@@ -933,7 +1021,7 @@ impl TurtleParser {
             let predicate = if let Some(ref pred) = current_predicate {
                 pred.clone()
             } else if i < tokens.len() {
-                let pred = self.resolve_token(&tokens[i], state)?;
+                let pred = self.resolve_predicate(&tokens[i], state)?;
                 i += 1;
                 current_predicate = Some(pred.clone());
                 pred
@@ -1221,8 +1309,8 @@ impl TurtleParser {
                 Token::PrefixedName(String::new(), subject_iri.to_string())
             };
 
-            let subject_uri = self.resolve_token(&subject_token, state)?;
-            let subject_class = Class::new(IRI::new(&subject_uri));
+            let resolved_subject = self.resolve_token(&subject_token, state)?;
+            let subject_class = Class::new(IRI::new(&resolved_subject));
 
             // Look for intersection patterns like "[ owl:intersectionOf ( ast:Healthy ast:MoistPlant ) ]"
             if statement.contains("owl:intersectionOf")
@@ -1441,11 +1529,36 @@ impl TurtleParser {
             ));
         };
 
-        // Check if it's owl:someValuesFrom or owl:hasValue
-        if restriction_str.contains("owl:someValuesFrom") {
-            // Data property restriction with datatype
+        // Check if it's owl:someValuesFrom, owl:allValuesFrom, or owl:hasValue
+        if restriction_str.contains("owl:someValuesFrom")
+            || restriction_str.contains("owl:allValuesFrom")
+        {
+            let is_some = restriction_str.contains("owl:someValuesFrom");
+            let keyword = if is_some {
+                "owl:someValuesFrom"
+            } else {
+                "owl:allValuesFrom"
+            };
 
-            // Resolve property
+            // Extract the filler token (the value after the keyword)
+            let filler_str = if let Some(kw_start) = restriction_str.find(keyword) {
+                restriction_str[kw_start + keyword.len()..]
+                    .trim_start()
+                    .split(&[';', '\n', '\t'][..])
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+            } else {
+                ""
+            };
+
+            // A datatype filler is a blank node, xsd: prefix, rdfs:Literal, or full XSD IRI
+            let is_data_restriction = filler_str.starts_with('[')
+                || filler_str.starts_with("xsd:")
+                || filler_str == "rdfs:Literal"
+                || filler_str.contains("XMLSchema#");
+
+            // Resolve the property IRI
             let property_token = if property_name.contains(':') {
                 let parts: Vec<&str> = property_name.splitn(2, ':').collect();
                 if parts.len() == 2 {
@@ -1460,19 +1573,65 @@ impl TurtleParser {
                     "Invalid property name: {property_name}"
                 )));
             };
-
             let property_iri = self.resolve_token(&property_token, state)?;
-            let data_property = DataProperty {
-                iri: IRI::new(&property_iri),
-            };
 
-            // Parse the datatype restriction
-            let data_range = self.parse_datatype_restriction(restriction_str, state)?;
-
-            Ok(ClassExpression::DataSomeValuesFrom {
-                property: DataPropertyExpression::DataProperty(data_property),
-                filler: data_range,
-            })
+            if is_data_restriction {
+                let data_property = DataProperty {
+                    iri: IRI::new(&property_iri),
+                };
+                let data_range = self.parse_datatype_restriction(restriction_str, state)?;
+                if is_some {
+                    Ok(ClassExpression::DataSomeValuesFrom {
+                        property: DataPropertyExpression::DataProperty(data_property),
+                        filler: data_range,
+                    })
+                } else {
+                    Ok(ClassExpression::DataAllValuesFrom {
+                        property: DataPropertyExpression::DataProperty(data_property),
+                        filler: data_range,
+                    })
+                }
+            } else {
+                // Object property restriction — filler is a named class IRI
+                let object_property = ObjectProperty {
+                    iri: IRI::new(&property_iri),
+                };
+                let filler_class = if filler_str.starts_with('<') && filler_str.ends_with('>') {
+                    let iri_str = &filler_str[1..filler_str.len() - 1];
+                    ClassExpression::Class(Class {
+                        iri: IRI::new(iri_str),
+                    })
+                } else if filler_str.contains(':') {
+                    let parts: Vec<&str> = filler_str.splitn(2, ':').collect();
+                    if parts.len() == 2 {
+                        let filler_token =
+                            Token::PrefixedName(parts[0].to_string(), parts[1].to_string());
+                        let filler_iri = self.resolve_token(&filler_token, state)?;
+                        ClassExpression::Class(Class {
+                            iri: IRI::new(&filler_iri),
+                        })
+                    } else {
+                        return Err(Error::ontology_parsing(format!(
+                            "Invalid filler class name: {filler_str}"
+                        )));
+                    }
+                } else {
+                    return Err(Error::ontology_parsing(format!(
+                        "Invalid filler class name: {filler_str}"
+                    )));
+                };
+                if is_some {
+                    Ok(ClassExpression::ObjectSomeValuesFrom {
+                        property: ObjectPropertyExpression::ObjectProperty(object_property),
+                        filler: Box::new(filler_class),
+                    })
+                } else {
+                    Ok(ClassExpression::ObjectAllValuesFrom {
+                        property: ObjectPropertyExpression::ObjectProperty(object_property),
+                        filler: Box::new(filler_class),
+                    })
+                }
+            }
         } else if restriction_str.contains("owl:hasValue") {
             // Data property with specific value
 
@@ -1497,42 +1656,34 @@ impl TurtleParser {
                 iri: IRI::new(&property_iri),
             };
 
-            // Extract the value - look for quoted string or unquoted value
-            let value_str = if let Some(val_start) = restriction_str.find("owl:hasValue") {
-                let after_val = &restriction_str[val_start + 12..].trim_start();
-
-                // Check if it's a quoted string
-                if let Some(quote_start) = after_val.find('"') {
-                    // Find the closing quote
-                    let after_quote = &after_val[quote_start + 1..];
-                    if let Some(quote_end) = after_quote.find('"') {
-                        after_quote[..quote_end].to_string()
-                    } else {
-                        // No closing quote found, take until semicolon or bracket
-                        after_val
-                            .split(&[';', ']'][..])
-                            .next()
-                            .unwrap_or("")
-                            .trim()
-                            .trim_matches('"')
-                            .to_string()
-                    }
+            // Extract the value — quoted string or unquoted — together with any
+            // explicit `^^datatype` tag that follows it (the tag used to be
+            // silently dropped here, so `DataHasValue` never matched a typed
+            // ABox literal in `DatatypeValidator::literal_values_equal`).
+            let (value_str, datatype_spec) =
+                if let Some(val_start) = restriction_str.find("owl:hasValue") {
+                    let after_val = restriction_str[val_start + 12..].trim_start();
+                    Self::split_literal_datatype(after_val)
                 } else {
-                    // Unquoted value - take until semicolon or bracket
-                    after_val
-                        .split(&[';', ']'][..])
-                        .next()
-                        .unwrap_or("")
-                        .trim()
-                        .to_string()
-                }
-            } else {
-                return Err(Error::ontology_parsing("No owl:hasValue found"));
-            };
+                    return Err(Error::ontology_parsing("No owl:hasValue found"));
+                };
+
+            // RDF 1.1 plain literals and explicit `xsd:string` are the same
+            // value, and this crate normalises that equivalence to
+            // `datatype: None` (see `rdf_to_owl::normalize_literal`); the
+            // legacy ABox object path also leaves untagged literals as `None`.
+            // Restriction literals must follow the same convention, or
+            // `literal_values_equal`'s `(Some, None)` arm would make an
+            // untagged `owl:hasValue "x"` stop matching an untagged ABox `"x"`.
+            // An explicit `^^datatype` tag is still preserved.
+            let datatype = datatype_spec.and_then(|spec| {
+                let datatype_iri = self.resolve_datatype_spec(&spec, state);
+                IRI::new(&datatype_iri).to_url().ok()
+            });
 
             let literal = Literal {
-                value: value_str,
-                datatype: None,
+                value: self.decode_escape_sequences(&value_str),
+                datatype,
                 language: None,
             };
 
@@ -1847,20 +1998,24 @@ impl TurtleParser {
 
         let facet_iri = self.resolve_token(&facet_token, state)?;
 
-        // Extract value (remove quotes and datatype annotation)
-        // The value might be like "80.0"^^xsd:double or just "80.0"
-        let value_part = parts[1];
-        let value_str = value_part
-            .split("^^")
-            .next()
-            .unwrap_or(value_part)
-            .trim_matches('"')
-            .trim_matches('\\') // Remove escape characters if present
-            .to_string();
+        // Extract the value and its optional `^^datatype` tag — everything
+        // after the facet name (the value may contain spaces; a `^^` inside
+        // the quotes of e.g. `"a^^b"` must not be mistaken for a tag).
+        let value_raw = parts[1..].join(" ");
+        let (raw_value, datatype_spec) = Self::split_literal_datatype(&value_raw);
+
+        // RDF 1.1 plain literals and explicit `xsd:string` are the same value,
+        // and this crate normalises that equivalence to `datatype: None` (see
+        // `rdf_to_owl::normalize_literal`). Restriction literals follow the
+        // same convention; an explicit `^^datatype` tag is preserved.
+        let datatype = datatype_spec.and_then(|spec| {
+            let datatype_iri = self.resolve_datatype_spec(&spec, state);
+            IRI::new(&datatype_iri).to_url().ok()
+        });
 
         let literal = Literal {
-            value: value_str,
-            datatype: None,
+            value: self.decode_escape_sequences(&raw_value),
+            datatype,
             language: None,
         };
 
@@ -1868,6 +2023,80 @@ impl TurtleParser {
             facet: IRI::new(&facet_iri),
             value: literal,
         })
+    }
+
+    /// Split a literal object into `(lexical form, optional `^^datatype` tag)`.
+    ///
+    /// Handles quoted strings — including escaped quotes and `^^` *inside* the
+    /// quotes (so `"a^^b"` is never mistaken for a tagged literal) — as well as
+    /// bare values such as `30.0^^xsd:double`. The returned datatype is the raw
+    /// specification (`xsd:double`, `<http://…>`, …); callers resolve it with
+    /// [`Self::resolve_datatype_spec`].
+    fn split_literal_datatype(raw: &str) -> (String, Option<String>) {
+        let trimmed = raw.trim();
+
+        // Quoted literal: scan for the closing quote, skipping `\"` escapes.
+        if let Some(rest) = trimmed.strip_prefix('"') {
+            let bytes = rest.as_bytes();
+            let mut end = 0usize;
+            while end < bytes.len() {
+                match bytes[end] {
+                    b'\\' => end += 2,
+                    b'"' => break,
+                    _ => end += 1,
+                }
+            }
+            let closed = end < bytes.len();
+            let value = rest[..end.min(bytes.len())].to_string();
+            let datatype = if closed {
+                rest[end + 1..]
+                    .trim_start()
+                    .strip_prefix("^^")
+                    .and_then(Self::first_datatype_token)
+            } else {
+                None
+            };
+            return (value, datatype);
+        }
+
+        // Bare value: bound it at `;`/`]`/`,` first so a later `^^`-tagged
+        // literal in the same restriction never becomes this value's tag.
+        let token = trimmed.split([';', ']', ',']).next().unwrap_or("").trim();
+        match token.find("^^") {
+            Some(pos) => {
+                let datatype = Self::first_datatype_token(&token[pos + 2..]);
+                (token[..pos].trim().to_string(), datatype)
+            }
+            None => (token.to_string(), None),
+        }
+    }
+
+    /// First delimiter-delimited token of a `^^datatype` suffix (delimiters are
+    /// exactly those that can legally follow a datatype IRI in a restriction).
+    fn first_datatype_token(rest: &str) -> Option<String> {
+        let token = rest
+            .split([' ', '\t', '\n', '\r', ';', ']', ',', ')'])
+            .next()
+            .unwrap_or("")
+            .trim();
+        (!token.is_empty()).then(|| token.to_string())
+    }
+
+    /// Resolve a raw `^^datatype` specification (`xsd:double`, `<http://…>`, a
+    /// full IRI or a bare name) to an absolute IRI string, reusing the shared
+    /// prefix machinery ([`Self::expand_prefixed_name`]) instead of
+    /// reimplementing prefix lookup.
+    ///
+    /// A specification that cannot be expanded falls back to itself, so a
+    /// malformed tag degrades instead of failing the whole parse.
+    fn resolve_datatype_spec(&self, spec: &str, state: &ParseState) -> String {
+        // A full IRI without angle brackets is already absolute.
+        if spec.starts_with("http://") || spec.starts_with("https://") {
+            return spec.to_string();
+        }
+        // Prefixed name, `<…>` IRI or bare name (expanded against the base).
+        self.expand_prefixed_name(spec, state)
+            .unwrap_or_else(|_| spec.to_string())
     }
 
     /// Enhanced tokenization
@@ -1928,15 +2157,15 @@ impl TurtleParser {
                 };
 
                 // Resolve to URIs
-                let subject_uri = self.resolve_token(&subject_token, state)?;
-                let object_uri = self.resolve_token(&object_token, state)?;
+                let resolved_subject = self.resolve_token(&subject_token, state)?;
+                let resolved_object = self.resolve_token(&object_token, state)?;
 
                 // Create SubClassOf axiom
                 let subclass = ClassExpression::Class(Class {
-                    iri: IRI::new(&subject_uri),
+                    iri: IRI::new(&resolved_subject),
                 });
                 let superclass = ClassExpression::Class(Class {
-                    iri: IRI::new(&object_uri),
+                    iri: IRI::new(&resolved_object),
                 });
 
                 let axiom = SubClassOfAxiom {
@@ -1947,7 +2176,7 @@ impl TurtleParser {
                 };
 
                 println!(
-                    "Creating enhanced SubClassOf axiom: {subject_uri} rdfs:subClassOf {object_uri}"
+                    "Creating enhanced SubClassOf axiom: {resolved_subject} rdfs:subClassOf {resolved_object}"
                 );
                 ontology.add_axiom(Axiom::SubClassOf(axiom));
             }
@@ -1991,7 +2220,7 @@ impl TurtleParser {
 
         // Resolve s/p/o strings from main tokens
         let subject_str = self.resolve_token(&main_tokens[0], state)?;
-        let predicate_str = self.resolve_token(&main_tokens[1], state)?;
+        let predicate_str = self.resolve_predicate(&main_tokens[1], state)?;
         let object_str = self.resolve_token(&main_tokens[2], state)?;
 
         // Process the main triple through the OWL pipeline
@@ -2053,7 +2282,7 @@ impl TurtleParser {
                 break;
             }
             // Read annotation object
-            let ao_term = self.token_to_rdf_term(&annot_tokens[idx], state)?;
+            let annotation_object_term = self.token_to_rdf_term(&annot_tokens[idx], state)?;
             idx += 1;
             // Skip optional language tag or datatype keyword after a literal
             if idx < annot_tokens.len()
@@ -2062,11 +2291,11 @@ impl TurtleParser {
             {
                 idx += 1;
             }
-            let ap_term = str_to_term(&ap_str);
+            let annotation_property_term = str_to_term(&ap_str);
             rdf_graph.add_triple(crate::semantics::Triple::new(
                 reifier_term.clone(),
-                ap_term,
-                ao_term,
+                annotation_property_term,
+                annotation_object_term,
             ));
         }
 
@@ -2153,6 +2382,19 @@ impl TurtleParser {
                         if !current_token.is_empty() {
                             current_token.push(ch);
                         }
+                    }
+                }
+                // Fix: handle backslash-escape sequences inside string literals.
+                // When we see `\` while building a literal, consume the next character
+                // as part of the literal too.  This prevents `\"` from prematurely
+                // closing the string, which was causing garbage tokens (and therefore
+                // 13 spurious AnnotationAssertion axioms) for ontologies containing
+                // strings like `\"2,5 meses\"` or `\"2.5 months\"`.
+                '\\' if in_literal => {
+                    current_token.push(ch);
+                    if i + 1 < chars.len() {
+                        i += 1;
+                        current_token.push(chars[i]);
                     }
                 }
                 '"' => {
@@ -2277,11 +2519,25 @@ impl TurtleParser {
                     i += 1; // skip the }
                 }
                 '.' if !in_iri && !in_literal => {
-                    if !current_token.is_empty() {
-                        self.add_token_from_string(&current_token, &mut tokens);
-                        current_token.clear();
+                    // Fix 1.6: If we're in the middle of an identifier token and the
+                    // next character is a local-name continuation char (letter, digit,
+                    // '_', '-', '%') the dot is part of the local name
+                    // (e.g. bedreflyt:C71.2).  Only emit a Period token when the dot
+                    // terminates the token.
+                    let next_is_local_name_char = i + 1 < chars.len() && {
+                        let next = chars[i + 1];
+                        next.is_alphanumeric() || next == '_' || next == '-' || next == '%'
+                    };
+                    if !current_token.is_empty() && next_is_local_name_char {
+                        // Embedded dot – stay in the current token
+                        current_token.push(ch);
+                    } else {
+                        if !current_token.is_empty() {
+                            self.add_token_from_string(&current_token, &mut tokens);
+                            current_token.clear();
+                        }
+                        tokens.push(Token::Period);
                     }
-                    tokens.push(Token::Period);
                 }
                 ' ' | '\t' | '\n' | '\r' if !in_iri && !in_literal => {
                     if !current_token.is_empty() {
@@ -2391,7 +2647,14 @@ impl TurtleParser {
 
         // Recursively resolve tokens to RdfTerms
         let subject_term = self.token_to_rdf_term(&tokens[0], state)?;
-        let predicate_term = self.token_to_rdf_term(&tokens[1], state)?;
+        // Predicate position again: the Turtle `a` keyword expands to
+        // `rdf:type` inside quoted triples too (RDF-star Turtle §2.3).
+        let predicate_term = match &tokens[1] {
+            Token::Keyword(kw) if kw == "a" => RdfTerm::Iri(
+                url::Url::parse(RDF_TYPE_IRI).expect("RDF_TYPE_IRI is a valid absolute IRI"),
+            ),
+            other => self.token_to_rdf_term(other, state)?,
+        };
         let object_term = self.token_to_rdf_term(&tokens[2], state)?;
 
         Ok(RdfTriple {
@@ -2495,6 +2758,24 @@ impl TurtleParser {
                 )))
             }
         }
+    }
+
+    /// Resolve a token that appears in **predicate** position.
+    ///
+    /// Turtle's predefined keyword `a` (Turtle spec §2.3 / §4.1.2) is shorthand
+    /// for `rdf:type` and may only appear as a predicate: `:i a :A` must
+    /// resolve to `<…/i> rdf:type <…/A>`, never to an object property whose IRI
+    /// is literally `a` (CR-008 / B5 Slice 0 Part D).  [`Self::resolve_token`]
+    /// is shared with subject/object positions — where `a` is *not* a keyword —
+    /// so the expansion happens in this predicate-position wrapper instead.
+    fn resolve_predicate(&self, token: &Token, state: &ParseState) -> Result<String> {
+        // `a` is a lexical *keyword* token (CR-011 n5): only `Token::Keyword("a")`
+        // expands to `rdf:type` — a relative IRI `<a>` or a prefixed name that
+        // merely *resolves* to `a` must stay an IRI.
+        if matches!(token, Token::Keyword(kw) if kw == "a") {
+            return Ok(RDF_TYPE_IRI.to_string());
+        }
+        self.resolve_token(token, state)
     }
 
     /// Decode escape sequences in strings
@@ -2607,7 +2888,22 @@ impl TurtleParser {
         }
     }
 
-    /// Enhanced triple processing with better OWL support
+    // ── helpers: delegated to the shared RDF→OWL mapping module ────────────
+    //    (`parsers::rdf_to_owl`, factored out of this parser in B5 Slice 1 so
+    //     Turtle, RDF/XML and JSON-LD share a single RDF→OWL mapping.)
+
+    fn is_annotation_property(&self, iri: &str, ontology: &Ontology) -> bool {
+        super::rdf_to_owl::is_annotation_property(iri, ontology)
+    }
+
+    fn ensure_annotation_property_declared(&self, iri: &str, ontology: &mut Ontology) {
+        super::rdf_to_owl::ensure_annotation_property_declared(iri, ontology);
+    }
+
+    /// Enhanced triple processing with better OWL support.
+    ///
+    /// The mapping itself lives in [`super::rdf_to_owl::process_triple`] —
+    /// one shared implementation used by Turtle, RDF/XML and JSON-LD.
     fn process_enhanced_triple(
         &self,
         ontology: &mut Ontology,
@@ -2615,142 +2911,7 @@ impl TurtleParser {
         predicate: String,
         object: String,
     ) -> Result<()> {
-        match predicate.as_str() {
-            "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" => {
-                match object.as_str() {
-                    "http://www.w3.org/2002/07/owl#Class" => {
-                        // Class declaration
-                        let _class = Class::new(IRI::new(&subject));
-                        let decl_axiom = DeclarationAxiom {
-                            id: generate_axiom_id(),
-                            entity: Entity::Class(IRI::new(&subject)),
-                        };
-                        ontology.add_axiom(Axiom::Declaration(decl_axiom));
-                    }
-                    "http://www.w3.org/2002/07/owl#ObjectProperty" => {
-                        // Object property declaration
-                        let _property = ObjectProperty::new(IRI::new(&subject));
-                        let decl_axiom = DeclarationAxiom {
-                            id: generate_axiom_id(),
-                            entity: Entity::ObjectProperty(IRI::new(&subject)),
-                        };
-                        ontology.add_axiom(Axiom::Declaration(decl_axiom));
-                    }
-                    _ => {
-                        // Class assertion
-                        let individual = Individual::Named(NamedIndividual {
-                            iri: IRI::new(&subject),
-                        });
-                        let class = Class::new(IRI::new(&object));
-
-                        let axiom = ClassAssertionAxiom {
-                            id: generate_axiom_id(),
-                            individual,
-                            class: ClassExpression::Class(class),
-                            annotations: vec![],
-                        };
-                        ontology.add_axiom(Axiom::ClassAssertion(axiom));
-                    }
-                }
-            }
-            "http://www.w3.org/2000/01/rdf-schema#subClassOf" => {
-                let subclass = Class::new(IRI::new(&subject));
-                let superclass = Class::new(IRI::new(&object));
-
-                let axiom = SubClassOfAxiom {
-                    id: generate_axiom_id(),
-                    subclass: ClassExpression::Class(subclass),
-                    superclass: ClassExpression::Class(superclass),
-                    annotations: vec![],
-                };
-                println!("Creating enhanced SubClassOf axiom: {subject} rdfs:subClassOf {object}");
-                ontology.add_axiom(Axiom::SubClassOf(axiom));
-            }
-            "http://www.w3.org/2002/07/owl#hasKey" => {
-                // owl:hasKey requires list syntax: owl:hasKey ( properties )
-                // If object is not a list (rdf:first/rest), it's invalid
-                if !object.starts_with("_:list") && !object.contains("22-rdf-syntax-ns#first") {
-                    return Err(Error::ontology_parsing(
-                        "owl:hasKey requires list syntax: owl:hasKey ( property1 property2 ... )",
-                    ));
-                }
-                // For now, just validate - full hasKey axiom support would go here
-            }
-            "http://www.w3.org/2002/07/owl#propertyChainAxiom" => {
-                // owl:propertyChainAxiom requires list syntax: owl:propertyChainAxiom ( prop1 prop2 ... )
-                // If object is not a list (rdf:first/rest), it's invalid
-                if !object.starts_with("_:list") && !object.contains("22-rdf-syntax-ns#first") {
-                    return Err(Error::ontology_parsing(
-                        "owl:propertyChainAxiom requires list syntax: owl:propertyChainAxiom ( property1 property2 ... )",
-                    ));
-                }
-                // For now, just validate - full property chain axiom support would go here
-            }
-            _ => {
-                // Detect if object is a literal (data property) or an individual (object property)
-                let is_literal = object.starts_with('"') || object.contains("^^");
-
-                if is_literal {
-                    // DataPropertyAssertion
-                    let subject_ind = Individual::Named(NamedIndividual {
-                        iri: IRI::new(&subject),
-                    });
-                    let data_property = DataProperty {
-                        iri: IRI::new(&predicate),
-                    };
-
-                    // Parse literal value and datatype
-                    let (value, datatype) = if let Some(idx) = object.find("^^") {
-                        let val = object[..idx].trim_matches('"').to_string();
-                        let dt_str = object[idx + 2..].to_string();
-                        let dt_iri = IRI::new(&dt_str);
-                        let dt_url = dt_iri.to_url().ok();
-                        (val, dt_url)
-                    } else {
-                        (object.trim_matches('"').to_string(), None)
-                    };
-
-                    let literal = Literal {
-                        value,
-                        language: None,
-                        datatype,
-                    };
-
-                    let axiom = DataPropertyAssertionAxiom {
-                        id: generate_axiom_id(),
-                        property: crate::ontology::DataPropertyExpression::DataProperty(
-                            data_property,
-                        ),
-                        individual: subject_ind,
-                        value: literal,
-                        annotations: vec![],
-                    };
-                    ontology.add_axiom(Axiom::DataPropertyAssertion(axiom));
-                } else {
-                    // ObjectPropertyAssertion
-                    let subject_ind = Individual::Named(NamedIndividual {
-                        iri: IRI::new(&subject),
-                    });
-                    let object_ind = Individual::Named(NamedIndividual {
-                        iri: IRI::new(&object),
-                    });
-                    let property = ObjectProperty::new(IRI::new(&predicate))?;
-
-                    let axiom = ObjectPropertyAssertionAxiom {
-                        id: generate_axiom_id(),
-                        property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
-                            property,
-                        ),
-                        source: subject_ind,
-                        target: object_ind,
-                        annotations: vec![],
-                    };
-                    ontology.add_axiom(Axiom::ObjectPropertyAssertion(axiom));
-                }
-            }
-        }
-
-        Ok(())
+        super::rdf_to_owl::process_triple(ontology, &subject, &predicate, &object)
     }
 }
 
@@ -2871,14 +3032,170 @@ impl OntologySerializer for TurtleSerializer {
                         ));
                     }
                 }
+                crate::ontology::Axiom::DataPropertyAssertion(dpa) => {
+                    if let (
+                        crate::ontology::DataPropertyExpression::DataProperty(dp),
+                        crate::ontology::Individual::Named(ind),
+                    ) = (&dpa.property, &dpa.individual)
+                    {
+                        let lit_str = if let Some(dt) = &dpa.value.datatype {
+                            format!("\"{}\"^^{}", dpa.value.value, dt)
+                        } else if let Some(lang) = &dpa.value.language {
+                            format!("\"{}\"@{}", dpa.value.value, lang)
+                        } else {
+                            format!("\"{}\"", dpa.value.value)
+                        };
+                        content.push_str(&format!("<{}> <{}> {lit_str} .\n", ind.iri, dp.iri));
+                    }
+                }
+                crate::ontology::Axiom::FunctionalObjectProperty(fp) => {
+                    if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) =
+                        &fp.property
+                    {
+                        content.push_str(&format!(
+                            "<{}> rdf:type owl:FunctionalProperty .\n",
+                            prop.iri
+                        ));
+                    }
+                }
+                crate::ontology::Axiom::TransitiveObjectProperty(tp) => {
+                    if let crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) =
+                        &tp.property
+                    {
+                        content.push_str(&format!(
+                            "<{}> rdf:type owl:TransitiveProperty .\n",
+                            prop.iri
+                        ));
+                    }
+                }
+                crate::ontology::Axiom::EquivalentClasses(eq) => {
+                    if eq.classes.len() >= 2
+                        && let (
+                            crate::ontology::ClassExpression::Class(c1),
+                            crate::ontology::ClassExpression::Class(c2),
+                        ) = (&eq.classes[0], &eq.classes[1])
+                    {
+                        content.push_str(&format!(
+                            "<{}> owl:equivalentClass <{}> .\n",
+                            c1.iri, c2.iri
+                        ));
+                    }
+                }
+                crate::ontology::Axiom::DisjointClasses(dj) => {
+                    if dj.classes.len() >= 2
+                        && let (
+                            crate::ontology::ClassExpression::Class(c1),
+                            crate::ontology::ClassExpression::Class(c2),
+                        ) = (&dj.classes[0], &dj.classes[1])
+                    {
+                        content
+                            .push_str(&format!("<{}> owl:disjointWith <{}> .\n", c1.iri, c2.iri));
+                    }
+                }
                 _ => {
-                    // Skip complex axioms for now
+                    let _name = match axiom {
+                        crate::ontology::Axiom::Declaration(decl) => match &decl.entity {
+                            crate::ontology::Entity::Class(iri) => {
+                                content.push_str(&format!(
+                                    "<{}> rdf:type owl:Class .\n",
+                                    iri.as_str()
+                                ));
+                                "Declaration"
+                            }
+                            crate::ontology::Entity::ObjectProperty(iri) => {
+                                content.push_str(&format!(
+                                    "<{}> rdf:type owl:ObjectProperty .\n",
+                                    iri.as_str()
+                                ));
+                                "Declaration"
+                            }
+                            crate::ontology::Entity::DataProperty(iri) => {
+                                content.push_str(&format!(
+                                    "<{}> rdf:type owl:DatatypeProperty .\n",
+                                    iri.as_str()
+                                ));
+                                "Declaration"
+                            }
+                            crate::ontology::Entity::NamedIndividual(iri) => {
+                                content.push_str(&format!(
+                                    "<{}> rdf:type owl:NamedIndividual .\n",
+                                    iri.as_str()
+                                ));
+                                "Declaration"
+                            }
+                            crate::ontology::Entity::AnnotationProperty(iri) => {
+                                content.push_str(&format!(
+                                    "<{}> rdf:type owl:AnnotationProperty .\n",
+                                    iri.as_str()
+                                ));
+                                "Declaration"
+                            }
+                            crate::ontology::Entity::Datatype(_) => "Declaration",
+                        },
+                        _ => "Other",
+                    };
                 }
             }
         }
 
+        // ── CR-011 M2: ontology-level annotations and SWRL rules ────────
+        //    (shared preservation form; the hand-rolled axiom loop above
+        //    has no arm for either, so they would otherwise be dropped
+        //    silently on a Turtle round-trip.)
+        for triple in crate::semantics::owl_rdf_mapping::ontology_preservation_triples(ontology)? {
+            content.push_str(&render_preservation_triple(&triple)?);
+            content.push('\n');
+        }
+
         Ok(content)
     }
+}
+
+/// Render one preservation triple as a Turtle statement, escaping the
+/// literal payload so rule text (which contains quotes) round-trips.
+fn render_preservation_triple(triple: &RdfTriple) -> Result<String> {
+    let subject = match &triple.subject {
+        RdfTerm::Iri(url) => format!("<{url}>"),
+        RdfTerm::BlankNode(id) => format!("_:{id}"),
+        other => {
+            return Err(Error::ontology_parsing(format!(
+                "Turtle: unsupported preservation subject {other:?}"
+            )));
+        }
+    };
+    let predicate = match &triple.predicate {
+        RdfTerm::Iri(url) => format!("<{url}>"),
+        other => {
+            return Err(Error::ontology_parsing(format!(
+                "Turtle: unsupported preservation predicate {other:?}"
+            )));
+        }
+    };
+    let object = match &triple.object {
+        RdfTerm::Iri(url) => format!("<{url}>"),
+        RdfTerm::BlankNode(id) => format!("_:{id}"),
+        RdfTerm::Literal {
+            value,
+            datatype,
+            language,
+            ..
+        } => {
+            let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+            let mut out = format!("\"{escaped}\"");
+            if let Some(lang) = language {
+                out.push_str(&format!("@{lang}"));
+            } else if let Some(dt) = datatype {
+                out.push_str(&format!("^^<{dt}>"));
+            }
+            out
+        }
+        other => {
+            return Err(Error::ontology_parsing(format!(
+                "Turtle: unsupported preservation object {other:?}"
+            )));
+        }
+    };
+    Ok(format!("{subject} {predicate} {object} ."))
 }
 
 /// Save ontology to Turtle file
@@ -2909,7 +3226,7 @@ ast:Pump rdf:type owl:Class ;
         let result = parser.parse_string(content);
 
         if let Err(err) = &result {
-            println!("Parse error: {:?}", err);
+            println!("Parse error: {err:?}");
         }
         assert!(result.is_ok(), "Enhanced parsing should succeed");
 
@@ -2941,7 +3258,7 @@ ast:Operational rdfs:subClassOf ast:Pump .
         let result = parser.parse_string(content);
 
         if let Err(err) = &result {
-            println!("Parse error: {:?}", err);
+            println!("Parse error: {err:?}");
         }
         assert!(result.is_ok(), "Enhanced parsing should succeed");
 
@@ -2956,8 +3273,148 @@ ast:Operational rdfs:subClassOf ast:Pump .
 
         assert!(
             subclass_count >= 2,
-            "Should have created at least 2 SubClassOf axioms, found: {}",
-            subclass_count
+            "Should have created at least 2 SubClassOf axioms, found: {subclass_count}"
+        );
+    }
+
+    /// Collect `(facet value, hasValue literal)` from the `EquivalentClasses`
+    /// axiom that defines `class_iri` as an `owl:intersectionOf` of a
+    /// `DataSomeValuesFrom` facet restriction and a `DataHasValue` restriction.
+    fn restriction_literals(ontology: &Ontology, class_iri: &str) -> (Literal, Literal) {
+        let mut facet_values = Vec::new();
+        let mut has_values = Vec::new();
+        for axiom in ontology.axioms() {
+            let Axiom::EquivalentClasses(eq) = axiom else {
+                continue;
+            };
+            if !eq.classes.iter().any(
+                |expr| matches!(expr, ClassExpression::Class(c) if c.iri.as_str() == class_iri),
+            ) {
+                continue;
+            }
+            for expr in &eq.classes {
+                let ClassExpression::ObjectIntersectionOf(members) = expr else {
+                    continue;
+                };
+                for member in members {
+                    match member {
+                        ClassExpression::DataSomeValuesFrom { filler, .. } => {
+                            if let DataRange::DatatypeRestriction { restrictions, .. } = filler {
+                                for fr in restrictions {
+                                    facet_values.push(fr.value.clone());
+                                }
+                            }
+                        }
+                        ClassExpression::DataHasValue { value, .. } => {
+                            has_values.push(value.clone());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            facet_values.len(),
+            1,
+            "expected exactly one facet restriction on {class_iri}"
+        );
+        assert_eq!(
+            has_values.len(),
+            1,
+            "expected exactly one hasValue restriction on {class_iri}"
+        );
+        (facet_values.remove(0), has_values.remove(0))
+    }
+
+    /// `^^datatype` tags on restriction literals must survive parsing.
+    ///
+    /// Regression: `parse_facet` and the `owl:hasValue` branch used to build
+    /// literals with `datatype: None`; `DatatypeValidator::literal_values_equal`
+    /// treats `(Some, None)` as unequal, so the `DataHasValue` conjunct never
+    /// matched the typed `ABox` literal and `realize()` never derived the
+    /// defined class (see `tests/restriction_literal_datatype_tests.rs`).
+    #[test]
+    fn test_restriction_literals_keep_datatype_tags() {
+        let content = r#"
+@prefix : <http://example.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:C owl:equivalentClass [ owl:intersectionOf ( [ owl:onProperty :p ; owl:someValuesFrom [ owl:onDatatype xsd:double ; owl:withRestrictions ( [ xsd:minInclusive "30.0"^^xsd:double ] ) ] ] [ owl:onProperty :q ; owl:hasValue "true"^^xsd:boolean ] ) ] .
+"#;
+
+        let ontology = TurtleParser::new()
+            .parse_string(content)
+            .expect("restriction ontology should parse");
+
+        let (facet_value, has_value) = restriction_literals(&ontology, "http://example.org/C");
+
+        assert_eq!(facet_value.value, "30.0");
+        assert_eq!(
+            facet_value.datatype.as_ref().map(url::Url::as_str),
+            Some("http://www.w3.org/2001/XMLSchema#double"),
+            "facet value must keep its ^^xsd:double tag; got {facet_value:?}"
+        );
+
+        assert_eq!(has_value.value, "true");
+        assert_eq!(
+            has_value.datatype.as_ref().map(url::Url::as_str),
+            Some("http://www.w3.org/2001/XMLSchema#boolean"),
+            "owl:hasValue must keep its ^^xsd:boolean tag; got {has_value:?}"
+        );
+    }
+
+    /// Edge cases: an untagged restriction literal defaults to `datatype: None`
+    /// — the crate's convention for RDF 1.1 plain literals (shared with
+    /// `rdf_to_owl::normalize_literal` and the legacy `ABox` object path), a
+    /// full-IRI `^^<…>` tag resolves, and a `^^` *inside* the quoted value is
+    /// not mistaken for a datatype tag.
+    #[test]
+    fn test_restriction_literal_default_and_iri_datatypes() {
+        let content = r#"
+@prefix : <http://example.org/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:C owl:equivalentClass [ owl:intersectionOf ( [ owl:onProperty :p ; owl:someValuesFrom [ owl:onDatatype xsd:double ; owl:withRestrictions ( [ xsd:minInclusive "30" ] ) ] ] [ owl:onProperty :q ; owl:hasValue "plain" ] ) ] .
+
+:D owl:equivalentClass [ owl:intersectionOf ( [ owl:onProperty :r ; owl:someValuesFrom [ owl:onDatatype xsd:double ; owl:withRestrictions ( [ xsd:minInclusive "7"^^<http://www.w3.org/2001/XMLSchema#integer> ] ) ] ] [ owl:onProperty :s ; owl:hasValue "a^^b" ] ) ] .
+"#;
+
+        let ontology = TurtleParser::new()
+            .parse_string(content)
+            .expect("restriction ontology should parse");
+
+        // Untagged values default to datatype: None — the crate's RDF 1.1
+        // plain-literal convention — so they keep matching untagged ABox
+        // literals through literal_values_equal's (None, None) arm.
+        let (facet_c, has_value_c) = restriction_literals(&ontology, "http://example.org/C");
+        assert_eq!(facet_c.value, "30");
+        assert_eq!(
+            facet_c.datatype, None,
+            "untagged facet value must default to datatype: None; got {facet_c:?}"
+        );
+        assert_eq!(has_value_c.value, "plain");
+        assert_eq!(
+            has_value_c.datatype, None,
+            "untagged owl:hasValue must default to datatype: None; got {has_value_c:?}"
+        );
+
+        // Full-IRI datatype tags resolve; `^^` inside the quotes is preserved.
+        let (facet_d, has_value_d) = restriction_literals(&ontology, "http://example.org/D");
+        assert_eq!(
+            facet_d.datatype.as_ref().map(url::Url::as_str),
+            Some("http://www.w3.org/2001/XMLSchema#integer"),
+            "^^<…#integer> facet tag must resolve; got {facet_d:?}"
+        );
+        assert_eq!(has_value_d.value, "a^^b");
+        assert_eq!(
+            has_value_d.datatype, None,
+            "\"a^^b\" is one untagged value (→ None), not value `a` tagged `b`; got {has_value_d:?}"
         );
     }
 }

@@ -365,9 +365,13 @@ impl BackwardChainingEngine {
             }
             SWRLAtom::DataRangeAtom {
                 predicate: _,
-                argument: _,
+                argument,
             } => {
-                // Data range atoms are not yet implemented
+                if let SWRLDArgument::Literal(lit) = argument.clone()
+                    && lit.value.parse::<f64>().is_ok()
+                {
+                    return true;
+                }
                 return false;
             }
         }
@@ -556,10 +560,10 @@ impl BackwardChainingEngine {
                 let mut new_bindings = bindings.clone();
 
                 // Check if either variable is already bound
-                let val1 = bindings.bindings.get(var1);
-                let val2 = bindings.bindings.get(var2);
+                let first_val = bindings.bindings.get(var1);
+                let second_val = bindings.bindings.get(var2);
 
-                match (val1, val2) {
+                match (first_val, second_val) {
                     (Some(v1), Some(v2)) => {
                         if v1 == v2 {
                             Some(new_bindings)
@@ -654,10 +658,10 @@ impl BackwardChainingEngine {
                 // Variable-variable unification
                 let mut new_bindings = bindings.clone();
 
-                let val1 = bindings.bindings.get(var1);
-                let val2 = bindings.bindings.get(var2);
+                let first_val = bindings.bindings.get(var1);
+                let second_val = bindings.bindings.get(var2);
 
-                match (val1, val2) {
+                match (first_val, second_val) {
                     (Some(v1), Some(v2)) => {
                         if v1 == v2 {
                             Some(new_bindings)
@@ -840,7 +844,7 @@ impl BackwardChainingEngine {
                     arg.clone()
                 }
             }
-            _ => arg.clone(),
+            crate::swrl::SWRLIArgument::Individual(_) => arg.clone(),
         }
     }
 
@@ -855,7 +859,7 @@ impl BackwardChainingEngine {
                 // For simplicity, assume data variables are not bound in this context
                 arg.clone()
             }
-            _ => arg.clone(),
+            crate::swrl::SWRLDArgument::Literal(_) => arg.clone(),
         }
     }
 

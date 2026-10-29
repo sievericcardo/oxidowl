@@ -1,0 +1,14 @@
+{
+  "id": "diff_005_shoin_nominal_oneof",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff005#>)\nOntology(<http://example.org/diff005>\n  EquivalentClasses(:A ObjectOneOf(:a))\n  ClassAssertion(:A :x)\n)",
+  "base": "http://example.org/diff005#",
+  "axioms": { "min": 2 },
+  "expected": {
+    "consistent": true,
+    "instances": { "A": ["a", "x"] },
+    "types": { "x": ["A"], "a": ["A"] },
+    "sameAs": [["x", "a"]]
+  },
+  "rationale": "A ≡ {a} (singleton nominal). x ∈ A forces x to be one of the individuals in {a}, hence x sameAs a. Both a and x are instances of A (a by the equivalence, x by the assertion). This is the SHOIN nominal case."
+}

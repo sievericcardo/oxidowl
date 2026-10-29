@@ -1,4 +1,4 @@
-//! Built-in OWL 2 ABox classification SPARQL INSERT-WHERE rules.
+//! Built-in OWL 2 `ABox` classification SPARQL INSERT-WHERE rules.
 //!
 //! Expose the rule set so external projects that manage their own Oxigraph store
 //! can run exactly the same rules without duplicating the queries:
@@ -71,12 +71,20 @@
 //! | 52   | `scm-avf2` — `allValuesFrom` with property subsumption (reversed direction) |
 //!
 //! *Consistency-detection rules* (derive `false`; require separate validation, **not** INSERT-WHERE):
-//! `eq-diff1/2/3`, `cls-nothing2`, `cls-com`, `cls-maxc1/2`, `cls-maxqc1–4`,
-//! `cax-dw`, `cax-adc`, `prp-irp`, `prp-asyp`, `prp-pdw`, `prp-adp`, `prp-npa1/2`,
-//! `prp-key` (derives `owl:sameAs`, but requires arbitrary-length key lists).
+//! `eq-diff1/2/3`, `cls-com`, `cls-maxc1/2`, `cls-maxqc1–4`, `prp-npa1/2`,
+//! and the arbitrary-length `prp-key` case. Workstream A5 added INSERT-style rules for
+//! `prp-irp`, `prp-asyp`, `prp-pdw`, `prp-adp`, `prp-key` (single-key), `cls-nothing2` and
+//! `cax-dw`; the marker triple they derive is `<urn:oxidowl:inconsistency>` and is never
+//! re-imported by `run_sparql_abox_classification`. The primary enforcement of every rule in
+//! this list lives in the tableau `RBox` pass (`TableauExecutor::apply_role_rules`); the SPARQL
+//! rules keep the RL materializer consistent with it. `eq-diff1/2/3` (sameAs ∧ differentFrom
+//! per-pair) are handled by the tableau's inequality-vs-merge clash logic, `cls-com`,
+//! `cls-maxc1/2`, `cls-maxqc1–4` and `prp-npa1/2` by the concept/negative-assertion clash
+//! handling, and arbitrary-length `prp-key` by the tableau `HasKey` rule.
 
-/// Returns the complete set of built-in OWL 2 ABox classification SPARQL
+/// Returns the complete set of built-in OWL 2 `ABox` classification SPARQL
 /// INSERT-WHERE rules that oxidowl applies during `run_sparql_abox_classification`.
+#[must_use]
 pub fn abox_classification_rules() -> &'static [&'static str] {
     &[
         // Rule 1: hasValue restriction — C ≡ (p hasValue v)
@@ -869,6 +877,73 @@ pub fn abox_classification_rules() -> &'static [&'static str] {
           ?c2 <http://www.w3.org/2002/07/owl#onProperty>    ?p2 . \
           ?p1 <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> ?p2 . \
           FILTER NOT EXISTS { ?c2 <http://www.w3.org/2000/01/rdf-schema#subClassOf> ?c1 } \
+        }",
+        // ── Consistency rules (workstream A5) ─────────────────────────────────────────
+        // These derive a marker triple `<urn:oxidowl:inconsistency> <urn:oxidowl:reason> …`
+        // instead of `false`; SPARQL has no ⊥. The marker is *not* an `rdf:type` triple, so
+        // the `run_sparql_abox_classification` sync query never re-imports it into the
+        // ontology. The primary enforcement of all of these lives in the tableau RBox pass
+        // (`TableauExecutor::apply_role_rules`); these rules make the SPARQL/RL materializer
+        // consistent with it. `cax-adc` (AllDisjointClasses) is intentionally not added here:
+        // the tableau's DisjointnessMap covers it, and the RDF encoding requires a full
+        // list-walk for arbitrary-length AllDisjointClasses.
+
+        // prp-irp — IrreflexiveProperty: P(x,x) ⇒ inconsistent.
+        "INSERT { <urn:oxidowl:inconsistency> <urn:oxidowl:reason> <urn:oxidowl:prp-irp> } \
+        WHERE { \
+          ?P <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> \
+             <http://www.w3.org/2002/07/owl#IrreflexiveProperty> . \
+          ?x ?P ?x . \
+        }",
+        // prp-asyp — AsymmetricProperty: P(x,y) ∧ P(y,x) ⇒ inconsistent.
+        "INSERT { <urn:oxidowl:inconsistency> <urn:oxidowl:reason> <urn:oxidowl:prp-asyp> } \
+        WHERE { \
+          ?P <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> \
+             <http://www.w3.org/2002/07/owl#AsymmetricProperty> . \
+          ?x ?P ?y . \
+          ?y ?P ?x . \
+          FILTER(?x != ?y) \
+        }",
+        // prp-pdw / prp-adp — propertyDisjointWith: P1(x,y) ∧ P2(x,y) ⇒ inconsistent
+        // (applies to both object and data properties, which share the same RDF encoding).
+        "INSERT { <urn:oxidowl:inconsistency> <urn:oxidowl:reason> <urn:oxidowl:prp-pdw> } \
+        WHERE { \
+          ?P1 <http://www.w3.org/2002/07/owl#propertyDisjointWith> ?P2 . \
+          ?x ?P1 ?y . \
+          ?x ?P2 ?y . \
+        }",
+        // prp-key — HasKey(C, [P]) with a single key property: two C-members sharing a
+        // P-value are the same individual. (Arbitrary-length key lists are handled by the
+        // tableau's HasKey rule; this covers the single-key RL fragment.)
+        "INSERT { ?x <http://www.w3.org/2002/07/owl#sameAs> ?y } \
+        WHERE { \
+          ?C <http://www.w3.org/2002/07/owl#hasKey> ?klist . \
+          ?klist <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> ?P ; \
+                 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest>  \
+                   <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil> . \
+          FILTER NOT EXISTS { \
+            ?klist <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> ?r . \
+            FILTER(?r != <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil>) \
+          } \
+          ?x a ?C . \
+          ?y a ?C . \
+          ?x ?P ?v . \
+          ?y ?P ?v . \
+          FILTER(?x != ?y) \
+          FILTER NOT EXISTS { ?x <http://www.w3.org/2002/07/owl#sameAs> ?y } \
+        }",
+        // cls-nothing2 — an instance of owl:Nothing ⇒ inconsistent.
+        "INSERT { <urn:oxidowl:inconsistency> <urn:oxidowl:reason> <urn:oxidowl:cls-nothing2> } \
+        WHERE { \
+          ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> \
+             <http://www.w3.org/2002/07/owl#Nothing> . \
+        }",
+        // cax-dw — owl:disjointWith: C1(x) ∧ C2(x) ⇒ inconsistent.
+        "INSERT { <urn:oxidowl:inconsistency> <urn:oxidowl:reason> <urn:oxidowl:cax-dw> } \
+        WHERE { \
+          ?C1 <http://www.w3.org/2002/07/owl#disjointWith> ?C2 . \
+          ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?C1 . \
+          ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ?C2 . \
         }",
     ]
 }

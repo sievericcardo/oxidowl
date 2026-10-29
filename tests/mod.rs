@@ -3,7 +3,9 @@
 //! This file serves as the main entry point for running all tests.
 
 mod integration;
+mod roundtrip;
 mod swrl;
 mod unit;
 
-// Re-export commonly used test utilities
+#[path = "helpers/mod.rs"]
+pub mod helpers;

@@ -543,7 +543,7 @@ fn test_backward_clause_present_for_some_values_from() -> Result<()> {
 // 10.  Concept unfolding rules – ABox integration
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Verify that the Tableau's concept_unfolding_rules map is populated for
+/// Verify that the Tableau's `concept_unfolding_rules` map is populated for
 /// `EquivalentClasses(A, ∃R.C)` so that ClassAssertion(A, a) causes the
 /// existential restriction to be added to the individual node.
 #[test]
@@ -577,8 +577,7 @@ fn test_concept_unfolding_rules_populated() -> Result<()> {
         .any(|r| matches!(r, ClassExpression::ObjectSomeValuesFrom { .. }));
     assert!(
         has_some,
-        "Unfolding rule for A should include ObjectSomeValuesFrom; rules: {:?}",
-        rules
+        "Unfolding rule for A should include ObjectSomeValuesFrom; rules: {rules:?}"
     );
 
     println!("✅ Concept unfolding rules correctly populated for A ≡ ∃R.C");

@@ -1,4 +1,4 @@
-//! Tests for HasKey axiom implementation
+//! Tests for `HasKey` axiom implementation
 
 use oxidowl::{
     config::ReasonerConfig,

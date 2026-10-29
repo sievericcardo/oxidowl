@@ -1034,7 +1034,6 @@ impl CostBasedOptimizer {
     }
 
     /// Estimate result size for query
-    #[allow(clippy::cast_possible_wrap)] // atom/join counts in a query are always << i32::MAX
     fn estimate_result_size(&self, query: &ConjunctiveQuery, stats: &QueryStatistics) -> usize {
         // Look for similar queries in statistics
         let pattern = self.analyze_query_pattern(query);
@@ -1045,8 +1044,8 @@ impl CostBasedOptimizer {
             // Heuristic: base size * reduction per atom
             let base_size = 1000;
             let reduction_factor = 0.6_f64; // Each atom reduces by ~40%
-            let atoms = query.body_atoms.len() as u32;
-            (f64::from(base_size) * reduction_factor.powi(atoms as i32)) as usize
+            let atoms = i32::try_from(query.body_atoms.len()).unwrap_or(i32::MAX);
+            (f64::from(base_size) * reduction_factor.powi(atoms)) as usize
         }
     }
 
@@ -1056,8 +1055,7 @@ impl CostBasedOptimizer {
         let sample_size = stats
             .execution_times
             .get(pattern)
-            .map(|s| s.sample_count)
-            .unwrap_or(0);
+            .map_or(0, |s| s.sample_count);
 
         // Confidence increases with sample size (logarithmic)
         if sample_size == 0 {
@@ -1525,7 +1523,6 @@ impl CostBasedOptimizer {
         Vec::new()
     }
 
-    #[allow(clippy::cast_possible_wrap)] // join_count is a small integer, always << i32::MAX
     fn estimate_performance(
         &self,
         query: &ConjunctiveQuery,
@@ -1577,7 +1574,7 @@ impl CostBasedOptimizer {
             let base_size = 100;
             let join_multiplier = if pattern.join_count > 0 {
                 // Each join typically reduces result size
-                let exp = pattern.join_count as i32;
+                let exp = i32::try_from(pattern.join_count).unwrap_or(i32::MAX);
                 0.5_f64.powi(exp)
             } else {
                 1.0
@@ -1693,8 +1690,7 @@ impl CostBasedOptimizer {
         let sample_count = stats
             .execution_times
             .get(pattern)
-            .map(|s| s.sample_count)
-            .unwrap_or(0);
+            .map_or(0, |s| s.sample_count);
 
         // Execution time confidence: higher with more samples
         let execution_time = if sample_count == 0 {
@@ -1865,6 +1861,11 @@ impl JoinOrderOptimizer {
     }
 
     /// Greedy join ordering algorithm - orders atoms by selectivity
+    ///
+    /// # Panics
+    ///
+    /// Panics if `atoms` is non-empty but the remaining-atom selection yields
+    /// no candidate.
     #[must_use]
     pub fn optimize_join_order_greedy(&self, atoms: &[QueryAtom]) -> Vec<usize> {
         if atoms.is_empty() {
@@ -2295,18 +2296,67 @@ impl AdvancedQueryRewriter {
     }
 
     fn eliminate_redundant_joins(&self, query: &ConjunctiveQuery) -> ConjunctiveQuery {
-        // Simplified implementation - would do actual join analysis
-        query.clone()
+        let mut atoms = query.body_atoms.clone();
+        // Remove duplicate atoms by structural comparison
+        let mut seen = std::collections::HashSet::new();
+        atoms.retain(|atom| {
+            let key = format!("{atom:?}");
+            seen.insert(key)
+        });
+        ConjunctiveQuery {
+            body_atoms: atoms,
+            ..query.clone()
+        }
     }
 
     fn push_filters_down(&self, query: &ConjunctiveQuery) -> ConjunctiveQuery {
-        // Simplified implementation - would reorder atoms
-        query.clone()
+        let mut atoms = query.body_atoms.clone();
+        // Sort: class atoms first (selective), role atoms last (expensive joins)
+        atoms.sort_by_key(|atom| match atom {
+            QueryAtom::ClassAtom { .. } => 0u8,
+            QueryAtom::SameIndividualAtom { .. } => 0,
+            QueryAtom::DataPropertyAtom { .. } => 1,
+            QueryAtom::ObjectPropertyAtom { .. } => 2,
+            _ => 3,
+        });
+        ConjunctiveQuery {
+            body_atoms: atoms,
+            ..query.clone()
+        }
     }
 
     fn simplify_complex_expressions(&self, query: &ConjunctiveQuery) -> ConjunctiveQuery {
-        // Simplified implementation - would simplify class expressions
-        query.clone()
+        let atoms = query.body_atoms.clone();
+        let simplified: Vec<_> = atoms
+            .into_iter()
+            .map(|atom| match atom {
+                QueryAtom::ClassAtom {
+                    variable,
+                    class_expression,
+                } => {
+                    let simplified_ce = Self::simplify_ce(&class_expression);
+                    QueryAtom::ClassAtom {
+                        variable,
+                        class_expression: simplified_ce,
+                    }
+                }
+                other => other,
+            })
+            .collect();
+        ConjunctiveQuery {
+            body_atoms: simplified,
+            ..query.clone()
+        }
+    }
+
+    fn simplify_ce(ce: &crate::ontology::ClassExpression) -> crate::ontology::ClassExpression {
+        match ce {
+            crate::ontology::ClassExpression::ObjectComplementOf(inner) => match inner.as_ref() {
+                crate::ontology::ClassExpression::ObjectComplementOf(inner2) => (**inner2).clone(),
+                _ => ce.clone(),
+            },
+            _ => ce.clone(),
+        }
     }
 
     fn estimate_query_improvement(
@@ -2503,7 +2553,7 @@ impl Default for AutoAdjustmentConfig {
             enable_auto_adjustment: false, // Conservative default
             adjustment_threshold: 0.8,
             min_feedback_samples: 50,
-            adjustment_frequency: Duration::from_secs(1 * 3600), // 1 hour
+            adjustment_frequency: Duration::from_hours(1), // 1 hour
             conservative_mode: true,
         }
     }

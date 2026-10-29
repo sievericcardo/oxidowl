@@ -212,28 +212,35 @@ impl TableauBuilder {
             // Queue appropriate rules for each initial concept
             for concept in &self.initial_concepts {
                 if let ConceptLabel::Complex(class_expr) = &concept {
-                    let rule = match class_expr.as_ref() {
-                        ClassExpression::ObjectIntersectionOf(_) => Some(CompletionRule::And),
-                        ClassExpression::ObjectUnionOf(_) => Some(CompletionRule::Or),
-                        ClassExpression::ObjectSomeValuesFrom { .. } => Some(CompletionRule::Some),
-                        ClassExpression::ObjectAllValuesFrom { .. } => Some(CompletionRule::All),
+                    let rules: Vec<CompletionRule> = match class_expr.as_ref() {
+                        ClassExpression::ObjectIntersectionOf(_) => vec![CompletionRule::And],
+                        ClassExpression::ObjectUnionOf(_) => vec![CompletionRule::Or],
+                        ClassExpression::ObjectSomeValuesFrom { .. } => vec![CompletionRule::Some],
+                        ClassExpression::ObjectAllValuesFrom { .. } => vec![CompletionRule::All],
                         ClassExpression::ObjectMinCardinality { .. } => {
-                            Some(CompletionRule::AtLeast)
+                            vec![CompletionRule::AtLeast]
                         }
                         ClassExpression::ObjectMaxCardinality { .. } => {
-                            Some(CompletionRule::AtMost)
+                            vec![CompletionRule::AtMost]
                         }
-                        ClassExpression::ObjectOneOf(_) => Some(CompletionRule::Nominal),
-                        ClassExpression::ObjectHasSelf { .. } => Some(CompletionRule::Self_),
+                        ClassExpression::ObjectExactCardinality { .. } => {
+                            // `=n R.C ≡ ≥n R.C ⊓ ≤n R.C`: expand both the AtLeast and the
+                            // AtMost rule. The AtLeast half creates n successors, the AtMost
+                            // half merges any excess so the count is exactly n.
+                            vec![CompletionRule::AtLeast, CompletionRule::AtMost]
+                        }
+                        ClassExpression::ObjectOneOf(_) => vec![CompletionRule::Nominal],
+                        ClassExpression::ObjectHasSelf { .. } => vec![CompletionRule::Self_],
+                        ClassExpression::ObjectHasValue { .. } => vec![CompletionRule::HasValue],
                         ClassExpression::DataSomeValuesFrom { .. } => {
-                            Some(CompletionRule::Datatype)
+                            vec![CompletionRule::Datatype]
                         }
-                        ClassExpression::DataAllValuesFrom { .. } => Some(CompletionRule::Datatype),
-                        ClassExpression::DataHasValue { .. } => Some(CompletionRule::Datatype),
-                        _ => None,
+                        ClassExpression::DataAllValuesFrom { .. } => vec![CompletionRule::Datatype],
+                        ClassExpression::DataHasValue { .. } => vec![CompletionRule::Datatype],
+                        _ => Vec::new(),
                     };
 
-                    if let Some(rule) = rule {
+                    for rule in rules {
                         let priority = match rule {
                             CompletionRule::And | CompletionRule::All => RulePriority::High,
                             CompletionRule::Or | CompletionRule::Choose => RulePriority::Low,
@@ -251,7 +258,7 @@ impl TableauBuilder {
                             dependencies: Arc::new(DependencySet::new()),
                         };
 
-                        tableau.pending_queue.push_back(rule_app);
+                        Arc::make_mut(&mut tableau.pending_queue).push_back(rule_app);
                     }
                 } else {
                     // Atomic concepts and other simple labels don't need rules

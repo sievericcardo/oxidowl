@@ -114,8 +114,7 @@ impl DisjointnessMap {
     pub fn are_disjoint(&self, c1: &ConceptId, c2: &ConceptId) -> bool {
         self.disjoint_pairs
             .get(c1)
-            .map(|set| set.contains(c2))
-            .unwrap_or(false)
+            .is_some_and(|set| set.contains(c2))
     }
 
     /// Get all concepts that are disjoint with the given concept

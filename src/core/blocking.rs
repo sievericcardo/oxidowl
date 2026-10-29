@@ -5,7 +5,7 @@
 
 use crate::{
     Result,
-    config::{BlockingStrategy as ConfigBlockingStrategy, ReasoningConfig},
+    config::BlockingStrategy as ConfigBlockingStrategy,
     core::tableau::{ConceptLabel, NodeId, TableauNode},
 };
 use std::collections::hash_map::DefaultHasher;
@@ -19,6 +19,20 @@ fn concept_sort_key(c: &ConceptLabel) -> u64 {
     let mut h = DefaultHasher::new();
     c.hash(&mut h);
     h.finish()
+}
+
+/// Whether a node carries a nominal label `{a}`.
+///
+/// Nominal labels are "root-like": a node whose label set contains a nominal is a
+/// genuine individual witness and must never be blocked (blocked nodes are not
+/// expanded, which would be unsound for nominals). A nominal label in a *blocker*
+/// remains a sound blocker: subsumption already requires every concept of the
+/// blocker — including the nominal — to be present in the blocked node's label.
+#[must_use]
+pub fn contains_nominal_label(node: &TableauNode) -> bool {
+    node.concepts
+        .iter()
+        .any(|c| matches!(c, ConceptLabel::Nominal(_)))
 }
 
 /// Trait for blocking checkers
@@ -37,9 +51,13 @@ pub trait BlockingChecker: Send + Sync + std::fmt::Debug {
 pub struct BlockingStrategy;
 
 impl BlockingStrategy {
-    /// Create a blocking checker based on configuration
-    pub fn create_checker(config: &ReasoningConfig) -> Result<Box<dyn BlockingChecker>> {
-        match config.blocking_strategy {
+    /// Create a blocking checker based on the configured strategy.
+    ///
+    /// The executor invokes this factory once per tableau run and reuses the
+    /// resulting checker across iterations so that strategy-local state (e.g.
+    /// signature caches, pairwise comparison sets) persists between updates.
+    pub fn create_checker(strategy: ConfigBlockingStrategy) -> Result<Box<dyn BlockingChecker>> {
+        match strategy {
             ConfigBlockingStrategy::Anywhere => Ok(Box::new(AnywhereBlocking::new())),
             ConfigBlockingStrategy::Ancestor => Ok(Box::new(AncestorBlocking::new())),
             ConfigBlockingStrategy::Pairwise => Ok(Box::new(PairwiseBlocking::new())),
@@ -76,6 +94,10 @@ impl AnywhereBlocking {
 
 impl BlockingChecker for AnywhereBlocking {
     fn is_blocked(&self, node: &TableauNode, nodes: &[TableauNode]) -> Option<NodeId> {
+        // Nominal-labelled nodes are root-like: never block a genuine individual witness.
+        if contains_nominal_label(node) {
+            return None;
+        }
         let node_signature = self.get_signature(node);
 
         // Check if any previous node has the same signature

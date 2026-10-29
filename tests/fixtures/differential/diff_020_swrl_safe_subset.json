@@ -1,0 +1,11 @@
+{
+  "id": "diff_020_swrl_safe_subset",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff020#>)\nOntology(<http://example.org/diff020>\n  DLSafeRule(Body(ClassAtom(:Person ?x)) Head(ClassAtom(:Adult ?x)))\n  ClassAssertion(:Person :p)\n)",
+  "base": "http://example.org/diff020#",
+  "axioms": { "min": 2 },
+  "expected": {
+    "consistent": true
+  },
+  "rationale": "DL-safe SWRL rule (variables bound by ClassAtom) with a Person assertion. Only consistency is asserted: the rule's effect (p ∈ Adult) depends on whether the SWRL engine fires, which is engine- and configuration-dependent, so a differential golden must not assume it. Kept to a rule that needs no built-in atoms."
+}

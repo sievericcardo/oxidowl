@@ -62,6 +62,9 @@ impl ParallelClassificationScheduler {
         // Build a priority map based on told subsumers (topological ordering)
         let priority_map = self.build_priority_map(classes, told_subsumers);
 
+        // Compute transitive closure so we also skip pairs that are transitively known
+        let transitive_closure = Self::compute_transitive_closure(told_subsumers);
+
         // Generate all N² subsumption test tasks
         for subclass in classes {
             for superclass in classes {
@@ -69,8 +72,15 @@ impl ParallelClassificationScheduler {
                     continue; // Skip reflexive subsumption
                 }
 
-                // Skip if already determined by told subsumers
+                // Skip if already determined by told subsumers (direct)
                 if let Some(subsumers) = told_subsumers.get(subclass)
+                    && subsumers.contains(superclass)
+                {
+                    continue;
+                }
+
+                // Skip if already determined transitively
+                if let Some(subsumers) = transitive_closure.get(subclass)
                     && subsumers.contains(superclass)
                 {
                     continue;
@@ -95,6 +105,38 @@ impl ParallelClassificationScheduler {
         info!("Scheduled {} parallel subsumption tests", tasks.len());
 
         tasks
+    }
+
+    /// Compute the transitive closure of a told-subsumer relation.
+    ///
+    /// If A ⊑ B and B ⊑ C are in `told_subsumers`, adds A ⊑ C.
+    /// Uses a fixed-point iteration (Warshall-style) until no new pairs are found.
+    fn compute_transitive_closure(
+        told_subsumers: &HashMap<ClassExpression, HashSet<ClassExpression>>,
+    ) -> HashMap<ClassExpression, HashSet<ClassExpression>> {
+        let mut closure = told_subsumers.clone();
+        let mut changed = true;
+        while changed {
+            changed = false;
+            let keys: Vec<ClassExpression> = closure.keys().cloned().collect();
+            for class in &keys {
+                let supers: Vec<ClassExpression> = closure
+                    .get(class)
+                    .map(|s| s.iter().cloned().collect())
+                    .unwrap_or_default();
+                for sup in supers {
+                    if let Some(sup_supers) = closure.get(&sup).cloned() {
+                        let entry = closure.entry(class.clone()).or_default();
+                        for ss in sup_supers {
+                            if entry.insert(ss) {
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        closure
     }
 
     /// Build priority map for dependency-aware scheduling

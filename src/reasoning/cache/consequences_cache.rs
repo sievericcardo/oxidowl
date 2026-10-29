@@ -27,15 +27,15 @@ pub struct IndividualSet {
 /// Thread-safe consequences cache with per-entry TTL.
 #[derive(Debug, Clone)]
 pub struct ConsequencesCache {
-    /// subclasses: concept_iri × direct → set of subclass IRIs.
+    /// subclasses: `concept_iri` × direct → set of subclass IRIs.
     subclasses: Arc<DashMap<(String, bool), ClassSet>>,
-    /// superclasses: concept_iri × direct → set.
+    /// superclasses: `concept_iri` × direct → set.
     superclasses: Arc<DashMap<(String, bool), ClassSet>>,
-    /// equivalent classes: concept_iri → set.
+    /// equivalent classes: `concept_iri` → set.
     equivalent: Arc<DashMap<String, ClassSet>>,
-    /// instances: concept_iri × direct → set.
+    /// instances: `concept_iri` × direct → set.
     instances: Arc<DashMap<(String, bool), IndividualSet>>,
-    /// types of an individual: individual_iri × direct → set.
+    /// types of an individual: `individual_iri` × direct → set.
     types: Arc<DashMap<(String, bool), ClassSet>>,
     ttl: Duration,
     hits: Arc<AtomicU64>,
@@ -230,7 +230,7 @@ impl ConsequencesCache {
 
 impl Default for ConsequencesCache {
     fn default() -> Self {
-        Self::new(Duration::from_secs(1 * 3600))
+        Self::new(Duration::from_hours(1))
     }
 }
 

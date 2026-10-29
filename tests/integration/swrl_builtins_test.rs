@@ -97,7 +97,7 @@ fn test_built_in_coverage() {
 
     for builtin in &potential_builtins {
         // Convert string to IRI for checking
-        let iri = IRI::new(&format!("http://www.w3.org/2003/11/{}", builtin));
+        let iri = IRI::new(&format!("http://www.w3.org/2003/11/{builtin}"));
         if registry.is_registered(&iri) {
             registered_count += 1;
         } else {
@@ -109,11 +109,11 @@ fn test_built_in_coverage() {
         "Built-in coverage: {}/{} ({:.1}%)",
         registered_count,
         potential_builtins.len(),
-        (registered_count as f64 / potential_builtins.len() as f64) * 100.0
+        (f64::from(registered_count) / potential_builtins.len() as f64) * 100.0
     );
 
     if !missing_builtins.is_empty() {
-        println!("Missing built-ins: {:?}", missing_builtins);
+        println!("Missing built-ins: {missing_builtins:?}");
     }
 
     // Just verify the registry exists and works

@@ -63,7 +63,14 @@ pub enum PerformanceFeature {
 }
 
 /// Main configuration structure for Oxidowl
+///
+/// `#[serde(default)]` (container level): any missing section/field is filled
+/// from `ReasonerConfig::default()` instead of failing with
+/// `TOML parse error … missing field …`.  Unknown keys are ignored (no
+/// `deny_unknown_fields`), so legacy/partial configs keep loading even when
+/// new fields (e.g. A8 `enable_absorption_classification`) are introduced.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ReasonerConfig {
     /// General settings for the reasoning engine
     pub reasoning: ReasoningConfig,
@@ -78,7 +85,11 @@ pub struct ReasonerConfig {
 }
 
 /// Configuration for core reasoning tasks
+///
+/// Container-level `#[serde(default)]`: fields absent from a `[reasoning]`
+/// table fall back to `ReasoningConfig::default()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ReasoningConfig {
     /// Tableau algorithm type to use
     pub tableau_algorithm: TableauAlgorithm,
@@ -90,7 +101,13 @@ pub struct ReasoningConfig {
     pub features: EnumSet<ReasoningFeature>,
     /// Maximum response time for reasoning tasks
     pub timeout: Option<Duration>,
-    /// Maximum memory usage in MB for the reasoner
+    /// Maximum memory usage in MB for the reasoner.
+    ///
+    /// Enforced in-process by the RSS [`MemoryGuard`] wired into the tableau
+    /// expansion loop, the classification / saturation loops and the EL
+    /// completion worklist: when RSS exceeds this cap the reasoning call
+    /// returns `Err("Memory limit exceeded: …")` instead of being OOM-killed.
+    /// `None` or `Some(0)` = unlimited (never enforced).  Defaults to 4096 MB.
     pub max_memory_mb: Option<u64>,
     /// Enable incremental reasoning
     pub incremental_reasoning: bool,
@@ -104,6 +121,11 @@ pub struct ReasoningConfig {
     pub clause_dump_file: Option<String>,
     /// Target OWL profile for optimization
     pub target_profile: OWLProfile,
+    /// Enable absorption + dependency-graph (Elgot-style) classification
+    /// (workstream A8).  When enabled, deterministic GCIs are discharged by
+    /// absorption + saturation + told subsumers and the tableau is invoked only
+    /// for genuinely non-deterministic concepts.
+    pub enable_absorption_classification: bool,
 }
 
 impl ReasoningConfig {
@@ -187,7 +209,11 @@ pub enum ExpansionStrategy {
 }
 
 /// Configuration for caching mechanisms
+///
+/// Container-level `#[serde(default)]`: fields absent from a `[cache]` table
+/// fall back to `CacheConfig::default()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CacheConfig {
     /// Enabled cache features
     pub features: EnumSet<CacheFeature>,
@@ -249,7 +275,11 @@ pub enum CacheEvictionStrategy {
 }
 
 /// Server configuration for the reasoning service
+///
+/// Container-level `#[serde(default)]`: fields absent from a `[server]` table
+/// fall back to `ServerConfig::default()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ServerConfig {
     /// Enabled server features
     pub features: EnumSet<ServerFeature>,
@@ -306,7 +336,11 @@ impl Default for ServerConfig {
 }
 
 /// Logging configuration for the reasoner
+///
+/// Container-level `#[serde(default)]`: fields absent from a `[logging]` table
+/// fall back to `LoggingConfig::default()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct LoggingConfig {
     /// Logging level
     pub level: LogLevel,
@@ -318,6 +352,21 @@ pub struct LoggingConfig {
     pub log_rotation_size_mb: u64,
     /// Maximum number of log files to keep
     pub max_log_files: u32,
+}
+
+impl Default for LoggingConfig {
+    /// Same values as the `logging` section of `ReasonerConfig::default()`
+    /// (the struct previously had no `Default`, which container-level
+    /// `#[serde(default)]` requires).
+    fn default() -> Self {
+        Self {
+            level: LogLevel::Info,
+            enable_file_logging: false,
+            log_file_path: None,
+            log_rotation_size_mb: 100, // 100 MB
+            max_log_files: 5,
+        }
+    }
 }
 
 /// Logging levels
@@ -336,7 +385,11 @@ pub enum LogLevel {
 }
 
 /// Performance configuration for the reasoner
+///
+/// Container-level `#[serde(default)]`: fields absent from a `[performance]`
+/// table fall back to `PerformanceConfig::default()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PerformanceConfig {
     /// Performance profile (Low/Medium/High/Ultra)
     pub profile: PerformanceProfile,
@@ -540,6 +593,11 @@ pub struct TableauConfig {
     pub max_depth: u32,
     /// Timeout for tableau expansion
     pub timeout: Option<Duration>,
+    /// Enforce `reasoning.max_memory_mb` inside the tableau expansion loop
+    /// (`None`/`Some(0)` = unlimited).  Flows from `ReasoningConfig` exactly
+    /// like `timeout`, so the executor checks both side by side.
+    #[serde(default)]
+    pub max_memory_mb: Option<u64>,
     /// Enable/disable blocking optimization
     pub blocking_enabled: bool,
     /// Enable/disable general optimizations
@@ -556,7 +614,8 @@ impl Default for TableauConfig {
     fn default() -> Self {
         Self {
             max_depth: 100,
-            timeout: Some(Duration::from_secs(5 * 60)),
+            timeout: None,
+            max_memory_mb: None,
             blocking_enabled: true,
             optimization_enabled: true,
             rdf11_mode: false,                // RDF-star enabled by default
@@ -577,14 +636,15 @@ impl Default for ReasoningConfig {
             blocking_strategy: BlockingStrategy::Anywhere,
             expansion_strategy: ExpansionStrategy::CreationOrder,
             features,
-            timeout: Some(Duration::from_secs(5 * 60)), // 5 minutes
-            max_memory_mb: Some(4096),             // 4 GB
+            timeout: None,
+            max_memory_mb: Some(4096), // 4 GB
             incremental_reasoning: false,
             max_expansion_depth: 100,
             ignore_unsupported_datatypes: false,
             dump_clauses: false,
             clause_dump_file: None,
             target_profile: OWLProfile::Auto,
+            enable_absorption_classification: true,
         }
     }
 }
@@ -609,19 +669,20 @@ impl Default for ReasonerConfig {
                 blocking_strategy: BlockingStrategy::Anywhere,
                 expansion_strategy: ExpansionStrategy::CreationOrder,
                 features: reasoning_features,
-                timeout: Some(Duration::from_secs(5 * 60)), // 5 minutes
-                max_memory_mb: Some(4096),             // 4 GB
+                timeout: None,
+                max_memory_mb: Some(4096), // 4 GB
                 incremental_reasoning: false,
                 max_expansion_depth: 100,
                 ignore_unsupported_datatypes: false,
                 dump_clauses: false,
                 clause_dump_file: None,
                 target_profile: OWLProfile::Auto,
+                enable_absorption_classification: true,
             },
             cache: CacheConfig {
                 features: cache_features,
                 max_cache_size_mb: 1024, // 1 GB
-                cache_ttl: Some(Duration::from_secs(1 * 3600)),
+                cache_ttl: Some(Duration::from_hours(1)),
                 eviction_strategy: CacheEvictionStrategy::LRU,
                 persistence: false,
             },
@@ -697,11 +758,9 @@ impl ReasonerConfig {
         }
 
         // Validate memory limits
-        if let Some(max_memory) = self.reasoning.max_memory_mb
-            && max_memory == 0
-        {
-            return Err(Error::config("Maximum memory cannot be zero".to_string()));
-        }
+        // NOTE: no zero-check here by design — `max_memory_mb = 0` (like
+        // `None`) means "unlimited", the documented escape hatch for the
+        // enforced RSS guard (`crate::performance::MemoryGuard`).
 
         // Validate cache settings
         if self.cache.max_cache_size_mb == 0 {
@@ -749,7 +808,7 @@ impl ReasonerConfig {
         config.reasoning.max_memory_mb = Some(8192); // 8 GB
         config.cache.max_cache_size_mb = 2048; // 2 GB
         config.performance.memory_pool_size_mb = 1024; // 1 GB
-        config.reasoning.timeout = Some(Duration::from_secs(30 * 60)); // 30 minutes
+        config.reasoning.timeout = Some(Duration::from_mins(30)); // 30 minutes
         config.reasoning.max_expansion_depth = 200; // Increase depth for large ontologies
         config.reasoning.enable(ReasoningFeature::Optimizations); // Enable optimisations
         config
@@ -760,8 +819,8 @@ impl ReasonerConfig {
     pub fn web_service_config() -> Self {
         let mut config = Self::default();
         config.server.max_connections = 500; // Increase for web service
-        config.server.request_timeout = Duration::from_secs(1 * 60); // 1 minute timeout
-        config.reasoning.timeout = Some(Duration::from_secs(2 * 60)); // 2 minutes
+        config.server.request_timeout = Duration::from_mins(1); // 1 minute timeout
+        config.reasoning.timeout = Some(Duration::from_mins(2)); // 2 minutes
         config.cache.persistence = true; // Enable cache persistence
         config
     }

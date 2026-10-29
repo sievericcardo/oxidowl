@@ -381,7 +381,7 @@ impl SWRLParser {
                             // Variables can be used in both contexts
                             Some(SWRLDArgument::Variable(var.clone()))
                         }
-                        _ => None, // Skip individual constants for data-focused built-ins
+                        SWRLArgument::Individual(SWRLIArgument::Individual(_)) => None, // Skip individual constants for data-focused built-ins
                     }
                 })
                 .collect();
@@ -401,7 +401,7 @@ impl SWRLParser {
                     predicate: ClassExpression::Class(Class::new(IRI::new(&class_iri))),
                     argument: match &arguments[0] {
                         SWRLArgument::Individual(arg) => arg.clone(),
-                        _ => {
+                        SWRLArgument::Data(_) => {
                             return Err(Error::ontology_parsing(
                                 "Class atom argument must be an individual",
                             ));
@@ -415,7 +415,7 @@ impl SWRLParser {
                     return Ok(SWRLAtom::SameIndividualAtom {
                         first_argument: match &arguments[0] {
                             SWRLArgument::Individual(arg) => arg.clone(),
-                            _ => {
+                            SWRLArgument::Data(_) => {
                                 return Err(Error::ontology_parsing(
                                     "SameAs arguments must be individuals",
                                 ));
@@ -423,7 +423,7 @@ impl SWRLParser {
                         },
                         second_argument: match &arguments[1] {
                             SWRLArgument::Individual(arg) => arg.clone(),
-                            _ => {
+                            SWRLArgument::Data(_) => {
                                 return Err(Error::ontology_parsing(
                                     "SameAs arguments must be individuals",
                                 ));
@@ -436,7 +436,7 @@ impl SWRLParser {
                     return Ok(SWRLAtom::DifferentIndividualsAtom {
                         first_argument: match &arguments[0] {
                             SWRLArgument::Individual(arg) => arg.clone(),
-                            _ => {
+                            SWRLArgument::Data(_) => {
                                 return Err(Error::ontology_parsing(
                                     "Arguments must be individuals in differentFrom atom",
                                 ));
@@ -444,7 +444,7 @@ impl SWRLParser {
                         },
                         second_argument: match &arguments[1] {
                             SWRLArgument::Individual(arg) => arg.clone(),
-                            _ => {
+                            SWRLArgument::Data(_) => {
                                 return Err(Error::ontology_parsing(
                                     "Arguments must be individuals in differentFrom atom",
                                 ));
@@ -463,7 +463,7 @@ impl SWRLParser {
                         }),
                         first_argument: match &arguments[0] {
                             SWRLArgument::Individual(arg) => arg.clone(),
-                            _ => {
+                            SWRLArgument::Data(_) => {
                                 return Err(Error::ontology_parsing(
                                     "First argument must be individual in data property atom",
                                 ));
@@ -471,7 +471,7 @@ impl SWRLParser {
                         },
                         second_argument: match &arguments[1] {
                             SWRLArgument::Data(arg) => arg.clone(),
-                            _ => {
+                            SWRLArgument::Individual(_) => {
                                 return Err(Error::ontology_parsing(
                                     "Second argument must be data in data property atom",
                                 ));
@@ -487,7 +487,7 @@ impl SWRLParser {
                         )?),
                         first_argument: match &arguments[0] {
                             SWRLArgument::Individual(arg) => arg.clone(),
-                            _ => {
+                            SWRLArgument::Data(_) => {
                                 return Err(Error::ontology_parsing(
                                     "First argument must be individual in object property atom",
                                 ));
@@ -495,7 +495,7 @@ impl SWRLParser {
                         },
                         second_argument: match &arguments[1] {
                             SWRLArgument::Individual(arg) => arg.clone(),
-                            _ => {
+                            SWRLArgument::Data(_) => {
                                 return Err(Error::ontology_parsing(
                                     "Second argument must be individual in object property atom",
                                 ));
@@ -513,7 +513,7 @@ impl SWRLParser {
                         SWRLArgument::Individual(SWRLIArgument::Variable(var)) => {
                             Some(SWRLDArgument::Variable(var.clone()))
                         }
-                        _ => None,
+                        SWRLArgument::Individual(SWRLIArgument::Individual(_)) => None,
                     })
                     .collect();
 
@@ -631,11 +631,10 @@ impl Lexer {
         let mut tokens = Vec::new();
 
         while let Some(token) = self.next_token()? {
-            if !matches!(token, Token::EOF) {
-                tokens.push(token);
-            } else {
+            if matches!(token, Token::EOF) {
                 break;
             }
+            tokens.push(token);
         }
 
         Ok(tokens)
@@ -864,11 +863,11 @@ mod tests {
     fn test_complex_rule_parsing() {
         let mut parser = SWRLParser::new();
 
-        let rule_text = r#"Person(?p), hasAge(?p, ?age), swrlb:greaterThan(?age, 18) -> Adult(?p)"#;
+        let rule_text = r"Person(?p), hasAge(?p, ?age), swrlb:greaterThan(?age, 18) -> Adult(?p)";
         let result = parser.parse_rule(rule_text);
 
         if let Err(ref e) = result {
-            println!("Parse error: {:?}", e);
+            println!("Parse error: {e:?}");
         }
         assert!(result.is_ok());
         let rule = result.expect("Failed to parse complex SWRL rule with multiple body atoms");
@@ -880,10 +879,10 @@ mod tests {
     fn test_prefix_declaration() {
         let mut parser = SWRLParser::new();
 
-        let rules_text = r#"
+        let rules_text = r"
             @prefix ex: <http://example.org/>
             ex:Person(?p) -> ex:Adult(?p)
-        "#;
+        ";
 
         let result = parser.parse_rules(rules_text);
         assert!(result.is_ok());

@@ -17,7 +17,7 @@
 //!      clauses are vacuously satisfied.
 //! 4. Return the rewritten clause set and a summary report.
 
-use crate::dl_clauses::{DLAtom, DLClause, DLClauseSet};
+use crate::dl_clauses::{DLAtom, DLClause, DLClauseSet, DLClauseStatistics};
 use std::collections::{HashMap, HashSet};
 
 /// A disjunct that appears in multiple clauses.
@@ -25,7 +25,7 @@ use std::collections::{HashMap, HashSet};
 pub struct CommonDisjunct {
     /// The shared disjunct predicate/concept name.
     pub concept: String,
-    /// Indices of clauses (within the original disjunctive_clauses list) that contain it.
+    /// Indices of clauses (within the original `disjunctive_clauses` list) that contain it.
     pub clause_indices: Vec<usize>,
 }
 
@@ -105,7 +105,7 @@ impl CommonDisjunctExtractor {
             disjunctive_clauses: Vec::new(),
             abox_facts: Vec::new(),
             prefixes: std::collections::HashMap::new(),
-            statistics: Default::default(),
+            statistics: DLClauseStatistics::default(),
         };
 
         for cd in &common_disjuncts {
@@ -197,7 +197,7 @@ mod tests {
     fn atom(pred: &str, args: &[&str]) -> DLAtom {
         DLAtom {
             predicate: pred.to_string(),
-            arguments: args.iter().map(|s| s.to_string()).collect(),
+            arguments: args.iter().map(std::string::ToString::to_string).collect(),
             is_positive: true,
             constraints: Vec::new(),
         }

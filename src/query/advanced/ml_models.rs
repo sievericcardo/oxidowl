@@ -190,8 +190,9 @@ impl LinearRegressionModel {
         let memory_mae = memory_errors.iter().sum::<f64>() / memory_errors.len() as f64;
 
         // Calculate root mean square error
-        let exec_mse = exec_errors.iter().map(|e| e * e).sum::<f64>() / exec_errors.len() as f64;
-        let exec_rmse = exec_mse.sqrt();
+        let mean_squared_error =
+            exec_errors.iter().map(|e| e * e).sum::<f64>() / exec_errors.len() as f64;
+        let exec_rmse = mean_squared_error.sqrt();
 
         // Simple correlation coefficient calculation (simplified)
         let correlation = self.calculate_correlation(&exec_actuals, data);

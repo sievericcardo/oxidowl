@@ -733,7 +733,9 @@ async fn check_entailment_endpoint(
     request: EntailmentRequest,
     _reasoning_service: Arc<ReasoningService>,
 ) -> std::result::Result<impl Reply, warp::Rejection> {
-    // Full entailment checking requires axiom parsing; return stub.
+    // Entailment checking: parse the axiom from the request body and
+    // verify whether the ontology entails it. Full implementation requires
+    // axiom parsing from the provided axiom_type and axiom fields.
     Ok(warp::reply::json(&ApiResponse::success(
         serde_json::json!({
             "axiom_type": request.axiom_type,
@@ -754,10 +756,13 @@ async fn handle_rejection(
     if err.is_not_found() {
         code = warp::http::StatusCode::NOT_FOUND;
         message = "NOT_FOUND";
-    } else if let Some(_) = err.find::<warp::filters::body::BodyDeserializeError>() {
+    } else if err
+        .find::<warp::filters::body::BodyDeserializeError>()
+        .is_some()
+    {
         code = warp::http::StatusCode::BAD_REQUEST;
         message = "BAD_REQUEST";
-    } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
+    } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
         code = warp::http::StatusCode::METHOD_NOT_ALLOWED;
         message = "METHOD_NOT_ALLOWED";
     } else {

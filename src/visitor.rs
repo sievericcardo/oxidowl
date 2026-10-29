@@ -650,76 +650,11 @@ pub trait OntologyVisitor<R = ()> {
         &mut self,
         axiom: &crate::ontology::datatypes::DatatypeDefinitionAxiom,
     ) -> Result<()> {
-        // Visit the datatype IRI
-        // (datatype field is IRI<String>, which we can't directly visit but can process)
-
-        // Visit the horned_owl data_range by converting it to oxidowl DataRange
-        self.visit_horned_owl_data_range(&axiom.data_range)?;
-
-        // Visit annotations
+        // Visit the native data range and annotations.
+        self.visit_data_range(&axiom.data_range)?;
         for annotation in &axiom.annotations {
-            self.visit_horned_owl_annotation(annotation)?;
+            self.visit_annotation(annotation)?;
         }
-
-        Ok(())
-    }
-
-    /// Visit a horned_owl DataRange structure
-    ///
-    /// This helper method traverses horned_owl::model::DataRange types and
-    /// recursively processes their components. It enables the visitor pattern
-    /// to work with foreign horned_owl types embedded in oxidowl ontologies.
-    fn visit_horned_owl_data_range(
-        &mut self,
-        data_range: &horned_owl::model::DataRange<String>,
-    ) -> Result<()> {
-        use horned_owl::model::DataRange;
-
-        // Recursively traverse the data range structure
-        // This provides a hook for visitors to process horned_owl DataRange types
-        match data_range {
-            DataRange::Datatype(_dt) => {
-                // Visit datatype IRI - implementers can override to track
-                Ok(())
-            }
-            DataRange::DataIntersectionOf(ranges) => {
-                // Recursively visit all ranges in the intersection
-                for range in ranges {
-                    self.visit_horned_owl_data_range(range)?;
-                }
-                Ok(())
-            }
-            DataRange::DataUnionOf(ranges) => {
-                // Recursively visit all ranges in the union
-                for range in ranges {
-                    self.visit_horned_owl_data_range(range)?;
-                }
-                Ok(())
-            }
-            DataRange::DataComplementOf(range) => {
-                // Recursively visit the complemented range
-                self.visit_horned_owl_data_range(range)?;
-                Ok(())
-            }
-            DataRange::DataOneOf(_literals) => {
-                // Visit enumerated literals - implementers can override to count
-                Ok(())
-            }
-            DataRange::DatatypeRestriction(_dt, _facet_restrictions) => {
-                // Visit datatype restrictions - implementers can override to count
-                Ok(())
-            }
-        }
-    }
-
-    /// Visit a horned_owl Annotation structure
-    fn visit_horned_owl_annotation(
-        &mut self,
-        _annotation: &horned_owl::model::Annotation<String>,
-    ) -> Result<()> {
-        // horned_owl Annotation has fields: ap (annotation property) and av (annotation value)
-        // We provide a default no-op implementation
-        // Specific visitors can override to extract property/value information
         Ok(())
     }
 
@@ -831,5 +766,80 @@ impl OntologyVisitor<std::collections::HashSet<crate::ontology::Class>> for Clas
 
     fn default_result(&self) -> std::collections::HashSet<crate::ontology::Class> {
         self.classes.clone()
+    }
+}
+
+/// Visitor interface for `OntologyChange` variants.
+pub trait OntologyChangeVisitor {
+    fn visit_add_axiom(&mut self, _ontology_iri: &crate::ontology::IRI, _axiom: &Axiom) {}
+    fn visit_remove_axiom(&mut self, _ontology_iri: &crate::ontology::IRI, _axiom: &Axiom) {}
+    fn visit_add_import(
+        &mut self,
+        _ontology_iri: &crate::ontology::IRI,
+        _import: &crate::import::ImportDeclaration,
+    ) {
+    }
+    fn visit_remove_import(
+        &mut self,
+        _ontology_iri: &crate::ontology::IRI,
+        _import: &crate::import::ImportDeclaration,
+    ) {
+    }
+    fn visit_add_ontology_annotation(
+        &mut self,
+        _ontology_iri: &crate::ontology::IRI,
+        _annotation: &Annotation,
+    ) {
+    }
+    fn visit_remove_ontology_annotation(
+        &mut self,
+        _ontology_iri: &crate::ontology::IRI,
+        _annotation: &Annotation,
+    ) {
+    }
+    fn visit_set_ontology_id(
+        &mut self,
+        _ontology_iri: &crate::ontology::IRI,
+        _new_iri: &crate::ontology::IRI,
+        _new_version_iri: &Option<crate::ontology::IRI>,
+    ) {
+    }
+}
+
+/// Dispatch an `OntologyChange` to the appropriate visitor method.
+pub fn dispatch_change(
+    change: &crate::manager::changes::OntologyChange,
+    visitor: &mut dyn OntologyChangeVisitor,
+) {
+    match change {
+        crate::manager::changes::OntologyChange::AddAxiom {
+            ontology_iri,
+            axiom,
+        } => visitor.visit_add_axiom(ontology_iri, axiom),
+        crate::manager::changes::OntologyChange::RemoveAxiom {
+            ontology_iri,
+            axiom,
+        } => visitor.visit_remove_axiom(ontology_iri, axiom),
+        crate::manager::changes::OntologyChange::AddImport {
+            ontology_iri,
+            import,
+        } => visitor.visit_add_import(ontology_iri, import),
+        crate::manager::changes::OntologyChange::RemoveImport {
+            ontology_iri,
+            import,
+        } => visitor.visit_remove_import(ontology_iri, import),
+        crate::manager::changes::OntologyChange::AddOntologyAnnotation {
+            ontology_iri,
+            annotation,
+        } => visitor.visit_add_ontology_annotation(ontology_iri, annotation),
+        crate::manager::changes::OntologyChange::RemoveOntologyAnnotation {
+            ontology_iri,
+            annotation,
+        } => visitor.visit_remove_ontology_annotation(ontology_iri, annotation),
+        crate::manager::changes::OntologyChange::SetOntologyId {
+            ontology_iri,
+            new_iri,
+            new_version_iri,
+        } => visitor.visit_set_ontology_id(ontology_iri, new_iri, new_version_iri),
     }
 }

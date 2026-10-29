@@ -11,7 +11,11 @@ use crate::semantics::RdfTerm;
 use crate::validation::shacl::{
     model::{ShaclMessage, ShaclSeverity},
     report::ShaclValidationResult,
-    vocabulary::*,
+    vocabulary::{
+        SH_LANGUAGE_IN_CONSTRAINT_COMPONENT, SH_MAX_LENGTH_CONSTRAINT_COMPONENT,
+        SH_MIN_LENGTH_CONSTRAINT_COMPONENT, SH_PATTERN_CONSTRAINT_COMPONENT,
+        SH_UNIQUE_LANG_CONSTRAINT_COMPONENT,
+    },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -53,6 +57,7 @@ fn make_result(
 
 // ── sh:minLength / sh:maxLength ───────────────────────────────────────────────
 
+#[must_use]
 pub fn evaluate_min_length(
     focus_node: &RdfTerm,
     values: &[RdfTerm],
@@ -92,6 +97,7 @@ pub fn evaluate_min_length(
     out
 }
 
+#[must_use]
 pub fn evaluate_max_length(
     focus_node: &RdfTerm,
     values: &[RdfTerm],
@@ -133,6 +139,7 @@ pub fn evaluate_max_length(
 
 // ── sh:pattern ───────────────────────────────────────────────────────────────
 
+#[must_use]
 pub fn evaluate_pattern(
     focus_node: &RdfTerm,
     values: &[RdfTerm],
@@ -215,6 +222,7 @@ fn lang_matches(tag: &str, range: &str) -> bool {
     tag_lower == range_lower || tag_lower.starts_with(&format!("{range_lower}-"))
 }
 
+#[must_use]
 pub fn evaluate_language_in(
     focus_node: &RdfTerm,
     values: &[RdfTerm],
@@ -262,6 +270,7 @@ pub fn evaluate_language_in(
 
 // ── sh:uniqueLang ─────────────────────────────────────────────────────────────
 
+#[must_use]
 pub fn evaluate_unique_lang(
     focus_node: &RdfTerm,
     values: &[RdfTerm],

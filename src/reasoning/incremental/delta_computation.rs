@@ -640,11 +640,11 @@ impl DeltaComputer {
                 for i in 0..class_sets.len() {
                     for j in 0..class_sets.len() {
                         if i != j {
-                            for class1 in &class_sets[i] {
+                            for left_class in &class_sets[i] {
                                 for class2 in &class_sets[j] {
                                     delta
                                         .hierarchy_updates
-                                        .insert((class1.clone(), class2.clone()));
+                                        .insert((left_class.clone(), class2.clone()));
                                 }
                             }
                         }
@@ -900,11 +900,11 @@ impl DeltaComputer {
     /// Check if one class expression is subsumed by another (simplified)
     fn is_expression_subsumed_by(&self, expr1: &ClassExpression, expr2: &ClassExpression) -> bool {
         match (expr1, expr2) {
-            (ClassExpression::Class(class1), ClassExpression::ObjectIntersectionOf(exprs)) => {
+            (ClassExpression::Class(left_class), ClassExpression::ObjectIntersectionOf(parts)) => {
                 // A class is subsumed by an intersection if the class appears in it
-                exprs
+                parts
                     .iter()
-                    .any(|e| matches!(e, ClassExpression::Class(class2) if class1 == class2))
+                    .any(|e| matches!(e, ClassExpression::Class(class2) if left_class == class2))
             }
             _ => false, // More complex subsumption checking would go here
         }
@@ -1022,7 +1022,10 @@ impl DeltaComputer {
             for (other_concept, node) in &saturation.nodes {
                 if (node.saturated_concepts.contains(&concept)
                     || node.direct_subsumers.contains(&concept)
-                    || node.all_subsumers.contains(&concept))
+                    || saturation
+                        .subsumptions
+                        .get(other_concept)
+                        .is_some_and(|s| s.contains(&concept)))
                     && affected.insert(other_concept.clone())
                 {
                     to_process.push(other_concept.clone());

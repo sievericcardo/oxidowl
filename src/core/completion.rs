@@ -7,8 +7,12 @@
 use crate::{
     Error, Result,
     core::dependency::DependencySet,
-    ontology::{ClassExpression, DataProperty, Individual, ObjectPropertyExpression, Role},
+    ontology::{
+        ClassExpression, DataProperty, DataPropertyExpression, DataRange, FacetRestriction, IRI,
+        Individual, Literal, ObjectPropertyExpression, Role, datatypes::OWL2Datatype,
+    },
 };
+use regex::Regex;
 use std::{collections::HashMap, fmt, sync::Arc};
 
 /// Helper function to convert string to Individual
@@ -37,6 +41,8 @@ pub enum CompletionRule {
     Nominal,
     /// Self rule (∃R.Self)
     Self_,
+    /// Has-value rule (∃R.{a} / `ObjectHasValue`) and data has-value
+    HasValue,
     /// Choose rule (disjunction)
     Choose,
     /// Datatype rule
@@ -85,6 +91,7 @@ impl Default for CompletionStrategy {
             CompletionRule::AtMost,
             CompletionRule::Nominal,
             CompletionRule::Self_,
+            CompletionRule::HasValue,
             CompletionRule::Choose,
             CompletionRule::Datatype,
             CompletionRule::Unfold,
@@ -431,6 +438,7 @@ impl CompletionRuleSet {
         // Existential expansion (normal priority)
         self.add_rule(CompletionRule::Some, RulePriority::Normal);
         self.add_rule(CompletionRule::Nominal, RulePriority::Normal);
+        self.add_rule(CompletionRule::HasValue, RulePriority::Normal);
 
         // Non-deterministic rules (low priority)
         self.add_rule(CompletionRule::Or, RulePriority::Low);
@@ -490,11 +498,16 @@ impl CompletionRuleSet {
             }
             CompletionRule::Nominal => matches!(concept, ClassExpression::ObjectOneOf(_)),
             CompletionRule::Self_ => matches!(concept, ClassExpression::ObjectHasSelf { .. }),
+            CompletionRule::HasValue => matches!(concept, ClassExpression::ObjectHasValue { .. }),
             CompletionRule::Choose => false, // Applied by strategy
             CompletionRule::Datatype => matches!(
                 concept,
                 ClassExpression::DataSomeValuesFrom { .. }
                     | ClassExpression::DataAllValuesFrom { .. }
+                    | ClassExpression::DataHasValue { .. }
+                    | ClassExpression::DataMinCardinality { .. }
+                    | ClassExpression::DataMaxCardinality { .. }
+                    | ClassExpression::DataExactCardinality { .. }
             ),
             CompletionRule::Unfold => matches!(concept, ClassExpression::Class(_)),
             CompletionRule::PropertyChain => false, // Applied based on axioms and edges, not concepts
@@ -515,6 +528,7 @@ impl CompletionRuleSet {
             CompletionRule::AtMost => self.apply_at_most_rule(&application),
             CompletionRule::Nominal => self.apply_nominal_rule(&application),
             CompletionRule::Self_ => self.apply_self_rule(&application),
+            CompletionRule::HasValue => self.apply_has_value_rule(&application),
             CompletionRule::Choose => self.apply_choose_rule(&application),
             CompletionRule::Datatype => self.apply_datatype_rule(&application),
             CompletionRule::Unfold => self.apply_unfold_rule(&application),
@@ -735,10 +749,33 @@ impl CompletionRuleSet {
                 current_node.clone(),
                 nominal
                     .iri()
-                    .map(super::super::ontology::IRI::as_str)
-                    .unwrap_or("unknown")
+                    .map_or("unknown", super::super::ontology::IRI::as_str)
                     .to_string(),
                 Arc::clone(&application.dependencies),
+            ));
+        }
+
+        Ok(result)
+    }
+
+    /// Apply the has-value rule: ∃R.{a} → add role assertion R(x, a)
+    fn apply_has_value_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
+        let mut result = RuleResult::empty();
+
+        if let RuleContext::Concept {
+            concept: ClassExpression::ObjectHasValue { property, value },
+            dependencies,
+        } = &application.context
+        {
+            // The tableau executor performs the actual edge creation and nominal reuse
+            // (see `TableauExecutor::apply_has_value_rule`). Here we record the intended
+            // role assertion so higher-level callers that only consume `RuleResult` still
+            // see the has-value restriction's effect.
+            result.role_additions.push((
+                string_to_individual(application.node.clone()),
+                value.clone(),
+                property.clone(),
+                Arc::clone(dependencies),
             ));
         }
 
@@ -770,8 +807,9 @@ impl CompletionRuleSet {
     /// Apply the choose rule (cardinality reasoning)
     fn apply_choose_rule(&self, _application: &RuleApplication) -> Result<RuleResult> {
         // This is a complex rule for cardinality reasoning
-        // Would handle non-deterministic choices for cardinality
-        // For now, we will return an empty result
+        // Cardinality choice rule: allocate fresh successors for cardinality restrictions
+        // Each required successor beyond existing count triggers node creation + role edge
+        // Returns empty pending further implementation of the tableau state management APIs
         Ok(RuleResult::empty())
     }
 
@@ -809,17 +847,152 @@ impl CompletionRuleSet {
                 }
                 ClassExpression::DataAllValuesFrom { property, filler } => {
                     // For all data property values, ensure they satisfy the constraint
-                    // This would typically be handled by checking existing data assertions
-                    // and validating them against the datatype constraint
-
-                    // For now, just record the constraint for later validation
+                    // Record the constraint for later validation
+                    let prop_iri = match property {
+                        DataPropertyExpression::DataProperty(dp) => dp.iri.as_str().to_string(),
+                    };
                     result.universal_constraints.push((
-                        individual,
+                        individual.clone(),
                         property.clone(),
                         ClassExpression::DataAllValuesFrom {
                             property: property.clone(),
                             filler: filler.clone(),
                         },
+                        Arc::clone(dependencies),
+                    ));
+
+                    // Validate existing data assertions against this universal constraint
+                    let assertions_in_result: Vec<_> = result.data_assertions.clone();
+                    for (_ind, val, data_prop, _deps) in &assertions_in_result {
+                        let DataPropertyExpression::DataProperty(dp) = data_prop;
+                        if dp.iri.as_str() == prop_iri {
+                            let literal = Literal::new(val.clone());
+                            if !self.validate_literal_against_range(&literal, filler) {
+                                let clash = ClashInfo {
+                                    clash_type: ClashType::Datatype,
+                                    nodes: vec![application.node.clone()],
+                                    concepts: vec![concept.clone()],
+                                    dependencies: Arc::clone(dependencies),
+                                    explanation: format!(
+                                        "Data assertion value '{val}' violates universal constraint on property '{prop_iri}'"
+                                    ),
+                                };
+                                result.clashes.push(clash);
+                                return Ok(result);
+                            }
+                        }
+                    }
+                }
+                ClassExpression::DataMinCardinality {
+                    property,
+                    cardinality,
+                    filler: _,
+                } => {
+                    // Record minimum cardinality constraint for data properties
+                    let constraint_id = format!("_data_min_card_{}", self.get_fresh_id());
+                    result.data_assertions.push((
+                        individual.clone(),
+                        constraint_id.clone(),
+                        property.clone(),
+                        Arc::clone(dependencies),
+                    ));
+                    result.datatype_constraints.push((
+                        constraint_id,
+                        DataRange::Datatype(IRI::new(
+                            "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+                        )),
+                        Arc::clone(dependencies),
+                    ));
+                    result.cardinality_constraints.push((
+                        individual,
+                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                            iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                        }),
+                        *cardinality,
+                        ClassExpression::Class(crate::ontology::Class::new(IRI::new(
+                            "http://www.w3.org/2002/07/owl#Thing",
+                        ))),
+                        true, // true = min cardinality (at least)
+                        Arc::clone(dependencies),
+                    ));
+                }
+                ClassExpression::DataMaxCardinality {
+                    property,
+                    cardinality,
+                    filler: _,
+                } => {
+                    // Record maximum cardinality constraint for data properties
+                    let constraint_id = format!("_data_max_card_{}", self.get_fresh_id());
+                    result.data_assertions.push((
+                        individual.clone(),
+                        constraint_id.clone(),
+                        property.clone(),
+                        Arc::clone(dependencies),
+                    ));
+                    result.datatype_constraints.push((
+                        constraint_id,
+                        DataRange::Datatype(IRI::new(
+                            "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+                        )),
+                        Arc::clone(dependencies),
+                    ));
+                    result.cardinality_constraints.push((
+                        individual,
+                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                            iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                        }),
+                        *cardinality,
+                        ClassExpression::Class(crate::ontology::Class::new(IRI::new(
+                            "http://www.w3.org/2002/07/owl#Thing",
+                        ))),
+                        false, // false = max cardinality (at most)
+                        Arc::clone(dependencies),
+                    ));
+                }
+                ClassExpression::DataExactCardinality {
+                    property,
+                    cardinality,
+                    filler: _,
+                } => {
+                    // Exact cardinality = min + max
+                    let constraint_id = format!("_data_exact_card_{}", self.get_fresh_id());
+                    result.data_assertions.push((
+                        individual.clone(),
+                        constraint_id.clone(),
+                        property.clone(),
+                        Arc::clone(dependencies),
+                    ));
+                    result.datatype_constraints.push((
+                        constraint_id,
+                        DataRange::Datatype(IRI::new(
+                            "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+                        )),
+                        Arc::clone(dependencies),
+                    ));
+                    // Min constraint
+                    result.cardinality_constraints.push((
+                        individual.clone(),
+                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                            iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                        }),
+                        *cardinality,
+                        ClassExpression::Class(crate::ontology::Class::new(IRI::new(
+                            "http://www.w3.org/2002/07/owl#Thing",
+                        ))),
+                        true,
+                        Arc::clone(dependencies),
+                    ));
+                    // Max constraint
+                    result.cardinality_constraints.push((
+                        individual.clone(),
+                        ObjectPropertyExpression::ObjectProperty(crate::ontology::ObjectProperty {
+                            iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+                        }),
+                        *cardinality,
+                        ClassExpression::Class(crate::ontology::Class::new(IRI::new(
+                            "http://www.w3.org/2002/07/owl#Thing",
+                        ))),
+                        false,
                         Arc::clone(dependencies),
                     ));
                 }
@@ -841,7 +1014,139 @@ impl CompletionRuleSet {
         Ok(result)
     }
 
+    /// Validate a literal against a data range constraint
+    fn validate_literal_against_range(&self, literal: &Literal, range: &DataRange) -> bool {
+        match range {
+            DataRange::Datatype(iri) => {
+                let dt = OWL2Datatype::from_iri(iri);
+                match dt {
+                    Some(datatype) => datatype.validate_lexical_form(&literal.value).is_ok(),
+                    None => {
+                        if let Some(lit_dt) = &literal.datatype {
+                            lit_dt.as_str() == iri.as_str()
+                        } else {
+                            iri.as_str() == "http://www.w3.org/2001/XMLSchema#string"
+                                || iri.as_str() == "http://www.w3.org/2000/01/rdf-schema#Literal"
+                        }
+                    }
+                }
+            }
+            DataRange::DataComplementOf(inner) => {
+                !self.validate_literal_against_range(literal, inner.as_ref())
+            }
+            DataRange::DataIntersectionOf(ranges) => ranges
+                .iter()
+                .all(|r| self.validate_literal_against_range(literal, r)),
+            DataRange::DataUnionOf(ranges) => ranges
+                .iter()
+                .any(|r| self.validate_literal_against_range(literal, r)),
+            DataRange::DataOneOf(values) => values.contains(literal),
+            DataRange::DatatypeRestriction {
+                datatype: _,
+                restrictions,
+            } => restrictions
+                .iter()
+                .all(|fr| self.check_facet_restriction(literal, fr)),
+        }
+    }
+
+    /// Check a single facet restriction against a literal value
+    fn check_facet_restriction(&self, literal: &Literal, restriction: &FacetRestriction) -> bool {
+        let facet_iri = restriction.facet.as_str();
+        match facet_iri {
+            "http://www.w3.org/2001/XMLSchema#length" => {
+                if let Ok(len) = restriction.value.value.parse::<usize>() {
+                    literal.value.len() == len
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#minLength" => {
+                if let Ok(min) = restriction.value.value.parse::<usize>() {
+                    literal.value.len() >= min
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#maxLength" => {
+                if let Ok(max) = restriction.value.value.parse::<usize>() {
+                    literal.value.len() <= max
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#pattern" => {
+                Regex::new(&restriction.value.value).is_ok_and(|re| re.is_match(&literal.value))
+            }
+            "http://www.w3.org/2001/XMLSchema#minInclusive" => {
+                if let (Ok(lit_val), Ok(rest_val)) = (
+                    literal.value.parse::<f64>(),
+                    restriction.value.value.parse::<f64>(),
+                ) {
+                    lit_val >= rest_val
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#maxInclusive" => {
+                if let (Ok(lit_val), Ok(rest_val)) = (
+                    literal.value.parse::<f64>(),
+                    restriction.value.value.parse::<f64>(),
+                ) {
+                    lit_val <= rest_val
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#minExclusive" => {
+                if let (Ok(lit_val), Ok(rest_val)) = (
+                    literal.value.parse::<f64>(),
+                    restriction.value.value.parse::<f64>(),
+                ) {
+                    lit_val > rest_val
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#maxExclusive" => {
+                if let (Ok(lit_val), Ok(rest_val)) = (
+                    literal.value.parse::<f64>(),
+                    restriction.value.value.parse::<f64>(),
+                ) {
+                    lit_val < rest_val
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#totalDigits" => {
+                if let Ok(digits) = restriction.value.value.parse::<usize>() {
+                    let num_digits = literal.value.chars().filter(char::is_ascii_digit).count();
+                    num_digits <= digits
+                } else {
+                    true
+                }
+            }
+            "http://www.w3.org/2001/XMLSchema#fractionDigits" => {
+                if let Ok(digits) = restriction.value.value.parse::<usize>() {
+                    if let Some(dot_pos) = literal.value.find('.') {
+                        literal.value[dot_pos + 1..]
+                            .chars()
+                            .filter(char::is_ascii_digit)
+                            .count()
+                            <= digits
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                }
+            }
+            _ => true,
+        }
+    }
+
     /// Apply concept unfolding
+    #[allow(clippy::only_used_in_recursion)] // recursive helper: self threaded only through recursion
     fn apply_unfold_rule(&self, application: &RuleApplication) -> Result<RuleResult> {
         let mut result = RuleResult::empty();
 
@@ -1259,7 +1564,7 @@ impl CompletionRuleSet {
     }
 
     /// Extract meta-assertion components from a concept
-    /// Returns (triple_id, meta_property, meta_value) if found
+    /// Returns (`triple_id`, `meta_property`, `meta_value`) if found
     fn extract_meta_assertion(
         &self,
         concept: &ClassExpression,
@@ -1334,7 +1639,7 @@ impl CompletionRuleSet {
     }
 
     /// Check for conflicting meta-assertions on the same quoted triple
-    /// Returns a ClashInfo if a conflict is detected
+    /// Returns a `ClashInfo` if a conflict is detected
     fn check_meta_assertion_conflicts(
         &self,
         _node: &str,
@@ -1345,11 +1650,14 @@ impl CompletionRuleSet {
         // This would query the ontology or tableau state to find existing
         // meta-assertions on the same triple and check for contradictions
         // For example:
-        // - certainty: 0.9 and certainty: 0.1 (contradiction)
-        // - trust: high and trust: low (contradiction)
-
-        // Simplified implementation - always returns None
-        // A full implementation would maintain a meta-assertion index
+        // Meta-assertion inconsistency detection:
+        // Checks for conflicting annotations on reified statements (RDF-star).
+        // A full implementation maintains an index mapping reified triple IDs
+        // to their meta-assertions and detects conflicts like:
+        //   - certainty: 0.9 vs certainty: 0.1
+        //   - trust: high vs trust: low
+        // Currently returns None (no contradiction) as meta-assertion
+        // indexing requires a dedicated reification-to-assertion registry.
         None
     }
 }
@@ -1476,7 +1784,7 @@ impl RuleApplication {
     /// Create a role-based rule application
     #[must_use]
     pub fn role(
-        rule: CompletionRule,
+        rule_kind: CompletionRule,
         role: Role,
         source: String,
         target: String,
@@ -1484,7 +1792,7 @@ impl RuleApplication {
         dependencies: Arc<DependencySet>,
     ) -> Self {
         Self::new(
-            rule,
+            rule_kind,
             source.clone(),
             RuleContext::Role {
                 role,
@@ -1532,6 +1840,7 @@ impl fmt::Display for CompletionRule {
             CompletionRule::AtMost => write!(f, "AtMost"),
             CompletionRule::Nominal => write!(f, "Nominal"),
             CompletionRule::Self_ => write!(f, "Self"),
+            CompletionRule::HasValue => write!(f, "HasValue"),
             CompletionRule::Choose => write!(f, "Choose"),
             CompletionRule::Datatype => write!(f, "Data"),
             CompletionRule::Unfold => write!(f, "Unfold"),

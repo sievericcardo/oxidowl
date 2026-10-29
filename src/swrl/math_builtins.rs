@@ -3,7 +3,7 @@
 //! This module implements additional mathematical built-in predicates for SWRL
 //! that extend the core mathematical operations.
 // SWRL built-in predicates perform exact equality checks by specification.
-#![allow(clippy::float_cmp)]
+#![allow(clippy::float_cmp)] // XSD/SWRL exact float equality
 
 use crate::swrl::builtins::{SWRLBuiltIn, SWRLValue};
 use crate::{Error, Result};
@@ -39,7 +39,7 @@ impl SWRLBuiltIn for IntegerDivideBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#integerDivide"
     }
 
@@ -68,7 +68,7 @@ impl SWRLBuiltIn for UnaryPlusBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#unaryPlus"
     }
 
@@ -97,7 +97,7 @@ impl SWRLBuiltIn for UnaryMinusBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#unaryMinus"
     }
 
@@ -126,7 +126,7 @@ impl SWRLBuiltIn for CeilingBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#ceiling"
     }
 
@@ -155,7 +155,7 @@ impl SWRLBuiltIn for FloorBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#floor"
     }
 
@@ -184,7 +184,7 @@ impl SWRLBuiltIn for RoundBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#round"
     }
 
@@ -242,7 +242,7 @@ impl SWRLBuiltIn for RoundHalfToEvenBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#roundHalfToEven"
     }
 
@@ -270,7 +270,7 @@ impl SWRLBuiltIn for SinBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#sin"
     }
 
@@ -297,7 +297,7 @@ impl SWRLBuiltIn for CosBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#cos"
     }
 
@@ -324,7 +324,7 @@ impl SWRLBuiltIn for TanBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#tan"
     }
 

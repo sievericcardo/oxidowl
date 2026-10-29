@@ -1,0 +1,14 @@
+{
+  "id": "diff_006_shoin_object_has_value",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff006#>)\nOntology(<http://example.org/diff006>\n  EquivalentClasses(:A ObjectHasValue(:p :b))\n  ObjectPropertyAssertion(:p :a :b)\n)",
+  "base": "http://example.org/diff006#",
+  "axioms": { "min": 2 },
+  "expected": {
+    "consistent": true,
+    "instances": { "A": ["a"] },
+    "entailed": ["ClassAssertion(:A :a)"],
+    "notEntailed": ["ClassAssertion(:A :b)"]
+  },
+  "rationale": "A ≡ ∃p.{b}. a p b makes a an instance of A; b is an instance of A only if p(b,b), which is not asserted, so b∉A. ObjectHasValue is the SHOIN nominal-in-value restriction."
+}

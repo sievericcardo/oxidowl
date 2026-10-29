@@ -1,0 +1,12 @@
+{
+  "id": "diff_015_profiles_rl_not_el",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff015#>)\nOntology(<http://example.org/diff015>\n  SubClassOf(:A ObjectAllValuesFrom(:p :B))\n)",
+  "base": "http://example.org/diff015#",
+  "axioms": { "min": 1 },
+  "expected": {
+    "consistent": true,
+    "profiles": { "el": false, "ql": false, "rl": true, "dl": true, "full": true }
+  },
+  "rationale": "ObjectAllValuesFrom is not permitted in EL (W3C EL_Profile_004) nor in QL (QL_Profile_004), but IS permitted as a superclass in RL (RL_Profile_002), and of course in DL and Full."
+}

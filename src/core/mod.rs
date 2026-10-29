@@ -42,6 +42,7 @@ pub use lock_helpers::{mutex_lock, read_lock, write_lock};
 pub use persistent_collections::{ConceptSet, ConceptSetPool, ConceptSetPoolStats};
 pub use reasoner::Reasoner;
 pub use saturation::{
-    SaturationConfig, SaturationEngine, SaturationNode, SaturationResult, SaturationStatus,
+    AbsorptionResult, ClassDerivation, DependencyClassifier, DeterministicClassification,
+    SaturationConfig, SaturationEngine, SaturationNode, SaturationResult, SaturationStatus, absorb,
 };
 pub use tableau::{Tableau, TableauState};

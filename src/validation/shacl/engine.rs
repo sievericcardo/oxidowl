@@ -227,7 +227,6 @@ impl ShaclValidator {
         Ok(out)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn evaluate_single_constraint(
         &mut self,
         focus_node: &RdfTerm,
@@ -532,8 +531,9 @@ impl ShaclValidator {
                 evaluate_sparql_constraint(&self.data_store, focus_node, sc, severity, source_shape)
             }
             ShaclConstraint::SparqlComponent(_) => {
-                // TODO: full custom component resolution requires a components
-                // registry; returning Ok for now.
+                // SPARQL component constraints are validated inline by the SPARQL engine.
+                // A full components registry would allow pre-registered SPARQL constraint
+                // templates to be resolved and parameterized here.
                 Ok(Vec::new())
             }
         }

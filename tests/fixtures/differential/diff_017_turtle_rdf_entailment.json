@@ -1,0 +1,15 @@
+{
+  "id": "diff_017_turtle_rdf_entailment",
+  "source": "Turtle",
+  "ontology": "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n@prefix : <http://example.org/diff017#> .\n\n:A rdf:type owl:Class ; rdfs:subClassOf :B .\n:B rdf:type owl:Class ; rdfs:subClassOf :C .\n:C rdf:type owl:Class .\n:a rdf:type :A , owl:NamedIndividual .\n",
+  "base": "http://example.org/diff017#",
+  "axioms": { "min": 4 },
+  "expected": {
+    "consistent": true,
+    "subsumptions": [["A", "C"]],
+    "instances": { "A": ["a"], "C": ["a"] },
+    "types": { "a": ["A", "B", "C"] },
+    "entailed": ["SubClassOf(:A :C)", "ClassAssertion(:B :a)", "ClassAssertion(:C :a)"]
+  },
+  "rationale": "RDF-based semantics: rdfs:subClassOf triples map to SubClassOf axioms and rdf:type to ClassAssertion. The A⊑B⊑C chain entails A⊑C; a∈A entails a∈B and a∈C. Exercises the Turtle → OWL mapping end-to-end."
+}

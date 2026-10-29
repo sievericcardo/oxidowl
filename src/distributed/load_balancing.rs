@@ -34,21 +34,21 @@ fn lb_select_node(
         LoadBalancingAlgorithm::RoundRobin => nodes.first().copied(),
         LoadBalancingAlgorithm::LeastConnections => nodes
             .iter()
-            .min_by_key(|id| loads.get(*id).map(|l| l.active_queries).unwrap_or(0))
+            .min_by_key(|id| loads.get(*id).map_or(0, |l| l.active_queries))
             .copied(),
         LoadBalancingAlgorithm::CpuBased => nodes
             .iter()
             .min_by(|a, b| {
-                let ca = loads.get(*a).map(|l| l.cpu_usage).unwrap_or(1.0);
-                let cb = loads.get(*b).map(|l| l.cpu_usage).unwrap_or(1.0);
+                let ca = loads.get(*a).map_or(1.0, |l| l.cpu_usage);
+                let cb = loads.get(*b).map_or(1.0, |l| l.cpu_usage);
                 ca.partial_cmp(&cb).unwrap_or(std::cmp::Ordering::Equal)
             })
             .copied(),
         LoadBalancingAlgorithm::MemoryBased => nodes
             .iter()
             .min_by(|a, b| {
-                let ma = loads.get(*a).map(|l| l.memory_usage).unwrap_or(1.0);
-                let mb = loads.get(*b).map(|l| l.memory_usage).unwrap_or(1.0);
+                let ma = loads.get(*a).map_or(1.0, |l| l.memory_usage);
+                let mb = loads.get(*b).map_or(1.0, |l| l.memory_usage);
                 ma.partial_cmp(&mb).unwrap_or(std::cmp::Ordering::Equal)
             })
             .copied(),
@@ -320,6 +320,7 @@ impl LoadBalancer {
     }
 
     /// Calculate composite load score (lower is better) — kept for external use
+    #[must_use]
     pub fn calculate_load_score(&self, load: Option<&NodeLoad>) -> f64 {
         lb_load_score(load)
     }

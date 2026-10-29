@@ -7,7 +7,10 @@ use crate::semantics::RdfTerm;
 use crate::validation::shacl::{
     model::{ShaclMessage, ShaclSeverity, ShapeId},
     report::ShaclValidationResult,
-    vocabulary::*,
+    vocabulary::{
+        SH_NODE_CONSTRAINT_COMPONENT, SH_QUALIFIED_MAX_COUNT_CONSTRAINT_COMPONENT,
+        SH_QUALIFIED_MIN_COUNT_CONSTRAINT_COMPONENT,
+    },
 };
 
 fn make_node_result(

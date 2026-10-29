@@ -12,8 +12,8 @@
   - `hypergraph/` - Structural-sharing hypergraph for Hypertableau
   - `saturation/` - Rule-saturation engine for RL/EL profiles
     - `cycle_detection.rs` — `CycleDetector` (DashMap + atomic counters)
-  - `inverted_index.rs` - Inverted index for fast concept lookup
-  - `persistent_collections.rs` - Immutable persistent data structures
+  - `inverted_index.rs` - DashMap-based unified inverted index with atomic stats counter for fast concept lookups
+  - `persistent_collections.rs` - Immutable persistent concept sets with hash-based deduplication pool
 
 - **`ontology`** - Ontology representation and management (built on horned-owl)
   - `axioms.rs` - Axiom structures and operations including DisjointUnion
@@ -49,7 +49,7 @@
   - `advanced/` - ML-enhanced conjunctive query execution engine
 
 - **`profiles`** - OWL 2 sub-profile support
-  - `el_reasoner.rs` - OWL 2 EL polynomial-time reasoner
+  - `el_reasoner.rs` - OWL 2 EL polynomial-time reasoner with O(1) indexed completion rules, queue deduplication, and concurrent classification
   - `ql.rs` - OWL 2 QL profile validator
   - `rl.rs` - OWL 2 RL profile validator
   - `rl_reasoner.rs` - OWL 2 RL forward-chaining materialisation engine
@@ -121,9 +121,13 @@ Oxidowl implements an efficient tableau algorithm that provides:
 
 ### Performance Optimizations
 
+- **EL Profile Auto-Detection**: `classify()` automatically detects EL-conforming ontologies and invokes the polynomial-time EL reasoner, bypassing full tableau expansion
 - **Parallel Processing**: Multi-threaded reasoning with Rayon for large ontologies
 - **Caching**: LRU/LFU/LRUFU caches with configurable eviction policies
 - **Lock-Free Structures**: DashMap-backed caches for concurrent access
+- **Indexed Completion Rules**: O(1) `sup_by_sub` and `sub_by_sup` indexes replace O(N) linear subsumption scans in the EL completion engine
+- **Queue Deduplication**: Hash-set guards prevent duplicate inferences from causing exponential blowup in completion fixpoint iteration
 - **Incremental Reasoning**: Dependency-tracked reclassification on updates
 - **High-Performance Allocator**: mimalloc (feature `high-performance`)
 - **Compile-Time Hashing**: Perfect hash tables (`phf`) for O(1) keyword lookup
+- **IRI Intern Pool**: Global `OnceLock<DashMap>` deduplicates IRI string allocations across the ontology

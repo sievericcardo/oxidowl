@@ -38,11 +38,15 @@ features = 13
 # Maximum response time for reasoning tasks (optional)
 # timeout = { secs = 300, nanos = 0 }
 
-# Maximum memory usage in MB for the reasoner (optional)
-# max_memory_mb = 4096
+# Maximum memory usage in MB for the reasoner — ENFORCED in-process by the RSS
+# memory guard: reasoning aborts with "Memory limit exceeded: …" (exit 1) when
+# RSS exceeds this cap, instead of being OOM-killed by the OS.
+# `0` (or omitting the key) = unlimited. Keep this <= the harness safety net
+# `--mem-limit-mb` (RLIMIT_AS) in benchmark_oxidowl_only.py.
+max_memory_mb = 4096
 
 # Enable incremental reasoning
-incremental_reasoning = true
+incremental_reasoning = false
 
 # Maximum tableau expansion depth
 max_expansion_depth = 1000
@@ -59,6 +63,11 @@ dump_clauses = false
 # Target OWL profile for optimization
 # Options: DL, EL, QL, RL, Auto
 target_profile = "DL"
+
+# Enable absorption + dependency-graph (Elgot-style) classification (workstream A8)
+# Optional (since serde defaults): any missing field falls back to the struct
+# Default; true matches the code default. Kept explicit here for clarity.
+enable_absorption_classification = true
 
 [cache]
 # Enabled cache features (bitflags): Satisfiability=1, CompletionGraph=2, Unsatisfiability=4

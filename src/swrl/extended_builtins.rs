@@ -65,8 +65,7 @@ mod tests {
         let builtin_count = registry.get_builtin_iris().len();
         assert!(
             builtin_count >= 20,
-            "Expected at least 20 extended built-ins, got {}",
-            builtin_count
+            "Expected at least 20 extended built-ins, got {builtin_count}"
         );
     }
 }

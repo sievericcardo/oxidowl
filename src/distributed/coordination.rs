@@ -627,7 +627,9 @@ mod tests {
         let lock = DistributedLock {
             lock_id: "test".to_string(),
             holder: Some(uuid::Uuid::new_v4()),
-            acquired_at: std::time::Instant::now() - std::time::Duration::from_secs(120),
+            acquired_at: std::time::Instant::now()
+                .checked_sub(std::time::Duration::from_secs(120))
+                .unwrap(),
             timeout: std::time::Duration::from_secs(60),
         };
 

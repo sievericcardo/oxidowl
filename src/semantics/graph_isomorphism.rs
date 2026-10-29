@@ -15,7 +15,9 @@
 //!
 //! Complexity is polynomial for most realistic graphs. For pathological cases
 //! (many automorphically-equivalent blank nodes) exhaustive search might
-//! be required, but that is not implemented here.
+//! be required for pathological cases with many automorphically-equivalent
+//! blank nodes, but that exhaustive search is not needed for typical
+//! ontology graphs where the signature-refinement approach suffices.
 
 use crate::semantics::{RdfGraph, RdfTerm, Triple};
 use std::collections::{HashMap, HashSet};
@@ -24,6 +26,7 @@ use std::collections::{HashMap, HashSet};
 ///
 /// Graphs are isomorphic if there exists a bijection on blank nodes that
 /// maps every triple in `a` to a triple in `b` and vice-versa.
+#[must_use]
 pub fn are_isomorphic(a: &RdfGraph, b: &RdfGraph) -> bool {
     // Fast path: if they have different numbers of triples they cannot be isomorphic.
     if a.triples().len() != b.triples().len() {
@@ -40,6 +43,7 @@ pub fn are_isomorphic(a: &RdfGraph, b: &RdfGraph) -> bool {
 /// All blank nodes are replaced by deterministic labels derived from their
 /// structural signature.  The result is a `Vec` of sorted triple strings that
 /// can be compared for equality.
+#[must_use]
 pub fn canonicalize(graph: &RdfGraph) -> Vec<String> {
     let mapping = canonical_blank_node_mapping(graph);
 

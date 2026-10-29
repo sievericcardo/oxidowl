@@ -1,0 +1,14 @@
+{
+  "id": "diff_013_datatypes_hasvalue_oneof",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff013#>)\nPrefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)\nOntology(<http://example.org/diff013>\n  EquivalentClasses(:Red DataHasValue(:color \"red\"^^xsd:string))\n  EquivalentClasses(:Primary DataSomeValuesFrom(:color DataOneOf(\"red\"^^xsd:string \"blue\"^^xsd:string \"green\"^^xsd:string)))\n  DataPropertyAssertion(:color :a \"red\"^^xsd:string)\n  DataPropertyAssertion(:color :b \"blue\"^^xsd:string)\n)",
+  "base": "http://example.org/diff013#",
+  "axioms": { "min": 4 },
+  "expected": {
+    "consistent": true,
+    "instances": { "Red": ["a"], "Primary": ["a", "b"] },
+    "entailed": ["ClassAssertion(:Red :a)", "ClassAssertion(:Primary :a)", "ClassAssertion(:Primary :b)"],
+    "notEntailed": ["ClassAssertion(:Red :b)"]
+  },
+  "rationale": "DataHasValue: a color \"red\" makes a an instance of Red = DataHasValue(color \"red\"); b color \"blue\" does not. Primary = ∃color.{red, blue, green} (DataOneOf data range): \"red\" and \"blue\" are both in {red, blue, green}, so a and b are instances of Primary."
+}

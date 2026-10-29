@@ -8,7 +8,10 @@
 
 #![allow(dead_code)]
 
-use super::{RdfGraph, RdfTerm, SemanticInterpretation, Triple, vocabulary::*};
+use super::{
+    RdfGraph, RdfTerm, SemanticInterpretation, Triple,
+    vocabulary::{OWL_NOTHING, OWL_THING},
+};
 use crate::{
     Error, Result,
     ontology::{
@@ -913,30 +916,7 @@ impl Owl2Interpretation {
                 let mut result_values = base_values;
 
                 for restriction in restrictions {
-                    // Convert from ontology::Literal to horned_owl::model::Literal<String>
-                    let horned_literal = if let Some(language) = &restriction.value.language {
-                        horned_owl::model::Literal::Language {
-                            literal: restriction.value.value.clone(),
-                            lang: language.clone(),
-                        }
-                    } else if let Some(_datatype) = &restriction.value.datatype {
-                        // For now, just use Simple literal as placeholder
-                        // Proper datatype handling would require horned_owl Datatype construction
-                        horned_owl::model::Literal::Simple {
-                            literal: restriction.value.value.clone(),
-                        }
-                    } else {
-                        horned_owl::model::Literal::Simple {
-                            literal: restriction.value.value.clone(),
-                        }
-                    };
-
-                    // Convert from ontology::FacetRestriction to datatypes::FacetRestriction
-                    let dt_restriction = crate::ontology::datatypes::FacetRestriction {
-                        facet: crate::ontology::datatypes::ConstrainingFacet::Length, // Default, would need proper mapping
-                        literal: horned_literal,
-                    };
-                    result_values = self.apply_facet_restriction(result_values, &dt_restriction)?;
+                    result_values = self.apply_facet_restriction(result_values, restriction)?;
                 }
 
                 Ok(result_values)
@@ -952,20 +932,6 @@ impl Owl2Interpretation {
             format!("\"{}\"^^{}", literal.value, datatype.as_str())
         } else {
             literal.value.clone()
-        }
-    }
-
-    /// Convert a `horned_owl` literal to string representation
-    fn horned_owl_literal_to_string(&self, literal: &horned_owl::model::Literal<String>) -> String {
-        match literal {
-            horned_owl::model::Literal::Simple { literal } => literal.clone(),
-            horned_owl::model::Literal::Language { literal, lang } => {
-                format!("{literal}@{lang}")
-            }
-            horned_owl::model::Literal::Datatype {
-                literal,
-                datatype_iri,
-            } => format!("{literal}^^{datatype_iri}"),
         }
     }
 
@@ -1083,17 +1049,20 @@ impl Owl2Interpretation {
     fn apply_facet_restriction(
         &self,
         values: HashSet<String>,
-        restriction: &crate::ontology::datatypes::FacetRestriction,
+        restriction: &crate::ontology::FacetRestriction,
     ) -> Result<HashSet<String>> {
-        use crate::ontology::datatypes::ConstrainingFacet;
+        use crate::ontology::ConstrainingFacet;
 
-        let restricting_value = &restriction.literal;
+        let restricting_str = restriction.value.value.clone();
+
+        let Some(facet) = ConstrainingFacet::from_iri(&restriction.facet) else {
+            return Ok(values);
+        };
 
         let filtered_values: HashSet<String> = values
             .into_iter()
             .filter(|value| {
-                let restricting_str = self.horned_owl_literal_to_string(restricting_value);
-                match restriction.facet {
+                match facet {
                     ConstrainingFacet::MinInclusive => {
                         if let (Ok(val), Ok(limit)) =
                             (value.parse::<f64>(), restricting_str.parse::<f64>())
@@ -1376,11 +1345,11 @@ impl Owl2ReasoningEngine {
 
         use std::collections::VecDeque;
 
+        const MAX_ITERATIONS: usize = 1000; // Prevent infinite loops
         let mut queue = VecDeque::new();
         let mut nodes = HashMap::new();
         let mut next_individual_id = 0;
         let mut iteration_count = 0;
-        const MAX_ITERATIONS: usize = 1000; // Prevent infinite loops
 
         // Create initial node with the class expression to check
         let initial_individual = format!("_:x{next_individual_id}");

@@ -48,6 +48,31 @@ impl Entity {
     }
 }
 
+/// Entity type discriminant (without IRI) for use in lookups and parameterization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EntityType {
+    Class,
+    ObjectProperty,
+    DataProperty,
+    AnnotationProperty,
+    NamedIndividual,
+    Datatype,
+}
+
+impl EntityType {
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EntityType::Class => "Class",
+            EntityType::ObjectProperty => "ObjectProperty",
+            EntityType::DataProperty => "DataProperty",
+            EntityType::AnnotationProperty => "AnnotationProperty",
+            EntityType::NamedIndividual => "NamedIndividual",
+            EntityType::Datatype => "Datatype",
+        }
+    }
+}
+
 /// Declaration axiom for OWL 2 DL entities
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DeclarationAxiom {

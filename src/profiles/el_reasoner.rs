@@ -44,7 +44,7 @@ impl ELReasoner {
     /// Create a new EL reasoner
     #[must_use]
     pub fn new(config: ReasonerConfig) -> Self {
-        #[allow(clippy::arc_with_non_send_sync)]
+        #[allow(clippy::arc_with_non_send_sync)] // Arc shared ownership, single-threaded use here
         let explanation_service = if config
             .reasoning
             .is_enabled(crate::config::ReasoningFeature::Explanations)
@@ -54,11 +54,15 @@ impl ELReasoner {
             None
         };
 
+        // Enforce `reasoning.max_memory_mb` in the completion worklist loop.
+        let mut completion_engine = CompletionEngine::new();
+        completion_engine.set_memory_limit_mb(config.reasoning.max_memory_mb);
+
         Self {
             normalized_axioms: Vec::new(),
             concept_hierarchy: ConceptHierarchy::new(),
             role_hierarchy: RoleHierarchy::new(),
-            completion_engine: CompletionEngine::new(),
+            completion_engine,
             config,
             explanation_service,
             statistics: ELStatistics::default(),
@@ -142,7 +146,7 @@ impl ELReasoner {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clone(),
         };
-        self.concept_hierarchy = ConceptHierarchy::from_subsumption_map(final_map);
+        self.concept_hierarchy = ConceptHierarchy::from_subsumption_map_already_closed(final_map);
 
         Ok(())
     }
@@ -258,7 +262,11 @@ impl ELReasoner {
 
     fn build_concept_hierarchy(&mut self) -> Result<()> {
         let subsumptions = self.completion_engine.get_all_subsumptions();
-        self.concept_hierarchy = ConceptHierarchy::from_subsumptions(subsumptions);
+        let mut map: HashMap<ELConcept, HashSet<ELConcept>> = HashMap::new();
+        for (sub, sup) in subsumptions {
+            map.entry(sub).or_default().insert(sup);
+        }
+        self.concept_hierarchy = ConceptHierarchy::from_subsumption_map_already_closed(map);
         Ok(())
     }
 
@@ -319,7 +327,10 @@ impl ELAxiom {
     /// Convert back to general axiom for explanations
     #[must_use]
     pub fn to_general_axiom(&self) -> Axiom {
-        use crate::ontology::axioms::*;
+        use crate::ontology::axioms::{
+            Axiom, ClassAssertionAxiom, ObjectPropertyAssertionAxiom, SubClassOfAxiom,
+            SubObjectPropertyOfAxiom,
+        };
         match self {
             ELAxiom::ConceptInclusion { lhs, rhs } => Axiom::SubClassOf(SubClassOfAxiom {
                 id: 0,
@@ -450,7 +461,10 @@ impl ELNormalizer {
 
     /// Normalize axioms to EL normal form
     pub fn normalize_axioms(&self, axioms: &[Axiom]) -> Result<Vec<ELAxiom>> {
-        use crate::ontology::axioms::*;
+        use crate::ontology::axioms::{
+            Axiom, ClassAssertionAxiom, ObjectPropertyAssertionAxiom, SubClassOfAxiom,
+            SubObjectPropertyOfAxiom,
+        };
         let mut el_axioms = Vec::with_capacity(axioms.len());
 
         for axiom in axioms {
@@ -461,10 +475,10 @@ impl ELNormalizer {
                     ..
                 }) => {
                     let el_sub = self.normalize_class_expression(subclass)?;
-                    let el_sup = self.normalize_class_expression(superclass)?;
+                    let normalized_sup = self.normalize_class_expression(superclass)?;
                     el_axioms.push(ELAxiom::ConceptInclusion {
                         lhs: el_sub,
-                        rhs: el_sup,
+                        rhs: normalized_sup,
                     });
                 }
                 Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
@@ -569,6 +583,19 @@ impl ConceptHierarchy {
         hierarchy
     }
 
+    /// Build hierarchy from pre-computed subsumption map that already contains
+    /// the full transitive closure (e.g., from the EL completion engine).
+    /// Skips the O(n^3) Floyd-Warshall pass.
+    #[must_use]
+    pub fn from_subsumption_map_already_closed(
+        subsumptions: HashMap<ELConcept, HashSet<ELConcept>>,
+    ) -> Self {
+        Self {
+            transitive_subsumptions: subsumptions.clone(),
+            subsumptions,
+        }
+    }
+
     /// Build hierarchy from a pre-computed subsumption map (used by concurrent classification)
     #[must_use]
     pub fn from_subsumption_map(subsumptions: HashMap<ELConcept, HashSet<ELConcept>>) -> Self {
@@ -591,8 +618,7 @@ impl ConceptHierarchy {
     pub fn is_subsumed(&self, sub: &ELConcept, sup: &ELConcept) -> bool {
         self.transitive_subsumptions
             .get(sub)
-            .map(|sups| sups.contains(sup))
-            .unwrap_or(false)
+            .is_some_and(|sups| sups.contains(sup))
     }
 
     /// Compute transitive closure of subsumptions
@@ -624,8 +650,7 @@ impl ConceptHierarchy {
     fn is_in_transitive(&self, sub: &ELConcept, sup: &ELConcept) -> bool {
         self.transitive_subsumptions
             .get(sub)
-            .map(|sups| sups.contains(sup))
-            .unwrap_or(false)
+            .is_some_and(|sups| sups.contains(sup))
     }
 
     /// Convert to classification hierarchy format
@@ -718,8 +743,7 @@ impl RoleHierarchy {
     ) -> bool {
         self.transitive_inclusions
             .get(sub_role)
-            .map(|sups| sups.contains(super_role))
-            .unwrap_or(false)
+            .is_some_and(|sups| sups.contains(super_role))
     }
 
     /// Get all super-roles of a given role
@@ -744,8 +768,13 @@ pub struct CompletionEngine {
     rules: Vec<Box<dyn CompletionRule>>,
     /// Queue of pending inferences
     queue: VecDeque<Inference>,
+    /// Deduplication set: inferences already enqueued (prevent exponential blowup)
+    queued: HashSet<(ELConcept, ELConcept)>,
     /// Statistics
     completion_steps: usize,
+    /// RSS cap from `reasoning.max_memory_mb` (`None`/`Some(0)` = unlimited),
+    /// enforced by the guard inside `run_to_completion`.
+    max_memory_mb: Option<u64>,
 }
 
 impl Default for CompletionEngine {
@@ -767,21 +796,31 @@ impl CompletionEngine {
                 Box::new(RoleChainRule),
             ],
             queue: VecDeque::new(),
+            queued: HashSet::new(),
             completion_steps: 0,
+            max_memory_mb: None,
         }
+    }
+
+    /// Enforce `reasoning.max_memory_mb` in `run_to_completion`.
+    /// `None`/`Some(0)` = unlimited.
+    pub fn set_memory_limit_mb(&mut self, max_memory_mb: Option<u64>) {
+        self.max_memory_mb = max_memory_mb;
     }
 
     /// Initialize with axioms and role hierarchy
     pub fn initialize(&mut self, axioms: &[ELAxiom], role_hierarchy: &RoleHierarchy) -> Result<()> {
         self.state.initialize(axioms, role_hierarchy)?;
 
-        // Add initial inferences to queue
         for axiom in axioms {
             if let ELAxiom::ConceptInclusion { lhs, rhs } = axiom {
-                self.queue.push_back(Inference::Subsumption {
+                let inf = Inference::Subsumption {
                     sub: lhs.clone(),
                     sup: rhs.clone(),
-                });
+                };
+                let key = (lhs.clone(), rhs.clone());
+                self.queued.insert(key);
+                self.queue.push_back(inf);
             }
         }
 
@@ -790,20 +829,27 @@ impl CompletionEngine {
 
     /// Run completion to fixpoint
     pub fn run_to_completion(&mut self) -> Result<()> {
+        // RSS guard for the worklist loop: interval-gated sampling, so the
+        // per-inference cost is a single `Instant::elapsed()` between samples.
+        // `None`/`Some(0)` (`reasoning.max_memory_mb` unset or 0) = unlimited.
+        let mut memory_guard =
+            crate::performance::MemoryGuard::from_max_memory_mb(self.max_memory_mb);
+
         while let Some(inference) = self.queue.pop_front() {
+            memory_guard.check()?;
             self.completion_steps += 1;
 
-            // Apply all applicable rules
             for rule in &self.rules {
                 let new_inferences = rule.apply(&inference, &mut self.state)?;
                 for new_inf in new_inferences {
-                    if !self.state.has_inference(&new_inf) {
+                    let key = new_inf.to_key();
+                    if !self.state.has_inference(&new_inf) && !self.queued.contains(&key) {
+                        self.queued.insert(key);
                         self.queue.push_back(new_inf);
                     }
                 }
             }
 
-            // Add inference to state
             self.state.add_inference(inference);
         }
 
@@ -822,6 +868,10 @@ impl CompletionEngine {
 pub struct CompletionState {
     /// All computed subsumptions
     subsumptions: HashSet<(ELConcept, ELConcept)>,
+    /// Index: for each sub-concept, all its super-concepts
+    sup_by_sub: HashMap<ELConcept, HashSet<ELConcept>>,
+    /// Index: for each super-concept, all its sub-concepts
+    sub_by_sup: HashMap<ELConcept, HashSet<ELConcept>>,
     /// Existential fillers for each concept-role pair
     #[allow(dead_code)]
     existential_fillers: HashMap<(ELConcept, ObjectPropertyExpression), HashSet<ELConcept>>,
@@ -841,6 +891,8 @@ impl CompletionState {
     pub fn new() -> Self {
         Self {
             subsumptions: HashSet::new(),
+            sup_by_sub: HashMap::new(),
+            sub_by_sup: HashMap::new(),
             existential_fillers: HashMap::new(),
             role_hierarchy: None,
         }
@@ -874,9 +926,30 @@ impl CompletionState {
     pub fn add_inference(&mut self, inference: Inference) {
         match inference {
             Inference::Subsumption { sub, sup } => {
-                self.subsumptions.insert((sub, sup));
+                self.subsumptions.insert((sub.clone(), sup.clone()));
+                self.sup_by_sub
+                    .entry(sub.clone())
+                    .or_default()
+                    .insert(sup.clone());
+                self.sub_by_sup.entry(sup).or_default().insert(sub);
             }
         }
+    }
+
+    /// Get all super-concepts of a given sub-concept (O(1) lookup)
+    #[must_use]
+    pub fn get_supers(&self, sub: &ELConcept) -> &HashSet<ELConcept> {
+        static EMPTY: std::sync::LazyLock<HashSet<ELConcept>> =
+            std::sync::LazyLock::new(HashSet::new);
+        self.sup_by_sub.get(sub).unwrap_or(&EMPTY)
+    }
+
+    /// Get all sub-concepts of a given super-concept (O(1) lookup)
+    #[must_use]
+    pub fn get_subs(&self, sup: &ELConcept) -> &HashSet<ELConcept> {
+        static EMPTY: std::sync::LazyLock<HashSet<ELConcept>> =
+            std::sync::LazyLock::new(HashSet::new);
+        self.sub_by_sup.get(sup).unwrap_or(&EMPTY)
     }
 
     /// Get all subsumptions
@@ -899,6 +972,14 @@ pub enum Inference {
     Subsumption { sub: ELConcept, sup: ELConcept },
 }
 
+impl Inference {
+    fn to_key(&self) -> (ELConcept, ELConcept) {
+        match self {
+            Inference::Subsumption { sub, sup } => (sub.clone(), sup.clone()),
+        }
+    }
+}
+
 /// Trait for completion rules
 pub trait CompletionRule: std::fmt::Debug + Send + Sync {
     /// Apply the rule to an inference and return new inferences
@@ -914,22 +995,19 @@ impl CompletionRule for SubsumptionRule {
         let mut new_inferences = Vec::new();
 
         let Inference::Subsumption { sub, sup } = inference;
-        // Find all concepts that sup subsumes
-        for (existing_sub, existing_sup) in &state.subsumptions {
-            if existing_sub == sup {
-                // sub ⊑ sup, sup ⊑ existing_sup ⟹ sub ⊑ existing_sup
-                new_inferences.push(Inference::Subsumption {
-                    sub: sub.clone(),
-                    sup: existing_sup.clone(),
-                });
-            }
-            if existing_sup == sub {
-                // existing_sub ⊑ sub, sub ⊑ sup ⟹ existing_sub ⊑ sup
-                new_inferences.push(Inference::Subsumption {
-                    sub: existing_sub.clone(),
-                    sup: sup.clone(),
-                });
-            }
+        // sub ⊑ sup  ∧  sup ⊑ existing_sup  ⟹  sub ⊑ existing_sup
+        for existing_sup in state.get_supers(sup) {
+            new_inferences.push(Inference::Subsumption {
+                sub: sub.clone(),
+                sup: existing_sup.clone(),
+            });
+        }
+        // existing_sub ⊑ sub  ∧  sub ⊑ sup  ⟹  existing_sub ⊑ sup
+        for existing_sub in state.get_subs(sub) {
+            new_inferences.push(Inference::Subsumption {
+                sub: existing_sub.clone(),
+                sup: sup.clone(),
+            });
         }
 
         Ok(new_inferences)
@@ -968,19 +1046,19 @@ impl CompletionRule for ExistentialRule {
 
         let Inference::Subsumption {
             sub: filler_sub,
-            sup: filler_sup,
+            sup: parent_filler,
         } = inference;
         // Look for existential restrictions with this filler
         for (existing_sub, existing_sup) in &state.subsumptions {
             if let ELConcept::Existential { role, filler } = existing_sup
                 && filler.as_ref() == filler_sub
             {
-                // existing_sub ⊑ ∃role.filler_sub, filler_sub ⊑ filler_sup ⟹ existing_sub ⊑ ∃role.filler_sup
+                // existing_sub ⊑ ∃role.filler_sub, filler_sub ⊑ parent_filler ⟹ existing_sub ⊑ ∃role.parent_filler
                 new_inferences.push(Inference::Subsumption {
                     sub: existing_sub.clone(),
                     sup: ELConcept::Existential {
                         role: role.clone(),
-                        filler: Box::new(filler_sup.clone()),
+                        filler: Box::new(parent_filler.clone()),
                     },
                 });
             }
@@ -1000,7 +1078,12 @@ impl CompletionRule for RoleChainRule {
         _inference: &Inference,
         _state: &mut CompletionState,
     ) -> Result<Vec<Inference>> {
-        // Simplified implementation - would need role chain support
+        // Role chain rule application: R1 o R2 o ... o Rn -> S
+        // requires decomposing property chain axioms and matching them against
+        // the current completion state. Full implementation would:
+        // 1. Index property chain axioms by chain head
+        // 2. For each chain, check if all chain elements have corresponding edges
+        // 3. If so, add an edge for the super-property S
         Ok(Vec::new())
     }
 }

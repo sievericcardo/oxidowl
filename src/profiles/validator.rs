@@ -121,7 +121,8 @@ impl OWL2ProfileValidator {
             OWL2Profile::EL => Box::new(ELValidator::new()),
             OWL2Profile::QL => Box::new(QLValidator::new()),
             OWL2Profile::RL => Box::new(RLValidator::new()),
-            _ => Box::new(GenericValidator::new(profile)),
+            OWL2Profile::DL => Box::new(GenericValidator::new(OWL2Profile::DL)),
+            OWL2Profile::Full => Box::new(GenericValidator::new(OWL2Profile::Full)),
         }
     }
 
@@ -150,29 +151,7 @@ impl OWL2ProfileValidator {
         let report = self.validate_profile(ontology, target_profile)?;
         let mut suggestions = Vec::new();
 
-        if !report.conforms {
-            suggestions.push(format!(
-                "Ontology does not conform to {}. Consider the following changes:",
-                target_profile.name()
-            ));
-
-            for violation in &report.violations {
-                match &violation.violation_type {
-                    crate::profiles::ProfileViolationType::DisallowedClassExpression(expr) => {
-                        suggestions.push(format!("Remove or replace {expr}"));
-                    }
-                    crate::profiles::ProfileViolationType::DisallowedAxiom(axiom) => {
-                        suggestions.push(format!("Remove or rewrite {axiom} axiom"));
-                    }
-                    crate::profiles::ProfileViolationType::ComplexityViolation(msg) => {
-                        suggestions.push(format!("Simplify construct: {msg}"));
-                    }
-                    _ => {
-                        suggestions.push(format!("Address: {}", violation.violation_type));
-                    }
-                }
-            }
-        } else {
+        if report.conforms {
             suggestions.push(format!(
                 "Ontology conforms to {}. No changes needed.",
                 target_profile.name()
@@ -199,6 +178,28 @@ impl OWL2ProfileValidator {
                 }
                 _ => {}
             }
+        } else {
+            suggestions.push(format!(
+                "Ontology does not conform to {}. Consider the following changes:",
+                target_profile.name()
+            ));
+
+            for violation in &report.violations {
+                match &violation.violation_type {
+                    crate::profiles::ProfileViolationType::DisallowedClassExpression(expr) => {
+                        suggestions.push(format!("Remove or replace {expr}"));
+                    }
+                    crate::profiles::ProfileViolationType::DisallowedAxiom(axiom) => {
+                        suggestions.push(format!("Remove or rewrite {axiom} axiom"));
+                    }
+                    crate::profiles::ProfileViolationType::ComplexityViolation(msg) => {
+                        suggestions.push(format!("Simplify construct: {msg}"));
+                    }
+                    _ => {
+                        suggestions.push(format!("Address: {}", violation.violation_type));
+                    }
+                }
+            }
         }
 
         Ok(suggestions)
@@ -223,13 +224,28 @@ impl GenericValidator {
 }
 
 impl ProfileValidator for GenericValidator {
-    fn validate(&self, _ontology: &Ontology) -> Result<ProfileValidationReport, OxidowlError> {
+    fn validate(&self, ontology: &Ontology) -> Result<ProfileValidationReport, OxidowlError> {
         let mut report = ProfileValidationReport::new(self.profile);
 
         match self.profile {
+            OWL2Profile::DL => {
+                let mut dl_validator =
+                    crate::validation::owl2_dl::OWL2DLValidator::new(ontology.clone());
+                if let Ok(dl_report) = dl_validator.validate()
+                    && !dl_report.is_valid
+                {
+                    for error in &dl_report.errors {
+                        report.add_violation(crate::profiles::ProfileViolation::new(
+                            crate::profiles::ProfileViolationType::DisallowedAxiom(
+                                error.error_type.to_string(),
+                            ),
+                            error.message.clone(),
+                        ));
+                    }
+                }
+            }
             OWL2Profile::Full => {
                 // OWL 2 Full allows everything
-                // report remains valid (no violations)
             }
             _ => {
                 // For unimplemented profiles, add a violation

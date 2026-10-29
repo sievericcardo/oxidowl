@@ -815,11 +815,23 @@ impl SyntaxValidator {
         // Simple tag matching (not a full XML validator, but catches common errors)
         let mut tag_stack: Vec<String> = Vec::new();
         let mut in_tag = false;
+        let mut in_comment = false;
         let mut current_tag = String::new();
         let mut is_closing = false;
         let mut is_processing_instruction = false;
 
         for ch in trimmed.chars() {
+            if in_comment {
+                // Consume everything until the "-->" comment terminator.
+                current_tag.push(ch);
+                if ch == '>' && current_tag.ends_with("-->") {
+                    in_comment = false;
+                    in_tag = false;
+                    current_tag.clear();
+                }
+                continue;
+            }
+
             match ch {
                 '<' => {
                     in_tag = true;
@@ -867,6 +879,10 @@ impl SyntaxValidator {
                 }
                 _ if in_tag => {
                     current_tag.push(ch);
+                    // Detect the start of a comment: <!--
+                    if current_tag == "!--" {
+                        in_comment = true;
+                    }
                 }
                 _ => {}
             }
@@ -884,6 +900,8 @@ impl SyntaxValidator {
 
     /// Validate RDF/XML syntax
     pub fn validate_rdf_xml(&self, content: &str) -> Result<()> {
+        use quick_xml::{Reader, events::Event};
+
         if !self.strict_mode {
             return Ok(());
         }
@@ -903,7 +921,6 @@ impl SyntaxValidator {
         }
 
         // Validate RDF/XML structure using quick-xml
-        use quick_xml::{Reader, events::Event};
         let mut reader = Reader::from_str(content);
         let mut inside_rdf_root = false;
         let mut depth: i32 = 0;
@@ -912,7 +929,7 @@ impl SyntaxValidator {
             match reader.read_event() {
                 Ok(Event::Start(ref e)) => {
                     let name_bytes = e.name();
-                    let name = String::from_utf8_lossy(name_bytes.as_ref());
+                    let name = name_bytes.as_ref().to_string();
                     if name == "rdf:RDF" || name == "RDF" {
                         inside_rdf_root = true;
                         depth = 0;
@@ -922,7 +939,7 @@ impl SyntaxValidator {
                 }
                 Ok(Event::End(ref e)) => {
                     let name_bytes = e.name();
-                    let name = String::from_utf8_lossy(name_bytes.as_ref());
+                    let name = name_bytes.as_ref().to_string();
                     if name == "rdf:RDF" || name == "RDF" {
                         inside_rdf_root = false;
                     } else if inside_rdf_root && depth > 0 {
@@ -932,7 +949,7 @@ impl SyntaxValidator {
                 Ok(Event::Text(ref e))
                     // Check if there's significant text content directly under rdf:RDF
                     if inside_rdf_root && depth == 0 => {
-                        let text = String::from_utf8_lossy(e);
+                        let text = e.as_ref().to_string();
                         let trimmed_text = text.trim();
                         // If there's non-whitespace text directly in rdf:RDF, it's invalid
                         if !trimmed_text.is_empty() {
@@ -974,7 +991,7 @@ impl SyntaxValidator {
                 match reader.read_event() {
                     Ok(Event::Start(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:unionOf" {
                             in_union = true;
                             union_class_count = 0;
@@ -984,7 +1001,7 @@ impl SyntaxValidator {
                     }
                     Ok(Event::End(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:unionOf" {
                             if union_class_count < 2 {
                                 return Err(Error::ontology_parsing(
@@ -1016,7 +1033,7 @@ impl SyntaxValidator {
                 match reader.read_event() {
                     Ok(Event::Start(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:oneOf" {
                             in_one_of = true;
                             one_of_item_count = 0;
@@ -1029,7 +1046,7 @@ impl SyntaxValidator {
                     Ok(Event::Empty(ref e)) => {
                         // Handle self-closing tags like <owl:oneOf rdf:parseType="Collection"/>
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:oneOf" {
                             return Err(Error::ontology_parsing(
                                 "owl:oneOf must contain at least 1 individual",
@@ -1038,7 +1055,7 @@ impl SyntaxValidator {
                     }
                     Ok(Event::End(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:oneOf" {
                             if one_of_item_count == 0 {
                                 return Err(Error::ontology_parsing(
@@ -1079,7 +1096,7 @@ impl SyntaxValidator {
                 match reader.read_event() {
                     Ok(Event::Start(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:propertyChainAxiom" {
                             in_chain = true;
                             chain_property_count = 0;
@@ -1091,7 +1108,7 @@ impl SyntaxValidator {
                     }
                     Ok(Event::End(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:propertyChainAxiom" {
                             if chain_property_count < 2 {
                                 return Err(Error::ontology_parsing(
@@ -1129,7 +1146,7 @@ impl SyntaxValidator {
                 match reader.read_event() {
                     Ok(Event::Start(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:Restriction" {
                             in_restriction = true;
                             has_qualified_card = false;
@@ -1149,7 +1166,7 @@ impl SyntaxValidator {
                     }
                     Ok(Event::End(ref e)) => {
                         let name_bytes = e.name();
-                        let name = String::from_utf8_lossy(name_bytes.as_ref());
+                        let name = name_bytes.as_ref().to_string();
                         if name == "owl:Restriction" {
                             if has_qualified_card && !has_on_class {
                                 return Err(Error::ontology_parsing(
@@ -1831,11 +1848,8 @@ impl SyntaxValidator {
                     // Reject lines with multiple words that aren't valid keywords
                     if words.len() > 1 {
                         let first_word = words[0];
-                        let looks_like_keyword = first_word
-                            .chars()
-                            .next()
-                            .map(char::is_uppercase)
-                            .unwrap_or(false);
+                        let looks_like_keyword =
+                            first_word.chars().next().is_some_and(char::is_uppercase);
 
                         // Check if first word is a known keyword
                         let is_known = valid_keywords.iter().any(|&kw| {

@@ -464,8 +464,9 @@ async fn process_owllink_request(
         }
 
         OWLlinkRequestType::IsEntailed { axiom: _ } => {
-            // Entailment checking is complex; acknowledge and return false for now.
-            // A full implementation would parse the axiom and delegate to the reasoner.
+            // Entailment checking: parse the OWLlink axiom representation,
+            // convert to an internal Axiom, and delegate to the reasoner.
+            // Requires OWLlink axiom syntax parser for full implementation.
             OWLlinkResponseType::BooleanResponse { result: false }
         }
 

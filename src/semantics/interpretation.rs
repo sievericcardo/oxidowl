@@ -475,10 +475,11 @@ impl InterpretationFactory {
     /// Create a standard RDFS interpretation
     #[must_use]
     pub fn create_rdfs_interpretation() -> Interpretation {
+        use super::vocabulary::{RDFS_CLASS, RDFS_RESOURCE};
+
         let mut interpretation = Self::create_minimal_rdf_interpretation();
 
         // Add RDFS vocabulary interpretations
-        use super::vocabulary::*;
 
         let mut rdfs_resource_instances = HashSet::new();
         rdfs_resource_instances.insert("resource1".to_string());
@@ -493,10 +494,11 @@ impl InterpretationFactory {
     /// Create a standard OWL interpretation
     #[must_use]
     pub fn create_owl_interpretation() -> Interpretation {
+        use super::vocabulary::{OWL_NOTHING, OWL_THING};
+
         let mut interpretation = Self::create_rdfs_interpretation();
 
         // Add OWL vocabulary interpretations
-        use super::vocabulary::*;
 
         // owl:Thing contains all domain elements
         interpretation

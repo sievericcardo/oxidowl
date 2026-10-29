@@ -30,7 +30,7 @@ impl SWRLBuiltIn for CountBuiltIn {
                     collection_str.split(',').map(str::trim).collect()
                 };
 
-                let actual_count = items.len() as i64;
+                let actual_count = i64::try_from(items.len()).unwrap_or(i64::MAX);
                 Ok(SWRLValue::Boolean(*expected_count == actual_count))
             }
             _ => Err(Error::reasoning(
@@ -39,7 +39,7 @@ impl SWRLBuiltIn for CountBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#count"
     }
 
@@ -65,7 +65,7 @@ impl SWRLBuiltIn for IsEmptyBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#isEmpty"
     }
 
@@ -110,7 +110,7 @@ impl SWRLBuiltIn for UnionBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#union"
     }
 
@@ -151,7 +151,7 @@ impl SWRLBuiltIn for SubsetBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subset"
     }
 
@@ -202,7 +202,7 @@ mod tests {
             .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
-        let args = vec![SWRLValue::Integer(0), SWRLValue::String("".to_string())];
+        let args = vec![SWRLValue::Integer(0), SWRLValue::String(String::new())];
         let result = builtin
             .execute(&args)
             .expect("Failed to execute SWRL builtin with given arguments");
@@ -213,7 +213,7 @@ mod tests {
     fn test_is_empty_builtin() {
         let builtin = IsEmptyBuiltIn;
 
-        let args = vec![SWRLValue::String("".to_string())];
+        let args = vec![SWRLValue::String(String::new())];
         let result = builtin
             .execute(&args)
             .expect("Failed to execute SWRL builtin with given arguments");

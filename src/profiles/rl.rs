@@ -11,8 +11,10 @@
 //! This implementation provides full OWL 2 RL profile validation according to the W3C specification.
 
 use crate::error::OxidowlError;
+use crate::ontology::axioms::AxiomTrait;
 use crate::ontology::{
-    Axiom, ClassExpression, DataPropertyExpression, DataRange, ObjectPropertyExpression, Ontology,
+    Axiom, ClassExpression, DataPropertyExpression, DataRange, Entity, ObjectPropertyExpression,
+    Ontology,
 };
 use crate::profiles::{
     OWL2Profile, ProfileValidationReport, ProfileValidator, ProfileViolation, ProfileViolationType,
@@ -29,7 +31,40 @@ impl RLValidator {
         Self
     }
 
+    /// Check for illegal punning between classes and datatypes.
+    ///
+    /// OWL 2 RL (like OWL 2 DL) disallows using a single IRI as both a class
+    /// and a datatype, although class/individual punning is permitted.
+    fn check_illegal_punning(&self, ontology: &Ontology, report: &mut ProfileValidationReport) {
+        let mut class_iris = std::collections::HashSet::new();
+        let mut datatype_iris = std::collections::HashSet::new();
+
+        for axiom in ontology.axioms() {
+            if let Axiom::Declaration(decl) = axiom {
+                match &decl.entity {
+                    Entity::Class(iri) => {
+                        class_iris.insert(iri.clone());
+                    }
+                    Entity::Datatype(iri) => {
+                        datatype_iris.insert(iri.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        for iri in class_iris.intersection(&datatype_iris) {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedAxiom("IllegalPunning".to_string()),
+                format!(
+                    "IRI {iri} is used both as a class and as a datatype (illegal punning in OWL 2 RL)"
+                ),
+            ));
+        }
+    }
+
     /// Validate class expressions in the ontology
+    #[allow(dead_code)]
     fn validate_class_expressions(
         &self,
         ontology: &Ontology,
@@ -42,6 +77,7 @@ impl RLValidator {
     }
 
     /// Validate property expressions in the ontology
+    #[allow(dead_code)]
     fn validate_property_expressions(
         &self,
         ontology: &Ontology,
@@ -94,9 +130,10 @@ impl RLValidator {
     fn is_rl_super_class_expression(&self, expr: &ClassExpression) -> bool {
         match expr {
             ClassExpression::Class(_) => true,
-            ClassExpression::ObjectIntersectionOf(classes) => classes
-                .iter()
-                .all(|c| matches!(c, ClassExpression::Class(_))),
+            // Intersection of super-class expressions (recursive, per RL spec)
+            ClassExpression::ObjectIntersectionOf(classes) => {
+                classes.iter().all(|c| self.is_rl_super_class_expression(c))
+            }
             ClassExpression::ObjectAllValuesFrom { property, filler } => {
                 self.is_property_expression_allowed(property)
                     && matches!(filler.as_ref(), ClassExpression::Class(_))
@@ -129,6 +166,7 @@ impl RLValidator {
     }
 
     /// Check for prohibited RL constructs
+    #[allow(dead_code)]
     fn check_prohibited_constructs(&self, axiom: &Axiom, report: &mut ProfileValidationReport) {
         let prohibited_constructs = self.get_prohibited_constructs();
 
@@ -144,12 +182,13 @@ impl RLValidator {
     }
 
     /// Get the set of constructs prohibited in OWL 2 RL
+    #[allow(dead_code)]
     fn get_prohibited_constructs(&self) -> HashSet<&'static str> {
         let mut prohibited = HashSet::new();
 
         // Prohibited axiom types
         prohibited.insert("DisjointUnion");
-        prohibited.insert("InverseObjectProperties");
+        // Note: InverseObjectProperties is ALLOWED in OWL 2 RL
         prohibited.insert("DatatypeDefinition");
 
         // Prohibited class expressions
@@ -162,7 +201,6 @@ impl RLValidator {
         prohibited.insert("ObjectOneOf");
 
         // Prohibited property expressions
-        prohibited.insert("InverseObjectProperty");
         prohibited.insert("PropertyChain");
 
         // Prohibited data ranges
@@ -175,6 +213,7 @@ impl RLValidator {
     }
 
     /// Check class expressions within an axiom
+    #[allow(dead_code)]
     fn check_class_expressions_in_axiom(
         &self,
         axiom: &Axiom,
@@ -217,6 +256,7 @@ impl RLValidator {
     }
 
     /// Check property expressions within an axiom
+    #[allow(dead_code)]
     fn check_property_expressions_in_axiom(
         &self,
         axiom: &Axiom,
@@ -258,26 +298,27 @@ impl ProfileValidator for RLValidator {
     fn validate(&self, ontology: &Ontology) -> Result<ProfileValidationReport, OxidowlError> {
         let mut report = ProfileValidationReport::new(OWL2Profile::RL);
 
-        // Validate all axioms in the ontology
+        // Single pass: use is_axiom_allowed() as the authoritative check.
+        // Do NOT also call validate_class_expressions() / validate_property_expressions() /
+        // check_prohibited_constructs() — those would double-count the same violations.
         for axiom in ontology.axioms() {
-            // Check for prohibited constructs
-            self.check_prohibited_constructs(axiom, &mut report);
-
             if !self.is_axiom_allowed(axiom) {
                 report.add_violation(ProfileViolation::new(
-                    ProfileViolationType::DisallowedAxiom(format!("{axiom:?}")),
-                    format!("Axiom type not supported in OWL 2 RL profile: {axiom:?}"),
+                    ProfileViolationType::DisallowedAxiom(format!("{:?}", axiom.axiom_type())),
+                    format!(
+                        "Axiom not allowed in OWL 2 RL profile: {:?}",
+                        axiom.axiom_type()
+                    ),
                 ));
             }
         }
 
-        // Additional validation for complex constructs
-        self.validate_class_expressions(ontology, &mut report)?;
-        self.validate_property_expressions(ontology, &mut report)?;
+        // validate_data_ranges covers DataPropertyRange data-range validity,
+        // which is not checked by is_axiom_allowed (it returns true unconditionally).
         self.validate_data_ranges(ontology, &mut report)?;
 
-        // Check ontology structure
-        self.validate_ontology_structure(ontology, &mut report)?;
+        // OWL 2 RL disallows punning a single IRI as both a class and a datatype.
+        self.check_illegal_punning(ontology, &mut report);
 
         Ok(report)
     }
@@ -355,14 +396,12 @@ impl ProfileValidator for RLValidator {
                 self.is_rl_sub_class_expression(&subclass_axiom.subclass)
                     && self.is_rl_super_class_expression(&subclass_axiom.superclass)
             }
-            Axiom::EquivalentClasses(equiv_axiom) => equiv_axiom
-                .classes
-                .iter()
-                .all(|c| matches!(c, ClassExpression::Class(_))),
-            Axiom::DisjointClasses(disjoint_axiom) => disjoint_axiom
-                .classes
-                .iter()
-                .all(|c| matches!(c, ClassExpression::Class(_))),
+            Axiom::EquivalentClasses(equiv_axiom) => equiv_axiom.classes.iter().all(|c| {
+                self.is_rl_sub_class_expression(c) || self.is_rl_super_class_expression(c)
+            }),
+            Axiom::DisjointClasses(disjoint_axiom) => disjoint_axiom.classes.iter().all(|c| {
+                self.is_rl_sub_class_expression(c) || self.is_rl_super_class_expression(c)
+            }),
             Axiom::DisjointUnion(_) => false, // Disjoint unions not allowed in RL
 
             // Object property axioms - most are allowed
@@ -380,13 +419,13 @@ impl ProfileValidator for RLValidator {
                 .all(|p| self.is_property_expression_allowed(p)),
             Axiom::ObjectPropertyDomain(domain_axiom) => {
                 self.is_property_expression_allowed(&domain_axiom.property)
-                    && matches!(&domain_axiom.domain, ClassExpression::Class(_))
+                    && self.is_rl_super_class_expression(&domain_axiom.domain)
             }
             Axiom::ObjectPropertyRange(range_axiom) => {
                 self.is_property_expression_allowed(&range_axiom.property)
-                    && matches!(&range_axiom.range, ClassExpression::Class(_))
+                    && self.is_rl_super_class_expression(&range_axiom.range)
             }
-            Axiom::InverseObjectProperties(_) => false, // Not allowed in RL
+            Axiom::InverseObjectProperties(_) => true, // Allowed in OWL 2 RL
             Axiom::FunctionalObjectProperty(_) => true,
             Axiom::InverseFunctionalObjectProperty(_) => true,
             Axiom::ReflexiveObjectProperty(_) => true,
@@ -400,7 +439,7 @@ impl ProfileValidator for RLValidator {
             Axiom::EquivalentDataProperties(_) => true,
             Axiom::DisjointDataProperties(_) => true,
             Axiom::DataPropertyDomain(domain_axiom) => {
-                matches!(&domain_axiom.domain, ClassExpression::Class(_))
+                self.is_rl_super_class_expression(&domain_axiom.domain)
             }
             Axiom::DataPropertyRange(_) => true,
             Axiom::FunctionalDataProperty(_) => true,
@@ -419,7 +458,7 @@ impl ProfileValidator for RLValidator {
             Axiom::DifferentIndividuals(_) => true,
 
             // Other axioms
-            Axiom::HasKey(_) => true,              // Allowed in RL
+            Axiom::HasKey(_) => false, // HasKey is not allowed in OWL 2 RL
             Axiom::DatatypeDefinition(_) => false, // Not allowed in RL
             Axiom::Declaration(_) => true,
             Axiom::AnnotationAssertion(_) => true,
@@ -453,6 +492,7 @@ impl ProfileValidator for RLValidator {
 
 impl RLValidator {
     /// Validate overall ontology structure for RL compliance
+    #[allow(dead_code)]
     fn validate_ontology_structure(
         &self,
         ontology: &Ontology,
@@ -468,6 +508,7 @@ impl RLValidator {
     }
 
     /// Check for interactions between complex constructs that might violate RL
+    #[allow(dead_code)]
     fn check_complex_construct_interactions(
         &self,
         ontology: &Ontology,
@@ -487,6 +528,7 @@ impl RLValidator {
     }
 
     /// Check specific combinations of complex class expressions
+    #[allow(dead_code)]
     fn check_complex_subclass_combinations(
         &self,
         subclass: &ClassExpression,
@@ -508,6 +550,7 @@ impl RLValidator {
     }
 
     /// Check for Horn clause compliance
+    #[allow(dead_code)]
     fn check_horn_clause_compliance(
         &self,
         ontology: &Ontology,
@@ -644,19 +687,20 @@ mod tests {
         let validator = RLValidator::new();
         let mut ontology = Ontology::new();
 
-        // Add a non-RL axiom (inverse object property)
-        let prop1 = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop1"))
-            .expect("Failed to create ObjectProperty for test: prop1");
-        let prop2 = crate::ontology::ObjectProperty::new(IRI::new("http://example.org/prop2"))
-            .expect("Failed to create ObjectProperty for test: prop2");
-        ontology.axioms.push(Axiom::InverseObjectProperties(
-            crate::ontology::axioms::InverseObjectPropertiesAxiom {
+        // Add a non-RL axiom: DisjointUnion is explicitly prohibited in OWL 2 RL.
+        // `set_axioms` (not a bare field push) keeps the incremental axiom
+        // index in sync — direct `axioms` mutation leaves it stale (CR-011 NR-1).
+        let class_a = ClassExpression::Class(Class::new(IRI::new("http://example.org/A")));
+        let class_b = ClassExpression::Class(Class::new(IRI::new("http://example.org/B")));
+        let class_c = ClassExpression::Class(Class::new(IRI::new("http://example.org/C")));
+        ontology.set_axioms(vec![Axiom::DisjointUnion(
+            crate::ontology::axioms::DisjointUnionAxiom {
                 id: 0,
-                property1: crate::ontology::ObjectPropertyExpression::ObjectProperty(prop1),
-                property2: crate::ontology::ObjectPropertyExpression::ObjectProperty(prop2),
+                class: class_a,
+                disjoint_classes: vec![class_b, class_c],
                 annotations: Vec::new(),
             },
-        ));
+        )]);
 
         let report = validator
             .validate(&ontology)

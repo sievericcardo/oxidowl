@@ -775,7 +775,9 @@ impl QueryProcessor {
                 format!("^<{}>", prop.iri)
             }
             // Add more cases as needed
-            _ => "_:complex_property".to_string(),
+            crate::ontology::ObjectPropertyExpression::PropertyChain(_) => {
+                "_:complex_property".to_string()
+            }
         }
     }
 
@@ -872,7 +874,7 @@ impl QueryProcessor {
         }
     }
 
-    /// Convert ClassExpression to ConceptLabel for tableau
+    /// Convert `ClassExpression` to `ConceptLabel` for tableau
     fn class_expression_to_concept_label(
         &self,
         class_expr: &ClassExpression,
@@ -895,7 +897,9 @@ impl QueryProcessor {
         ontology: &Ontology,
     ) -> Result<String> {
         // Enhanced entailment checking for OWLlink requests
-        let result = if !request.request_xml.is_empty() {
+        let result = if request.request_xml.is_empty() {
+            false
+        } else {
             // Parse the entailment query from request XML
             if let Ok(axiom) = self.parse_axiom_from_owllink(&request.request_xml) {
                 // Create a temporary reasoner to check entailment
@@ -910,8 +914,6 @@ impl QueryProcessor {
             } else {
                 false
             }
-        } else {
-            false
         };
 
         Ok(format!(

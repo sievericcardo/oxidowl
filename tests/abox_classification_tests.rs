@@ -1,8 +1,8 @@
-//! ABox classification tests
+//! `ABox` classification tests
 //!
 //! Verifies that the native Rust forward-chaining materialization engine
 //! and the optional SPARQL-based Oxigraph materialization produce correct
-//! OWL DL ABox entailments.
+//! OWL DL `ABox` entailments.
 
 use oxidowl::{
     config::ReasonerConfig,

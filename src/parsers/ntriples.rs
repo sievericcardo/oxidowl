@@ -9,7 +9,7 @@ use std::{
     path::Path,
 };
 
-use super::common::OntologySerializer;
+use super::common::{OntologySerializer, SerializerConfig};
 use crate::{
     Error, Result,
     ontology::Ontology,
@@ -196,6 +196,19 @@ impl NTriplesParser {
                                 );
                                 ontology.add_axiom(axiom);
                             }
+                        } else if obj_iri.as_str() == "http://www.w3.org/2002/07/owl#ObjectProperty"
+                        {
+                            if let Some(subj_iri) = subject.as_iri() {
+                                let axiom = crate::ontology::Axiom::Declaration(
+                                    crate::ontology::DeclarationAxiom {
+                                        id: ontology.next_axiom_id(),
+                                        entity: crate::ontology::Entity::ObjectProperty(
+                                            crate::ontology::IRI::new(subj_iri.as_str()),
+                                        ),
+                                    },
+                                );
+                                ontology.add_axiom(axiom);
+                            }
                         } else {
                             // Class assertion: individual is instance of class
                             if let Some(subj_iri) = subject.as_iri() {
@@ -263,7 +276,31 @@ impl NTriplesParser {
                     }
                 }
                 _ => {
-                    // For other predicates, RDF graph storage is sufficient
+                    // ObjectPropertyAssertion or DataPropertyAssertion
+                    if let (Some(subj_iri), Some(obj_iri)) = (subject.as_iri(), object.as_iri()) {
+                        let axiom = crate::ontology::Axiom::ObjectPropertyAssertion(
+                            crate::ontology::ObjectPropertyAssertionAxiom {
+                                id: ontology.next_axiom_id(),
+                                property: crate::ontology::ObjectPropertyExpression::ObjectProperty(
+                                    crate::ontology::ObjectProperty {
+                                        iri: crate::ontology::IRI::new(pred_iri.as_str()),
+                                    },
+                                ),
+                                source: crate::ontology::Individual::Named(
+                                    crate::ontology::NamedIndividual {
+                                        iri: crate::ontology::IRI::new(subj_iri.as_str()),
+                                    },
+                                ),
+                                target: crate::ontology::Individual::Named(
+                                    crate::ontology::NamedIndividual {
+                                        iri: crate::ontology::IRI::new(obj_iri.as_str()),
+                                    },
+                                ),
+                                annotations: vec![],
+                            },
+                        );
+                        ontology.add_axiom(axiom);
+                    }
                 }
             }
         }
@@ -531,28 +568,52 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Ontology> {
 pub struct NTriplesSerializer;
 
 impl NTriplesSerializer {
-    /// Create a new `NTriplesSerializer` instance
     #[must_use]
     pub fn new() -> Self {
         Self
+    }
+
+    pub fn serialize_with_config(
+        &self,
+        ontology: &Ontology,
+        _config: &SerializerConfig,
+    ) -> std::result::Result<String, Error> {
+        let mut content = String::new();
+        for axiom in ontology.axioms() {
+            match axiom {
+                crate::ontology::Axiom::SubClassOf(sub) => {
+                    if let (crate::ontology::ClassExpression::Class(a), crate::ontology::ClassExpression::Class(b)) = (&sub.subclass, &sub.superclass) {
+                        content.push_str(&format!("<{}> <http://www.w3.org/2000/01/rdf-schema#subClassOf> <{}> .\n", a.iri, b.iri));
+                    }
+                }
+                crate::ontology::Axiom::ClassAssertion(ca) => {
+                    if let (crate::ontology::ClassExpression::Class(cls), crate::ontology::Individual::Named(ind)) = (&ca.class, &ca.individual) {
+                        content.push_str(&format!("<{}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <{}> .\n", ind.iri, cls.iri));
+                    }
+                }
+                crate::ontology::Axiom::ObjectPropertyAssertion(opa) => {
+                    if let (crate::ontology::ObjectPropertyExpression::ObjectProperty(prop), crate::ontology::Individual::Named(src), crate::ontology::Individual::Named(tgt)) = (&opa.property, &opa.source, &opa.target) {
+                        content.push_str(&format!("<{}> <{}> <{}> .\n", src.iri, prop.iri, tgt.iri));
+                    }
+                }
+                crate::ontology::Axiom::Declaration(decl) => {
+                    match &decl.entity {
+                        crate::ontology::Entity::Class(iri) => content.push_str(&format!("<{}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Class> .\n", iri.as_str())),
+                        crate::ontology::Entity::ObjectProperty(iri) => content.push_str(&format!("<{}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#ObjectProperty> .\n", iri.as_str())),
+                        crate::ontology::Entity::NamedIndividual(iri) => content.push_str(&format!("<{}> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#NamedIndividual> .\n", iri.as_str())),
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(content)
     }
 }
 
 impl OntologySerializer for NTriplesSerializer {
     fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
-        let mut content = String::new();
-
-        for (subject, class) in ontology.classes() {
-            content.push_str(&format!("{} rdf:type {} .\n", subject, class.iri));
-        }
-
-        for (_subject, individual) in ontology.individuals() {
-            if let Some(iri) = individual.iri() {
-                content.push_str(&format!("{iri} rdf:type Individual .\n"));
-            }
-        }
-
-        Ok(content)
+        self.serialize_with_config(ontology, &SerializerConfig::default())
     }
 }
 
@@ -568,10 +629,10 @@ mod tests {
 
     #[test]
     fn test_parse_basic_ntriples() {
-        let content = r#"
+        let content = r"
 # Comment line
 <http://example.org/subject> <http://example.org/predicate> <http://example.org/object> .
-"#;
+";
 
         let parser = NTriplesParser::new();
         let result = parser.parse_string(content);
@@ -645,9 +706,9 @@ mod tests {
 
     #[test]
     fn test_parse_blank_node() {
-        let content = r#"
+        let content = r"
 _:b1 <http://example.org/predicate> <http://example.org/object> .
-"#;
+";
 
         let parser = NTriplesParser::new();
         let result = parser.parse_string(content);
@@ -657,11 +718,11 @@ _:b1 <http://example.org/predicate> <http://example.org/object> .
     #[test]
     fn test_blank_node_validation_lenient_mode() {
         // Default mode should accept any blank node label (RDF 1.1 compatible)
-        let content = r#"
+        let content = r"
 _:node-with-hyphens <http://example.org/pred> <http://example.org/obj> .
 _:node_with_underscores <http://example.org/pred> <http://example.org/obj> .
 _:node.with.dots <http://example.org/pred> <http://example.org/obj> .
-"#;
+";
 
         let parser = NTriplesParser::with_config(NTriplesConfig {
             validate_blank_nodes: false,
@@ -678,12 +739,12 @@ _:node.with.dots <http://example.org/pred> <http://example.org/obj> .
     #[test]
     fn test_blank_node_validation_strict_mode_valid() {
         // Strict mode should accept RDF 1.2 well-formed blank nodes
-        let content = r#"
+        let content = r"
 _:node1 <http://example.org/pred> <http://example.org/obj1> .
 _:a <http://example.org/pred> <http://example.org/obj2> .
 _:Z <http://example.org/pred> <http://example.org/obj3> .
 _:node123ABC <http://example.org/pred> <http://example.org/obj4> .
-"#;
+";
 
         let parser = NTriplesParser::with_config(NTriplesConfig {
             validate_blank_nodes: true,
@@ -708,10 +769,8 @@ _:node123ABC <http://example.org/pred> <http://example.org/obj4> .
         ];
 
         for invalid_label in invalid_cases {
-            let content = format!(
-                "{} <http://example.org/pred> <http://example.org/obj> .",
-                invalid_label
-            );
+            let content =
+                format!("{invalid_label} <http://example.org/pred> <http://example.org/obj> .");
 
             let parser = NTriplesParser::with_config(NTriplesConfig {
                 validate_blank_nodes: true,
@@ -721,8 +780,7 @@ _:node123ABC <http://example.org/pred> <http://example.org/obj4> .
             let result = parser.parse_string(&content);
             assert!(
                 result.is_err(),
-                "Strict mode should reject invalid blank node: {}",
-                invalid_label
+                "Strict mode should reject invalid blank node: {invalid_label}"
             );
         }
     }

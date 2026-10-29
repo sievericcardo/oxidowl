@@ -9,6 +9,8 @@
 //! - `Individual` named / anonymous classification invariants.
 //! - `Ontology` initial empty-axiom state.
 
+#![cfg(kani)]
+
 use crate::ontology::{IRI, Individual, Ontology};
 
 // ── IRI Equality ──────────────────────────────────────────────────────────

@@ -146,6 +146,19 @@ impl ReasoningService {
         .await
     }
 
+    /// Batch subsumption check — processes N pairs in a single actor round-trip.
+    ///
+    /// This is much more efficient than N sequential `is_subsumed_by` calls
+    /// for large ontologies because it avoids N-1 extra channel round-trips.
+    /// Returns one `bool` per input pair in the same order.
+    pub async fn batch_check_subsumptions(
+        &self,
+        pairs: Vec<(ClassExpression, ClassExpression)>,
+    ) -> Result<Vec<bool>> {
+        self.send(|r| actor::ReasoningRequest::BatchSubsumptionCheck { pairs, reply: r })
+            .await
+    }
+
     /// Check equivalence of two class expressions
     pub async fn is_equivalent_to(
         &self,
@@ -472,9 +485,19 @@ impl ReasoningService {
     /// Get object property assertions (for advanced query processing)
     pub fn get_object_property_assertions_sync(
         &self,
-        _property: &ObjectPropertyExpression,
+        property: &ObjectPropertyExpression,
     ) -> Result<Vec<(Individual, Individual)>> {
-        Ok(Vec::new())
+        let property = property.clone();
+        self.send_sync(|r| ReasoningRequest::GetObjectPropertyAssertionsSync { property, reply: r })
+    }
+
+    /// Get data property assertions (for advanced query processing)
+    pub fn get_data_property_assertions_sync(
+        &self,
+        property: &DataPropertyExpression,
+    ) -> Result<Vec<(Individual, crate::ontology::Literal)>> {
+        let property = property.clone();
+        self.send_sync(|r| ReasoningRequest::GetDataPropertyAssertionsSync { property, reply: r })
     }
 
     /// Create an incremental reasoning service wrapper

@@ -1,0 +1,13 @@
+{
+  "id": "diff_014_profiles_el_all",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff014#>)\nOntology(<http://example.org/diff014>\n  SubClassOf(:A :B)\n  SubClassOf(:B :C)\n)",
+  "base": "http://example.org/diff014#",
+  "axioms": { "min": 2 },
+  "expected": {
+    "consistent": true,
+    "subsumptions": [["A", "C"]],
+    "profiles": { "el": true, "ql": true, "rl": true, "dl": true, "full": true }
+  },
+  "rationale": "EL-conforming ontology: a plain SubClassOf chain conforms to EL, and since the chain uses only constructs shared by every profile, it conforms to QL, RL, DL and Full as well. Matches the W3C EL_Profile_001 / QL_Profile_001 / RL_Profile_001 conformance cases."
+}

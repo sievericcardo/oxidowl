@@ -60,6 +60,10 @@ pub enum RewritingError {
 
 impl QueryRewriter {
     /// Create a new query rewriter
+    ///
+    /// # Panics
+    ///
+    /// Panics if the hardcoded cache capacity constant is zero.
     pub fn new(ontology: Arc<Ontology>) -> Result<Self, RewritingError> {
         let ql_validator = QLValidator::new();
         let tbox_index = Self::build_tbox_index(&ontology)?;

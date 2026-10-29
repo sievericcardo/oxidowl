@@ -9,7 +9,7 @@ use crate::validation::shacl::{
     model::{ShaclMessage, ShaclSeverity, SparqlConstraint},
     paths::term_to_sparql,
     report::ShaclValidationResult,
-    vocabulary::*,
+    vocabulary::SH_SPARQL_CONSTRAINT_COMPONENT,
 };
 
 /// Evaluate a `sh:sparql` constraint against `focus_node`.

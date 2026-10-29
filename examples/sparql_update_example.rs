@@ -39,29 +39,29 @@ async fn main() -> Result<()> {
     "#;
 
     let result = reasoner.execute_sparql_query(insert_query)?;
-    println!("Insert result: {}\n", result);
+    println!("Insert result: {result}\n");
 
     // Query to verify insertion
     println!("3. Verifying inserted data with SELECT query...\n");
-    let select_query = r#"
+    let select_query = r"
         SELECT ?person WHERE {
             ?person <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/Person>
         }
-    "#;
+    ";
 
     let query_result = reasoner.execute_sparql_query(select_query)?;
-    println!("Query result: {}\n", query_result);
+    println!("Query result: {query_result}\n");
 
     // INSERT more data
     println!("4. Inserting object property assertion...\n");
-    let insert_property = r#"
+    let insert_property = r"
         INSERT DATA {
             <http://example.org/John> <http://example.org/knows> <http://example.org/Mary>
         }
-    "#;
+    ";
 
     let result = reasoner.execute_sparql_query(insert_property)?;
-    println!("Insert result: {}\n", result);
+    println!("Insert result: {result}\n");
 
     // DELETE DATA - Remove a triple
     println!("5. Deleting a triple using DELETE DATA...\n");
@@ -72,18 +72,18 @@ async fn main() -> Result<()> {
     "#;
 
     let result = reasoner.execute_sparql_query(delete_query)?;
-    println!("Delete result: {}\n", result);
+    println!("Delete result: {result}\n");
 
     // Query again to verify deletion
     println!("6. Verifying deletion with SELECT query...\n");
-    let verify_query = r#"
+    let verify_query = r"
         SELECT ?s ?p ?o WHERE {
             ?s ?p ?o
         }
-    "#;
+    ";
 
     let final_result = reasoner.execute_sparql_query(verify_query)?;
-    println!("Final query result: {}\n", final_result);
+    println!("Final query result: {final_result}\n");
 
     println!("\n=== SPARQL UPDATE Example Complete ===");
 

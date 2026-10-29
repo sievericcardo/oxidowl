@@ -7,7 +7,8 @@ use oxidowl::ontology::concepts::Class;
 use oxidowl::ontology::{ClassExpression, IRI, Ontology};
 use oxidowl::query::advanced::execution_engine::{ExecutionConstraints, ExecutionPriority};
 use oxidowl::query::advanced::{
-    AdvancedExecutionConfig, AdvancedExecutionEngine, ConjunctiveQuery, QueryAtom, QueryVariable,
+    AdvancedExecutionConfig, AdvancedExecutionEngine, AdvancedQueryError, ConjunctiveQuery,
+    QueryAtom, QueryVariable,
 };
 use oxidowl::reasoning::ReasoningService;
 use std::sync::Arc;
@@ -26,9 +27,9 @@ fn default_constraints() -> ExecutionConstraints {
 /// Helper: Create a test ontology
 fn create_test_onto(name: &str, size: usize) -> Ontology {
     let mut ontology = Ontology::new();
-    ontology.set_iri(IRI::new(&format!("http://test.org/{}", name)));
+    ontology.set_iri(IRI::new(&format!("http://test.org/{name}")));
     for i in 0..size {
-        let class_iri = IRI::new(&format!("http://test.org/{}#C{}", name, i));
+        let class_iri = IRI::new(&format!("http://test.org/{name}#C{i}"));
         ontology.add_class(Class::new(class_iri));
     }
     ontology
@@ -41,8 +42,7 @@ fn simple_query(var: &str, class: &str) -> ConjunctiveQuery {
         body_atoms: vec![QueryAtom::ClassAtom {
             variable: QueryVariable::new(var.to_string()),
             class_expression: ClassExpression::class(IRI::new(&format!(
-                "http://test.org/#{}",
-                class
+                "http://test.org/#{class}"
             ))),
         }],
         constraints: Default::default(),
@@ -50,7 +50,7 @@ fn simple_query(var: &str, class: &str) -> ConjunctiveQuery {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_ml_engine_creation() {
     println!("\n=== Test: ML Engine Creation ===");
 
@@ -71,7 +71,7 @@ async fn test_ml_engine_creation() {
     println!("✓ ML-enabled engine created successfully");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_ml_vs_legacy_execution() {
     println!("\n=== Test: ML vs Legacy Execution ===");
 
@@ -106,7 +106,7 @@ async fn test_ml_vs_legacy_execution() {
     println!("✓ Configuration variations work correctly");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_query_execution_basic() {
     println!("\n=== Test: Basic Query Execution ===");
 
@@ -137,13 +137,20 @@ async fn test_query_execution_basic() {
             assert!(!query_result.metadata.strategy_used.is_empty());
         }
         Err(e) => {
-            println!("Query execution handled error: {:?}", e);
-            assert!(true, "Error handling works");
+            // No execution strategies are registered yet, so execution is
+            // expected to fail deterministically with a "strategy not found"
+            // internal error rather than panic or return a wrong result.
+            println!("Query execution handled error: {e:?}");
+            assert!(matches!(
+                e,
+                AdvancedQueryError::InternalError(ref msg)
+                    if msg.contains("Execution strategy not found")
+            ));
         }
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_concurrent_queries() {
     println!("\n=== Test: Concurrent Query Execution ===");
 
@@ -162,35 +169,41 @@ async fn test_concurrent_queries() {
             .expect("Engine creation failed"),
     );
 
-    // Spawn 4 concurrent tasks
+    // Spawn 4 concurrent tasks, capturing each result.
     let mut handles = vec![];
     for thread_id in 0..4usize {
         let engine_clone = engine.clone();
         let handle = tokio::task::spawn(async move {
-            let query = simple_query("var", &format!("Class{}", thread_id));
+            let query = simple_query("var", &format!("Class{thread_id}"));
             let constraints = default_constraints();
-            engine_clone
-                .execute_query(&query, constraints)
-                .await
-                .is_ok()
+            engine_clone.execute_query(&query, constraints).await
         });
         handles.push(handle);
     }
 
-    // Wait for tasks
-    let mut success_count = 0;
+    // Wait for tasks; every task must complete without panic and return the
+    // deterministic "strategy not found" error (no strategies are registered).
     for handle in handles {
-        if handle.await.expect("Task panicked") {
-            success_count += 1;
+        let result = handle.await.expect("Task panicked");
+        match result {
+            Ok(query_result) => {
+                assert!(!query_result.metadata.strategy_used.is_empty());
+            }
+            Err(e) => assert!(
+                matches!(
+                    e,
+                    AdvancedQueryError::InternalError(ref msg)
+                        if msg.contains("Execution strategy not found")
+                ),
+                "Unexpected error: {e:?}"
+            ),
         }
     }
 
-    println!("✓ Concurrent execution completed");
-    println!("  Success: {}/4 tasks", success_count);
-    assert!(true, "Concurrent execution completed without deadlocks");
+    println!("✓ Concurrent execution completed without deadlocks");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_multiple_query_execution() {
     println!("\n=== Test: Multiple Query Executions ===");
 
@@ -207,22 +220,33 @@ async fn test_multiple_query_execution() {
     let engine = AdvancedExecutionEngine::new(ontology_arc, reasoning, config)
         .expect("Engine creation failed");
 
-    // Execute 10 queries
+    // Execute 10 queries, each must complete and return either a successful
+    // result or the specific "strategy not found" error.
     let mut successful = 0;
     for i in 0..10 {
-        let query = simple_query("x", &format!("Type{}", i));
+        let query = simple_query("x", &format!("Type{i}"));
         let constraints = default_constraints();
-        let result = engine.execute_query(&query, constraints).await;
-        if result.is_ok() {
-            successful += 1;
+        match engine.execute_query(&query, constraints).await {
+            Ok(result) => {
+                successful += 1;
+                assert!(!result.metadata.strategy_used.is_empty());
+            }
+            Err(e) => assert!(
+                matches!(
+                    e,
+                    AdvancedQueryError::InternalError(ref msg)
+                        if msg.contains("Execution strategy not found")
+                ),
+                "Unexpected error: {e:?}"
+            ),
         }
     }
 
-    println!("✓ Executed 10 queries: {} successful", successful);
-    assert!(true, "Multiple queries completed");
+    println!("✓ Executed 10 queries: {successful} successful");
+    assert!(successful <= 10, "Sanity check on success count");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_performance_measurement() {
     println!("\n=== Test: Performance Measurement ===");
 
@@ -246,14 +270,14 @@ async fn test_performance_measurement() {
     let _ = engine.execute_query(&query, constraints).await;
     let duration = start.elapsed();
 
-    println!("✓ Query execution time: {:?}", duration);
+    println!("✓ Query execution time: {duration:?}");
     assert!(
         duration < Duration::from_secs(10),
         "Query should complete in reasonable time"
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_error_handling() {
     println!("\n=== Test: Error Handling ===");
 
@@ -279,10 +303,21 @@ async fn test_error_handling() {
     };
 
     let constraints = default_constraints();
-    let _ = engine.execute_query(&empty_query, constraints).await;
+    let result = engine.execute_query(&empty_query, constraints).await;
 
+    // The engine must reject an empty query with a specific InvalidQuery error
+    // rather than panic or silently return an empty result.
     println!("✓ Error handling completed without panicking");
-    assert!(true, "Engine handles errors gracefully");
+    match result {
+        Ok(r) => assert!(
+            r.bindings.is_empty(),
+            "Empty query should yield no bindings"
+        ),
+        Err(e) => assert!(
+            matches!(e, AdvancedQueryError::InvalidQuery(ref msg) if msg.contains("no body atoms")),
+            "Unexpected error: {e:?}"
+        ),
+    }
 }
 
 #[test]

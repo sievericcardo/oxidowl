@@ -4,23 +4,23 @@ use std::hint::black_box;
 
 fn generate_test_ontology(num_classes: usize) -> String {
     let mut content = String::from(
-        r#"Prefix(:=<http://example.org/>)
+        r"Prefix(:=<http://example.org/>)
 Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
 Ontology(<http://example.org/test>
-"#,
+",
     );
 
     // Add class declarations
     for i in 0..num_classes {
-        content.push_str(&format!("    Declaration(Class(:Class{}))\n", i));
+        content.push_str(&format!("    Declaration(Class(:Class{i}))\n"));
     }
 
     // Add subclass axioms
     for i in 0..num_classes {
-        content.push_str(&format!("    SubClassOf(:Class{} owl:Thing)\n", i));
+        content.push_str(&format!("    SubClassOf(:Class{i} owl:Thing)\n"));
     }
 
-    content.push_str(")");
+    content.push(')');
     content
 }
 
@@ -63,7 +63,7 @@ fn benchmark_keyword_lookup(c: &mut Criterion) {
     let mut group = c.benchmark_group("keyword_lookup");
 
     // Create ontologies with increasing numbers of class references
-    for size in [10, 50, 100].iter() {
+    for size in &[10, 50, 100] {
         let ontology = generate_test_ontology(*size);
 
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, _| {
@@ -78,7 +78,7 @@ fn benchmark_keyword_lookup(c: &mut Criterion) {
 fn benchmark_tokenization(c: &mut Criterion) {
     let mut group = c.benchmark_group("tokenization");
 
-    for size in [10, 50, 100].iter() {
+    for size in &[10, 50, 100] {
         let ontology = generate_test_ontology(*size);
 
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, _| {
@@ -91,7 +91,7 @@ fn benchmark_tokenization(c: &mut Criterion) {
 }
 
 fn benchmark_swrl_parsing(c: &mut Criterion) {
-    let swrl_content = r#"Prefix(:=<http://example.org/>)
+    let swrl_content = r"Prefix(:=<http://example.org/>)
 Prefix(swrl:=<http://www.w3.org/2003/11/swrl#>)
 Ontology(<http://example.org/test>
     DLSafeRule(
@@ -107,7 +107,7 @@ Ontology(<http://example.org/test>
         Body(ClassAtom(:Student Variable(:x)))
         Head(ClassAtom(:Person Variable(:x)))
     )
-)"#;
+)";
 
     c.bench_function("swrl_parsing", |b| {
         let parser = FunctionalParser::new();

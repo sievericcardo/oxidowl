@@ -1,0 +1,11 @@
+{
+  "id": "diff_019_ore_ont_10009",
+  "source": "Path",
+  "ontology": "ontologies-test/ore_ont_10009.owl",
+  "base": "http://purl.obolibrary.org/obo/",
+  "axioms": { "min": 100 },
+  "expected": {
+    "consistent": true
+  },
+  "rationale": "ORE-2015 ontology ore_ont_10009.owl (CMO clinical-measurement ontology, EL approximation). ORE-2015 ontologies are known-consistent benchmark inputs (they are the working-set reasoners are scored on); HermiT and Konclude both report them consistent. Verdict kept conservative — consistency only — because hand-authoring the exact ORE classification is not tractable; the harness at least guards the load + axiom count + consistency surface."
+}

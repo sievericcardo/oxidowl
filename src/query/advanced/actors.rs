@@ -43,30 +43,6 @@ fn map_strategy_name(name: &str) -> MLExecutionStrategy {
     }
 }
 
-fn make_test_ontology() -> Arc<crate::ontology::Ontology> {
-    use crate::ontology::*;
-    let mut onto = Ontology::new();
-    let person_class = Class {
-        iri: IRI::new("http://test.org/Person"),
-    };
-    let animal_class = Class {
-        iri: IRI::new("http://test.org/Animal"),
-    };
-    onto.add_class(person_class.clone());
-    onto.add_class(animal_class.clone());
-    onto.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
-        id: 0,
-        subclass: ClassExpression::Class(person_class),
-        superclass: ClassExpression::Class(animal_class),
-        annotations: Vec::new(),
-    }));
-    let knows_prop = ObjectProperty {
-        iri: IRI::new("http://test.org/knows"),
-    };
-    onto.add_object_property(knows_prop);
-    Arc::new(onto)
-}
-
 // ─── OptimizerActor ──────────────────────────────────────────────────────────
 
 /// Messages processed by the `OptimizerActor`.
@@ -108,9 +84,12 @@ pub struct OptimizerHandle {
 
 impl OptimizerHandle {
     /// Spawn the actor task and return a handle.
+    #[must_use]
     pub fn spawn(
         optimizer: CostBasedOptimizer,
         strategy_selector: ExecutionStrategySelector,
+        ontology: Arc<Ontology>,
+        reasoning_service: Arc<ReasoningService>,
     ) -> Self {
         let (tx, mut rx) = mpsc::channel::<OptimizerMsg>(64);
         tokio::spawn(async move {
@@ -130,22 +109,10 @@ impl OptimizerHandle {
                             let _ = reply.send(res);
                         }
                         Some(OptimizerMsg::ExecuteSequential { query, strategy, constraints, reply }) => {
-                            let test_ontology = make_test_ontology();
                             let result = (|| -> Result<ConjunctiveQueryResult, AdvancedQueryError> {
-                                let rs = Arc::new(
-                                    ReasoningService::new(
-                                        (*test_ontology).clone(),
-                                        Default::default(),
-                                    )
-                                    .map_err(|e| {
-                                        AdvancedQueryError::InternalError(format!(
-                                            "Failed to create reasoning service: {e}"
-                                        ))
-                                    })?,
-                                );
                                 let context = ExecutionContext {
-                                    ontology: test_ontology.clone(),
-                                    reasoning_service: rs,
+                                    ontology: ontology.clone(),
+                                    reasoning_service: reasoning_service.clone(),
                                     available_indices: Vec::new(),
                                     constraints,
                                     cache: Arc::new(RwLock::new(
@@ -270,6 +237,7 @@ pub struct MLStrategyHandle {
 
 impl MLStrategyHandle {
     /// Spawn the actor task and return a handle.
+    #[must_use]
     pub fn spawn(ml_engine: MLEngine) -> Self {
         let (tx, mut rx) = mpsc::channel::<MLMsg>(64);
         tokio::spawn(async move {
@@ -389,6 +357,7 @@ pub struct MonitorHandle {
 
 impl MonitorHandle {
     /// Spawn the actor task and return a handle.
+    #[must_use]
     pub fn spawn(monitor: ExecutionPerformanceMonitor) -> Self {
         let (tx, mut rx) = mpsc::unbounded_channel::<MonitorMsg>();
         tokio::spawn(async move {
@@ -469,6 +438,7 @@ pub struct TaskCoordinatorHandle {
 
 impl TaskCoordinatorHandle {
     /// Spawn the actor task and return a handle.
+    #[must_use]
     pub fn spawn(
         thread_pool: ThreadPool,
         resource_manager: ResourceManager,
@@ -476,9 +446,9 @@ impl TaskCoordinatorHandle {
     ) -> Self {
         let (tx, mut rx) = mpsc::channel::<TaskCoordinatorMsg>(256);
         tokio::spawn(async move {
-            let _thread_pool = thread_pool;
-            let _resource_manager = resource_manager;
-            let _config = config;
+            // Hold these for the actor's lifetime; they are intentionally not
+            // otherwise used and are dropped when the task ends.
+            let keepalive = (thread_pool, resource_manager, config);
             let mut work_queue: VecDeque<ParallelTask> = VecDeque::new();
             let mut active_tasks: HashMap<TaskId, TaskStatus> = HashMap::new();
             loop {
@@ -505,6 +475,7 @@ impl TaskCoordinatorHandle {
                     }
                 }
             }
+            drop(keepalive);
         });
         Self { tx }
     }

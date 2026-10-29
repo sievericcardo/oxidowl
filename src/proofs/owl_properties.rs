@@ -10,6 +10,8 @@
 //! - [`ObjectProperty`] top/bottom distinctness.
 //! - [`DataPropertyCharacteristics`]: functional flag round-trip.
 
+#![cfg(kani)]
+
 use crate::ontology::ObjectProperty;
 use crate::ontology::properties::{DataPropertyCharacteristics, ObjectPropertyCharacteristics};
 

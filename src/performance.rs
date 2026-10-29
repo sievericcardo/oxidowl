@@ -11,6 +11,195 @@ use crate::core::lock_helpers::{read_lock, write_lock};
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
+/// Bytes in one megabyte (the unit of `reasoning.max_memory_mb`).
+const BYTES_PER_MB: usize = 1024 * 1024;
+
+/// Sample the current process' resident set size (RSS) in bytes.
+///
+/// Best-effort, cheap sampler shared by [`MemoryTracker`] and [`MemoryGuard`]:
+/// - Linux: `VmRSS` from `/proc/self/status` (one small file read)
+/// - macOS: `ps -o rss=<pid>` (one short-lived process; gated by
+///   [`MemoryGuard`]'s check interval so it never runs per iteration)
+/// - Windows: `GetProcessMemoryInfo` working set
+/// - other platforms: `None` (caller cannot enforce a limit)
+///
+/// Returns `None` when the platform is unsupported *or* the sample fails, so
+/// callers treat "unknown" as "do not enforce" instead of guessing.
+pub(crate) fn current_rss_bytes() -> Option<usize> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::fs;
+
+        let status = fs::read_to_string("/proc/self/status").ok()?;
+        for line in status.lines() {
+            if line.starts_with("VmRSS:") {
+                let kb = line.split_whitespace().nth(1)?.parse::<usize>().ok()?;
+                return Some(kb * 1024); // KB -> bytes
+            }
+        }
+        None
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        let output = Command::new("ps")
+            .args(["-o", "rss=", "-p"])
+            .arg(std::process::id().to_string())
+            .output()
+            .ok()?;
+        let output_str = String::from_utf8(output.stdout).ok()?;
+        let kb = output_str.trim().parse::<usize>().ok()?;
+        Some(kb * 1024) // KB -> bytes
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::System::ProcessStatus::{
+            GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX,
+        };
+        use windows::Win32::System::Threading::GetCurrentProcess;
+
+        unsafe {
+            let process = GetCurrentProcess();
+            let mut pmc: PROCESS_MEMORY_COUNTERS_EX = std::mem::zeroed();
+            pmc.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32;
+
+            if GetProcessMemoryInfo(
+                process,
+                &mut pmc as *mut _ as *mut _,
+                std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
+            )
+            .is_ok()
+            {
+                return Some(pmc.WorkingSetSize);
+            }
+        }
+        None
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        None
+    }
+}
+
+/// In-process memory guard backed by the [`current_rss_bytes`] sampler.
+///
+/// Enforces `reasoning.max_memory_mb` from *inside* the hot reasoning loops so
+/// a pathological ontology aborts with a clear [`crate::Error`] instead of
+/// being OOM-killed by the OS (or taking the host down).
+///
+/// Semantics:
+/// - `limit_bytes = None` or `Some(0)` → **unlimited**: `check()` returns
+///   `Ok(())` immediately and never samples.
+/// - otherwise RSS is sampled at most once per `check_interval` (default
+///   300 ms); between samples `check()` is a single `Instant::elapsed()` call,
+///   so calling it every loop iteration is cheap.
+/// - when a sample shows `rss > limit_bytes`, `check()` returns
+///   `Error::reasoning("Memory limit exceeded: …")`.
+/// - when the platform cannot report RSS (`current_rss_bytes() == None`) the
+///   guard stays silent (`Ok`) — an unenforceable limit is not an error.
+///
+/// The guard is intentionally *not* `Sync`-shared: each loop owns its own
+/// instance (no lock traffic, no borrow churn).
+#[derive(Debug, Clone)]
+pub struct MemoryGuard {
+    /// Cap in bytes (`None`/`Some(0)` = unlimited, never enforced).
+    limit_bytes: Option<usize>,
+    /// Minimum time between RSS samples.
+    check_interval: Duration,
+    /// When RSS was last sampled; `None` = never sampled yet (the very first
+    /// `check()` always samples so a tiny limit aborts immediately).
+    last_check: Option<Instant>,
+    /// Number of RSS samples actually taken (diagnostics + gating tests).
+    samples: u64,
+}
+
+impl MemoryGuard {
+    /// Guard with the default check interval (300 ms).
+    #[must_use]
+    pub fn new(limit_bytes: Option<usize>) -> Self {
+        Self::with_interval(limit_bytes, Duration::from_millis(300))
+    }
+
+    /// Guard with an explicit check interval (used by tests).
+    #[must_use]
+    pub fn with_interval(limit_bytes: Option<usize>, check_interval: Duration) -> Self {
+        Self {
+            limit_bytes,
+            check_interval,
+            last_check: None,
+            samples: 0,
+        }
+    }
+
+    /// Build the guard that enforces `reasoning.max_memory_mb`.
+    ///
+    /// `None` and `Some(0)` both mean unlimited (`Some(0)` is normalised to
+    /// `None` so the semantics are visible in `Debug` output).
+    #[must_use]
+    pub fn from_max_memory_mb(max_memory_mb: Option<u64>) -> Self {
+        let limit_bytes = max_memory_mb
+            .filter(|&mb| mb > 0)
+            .map(|mb| (mb as usize).saturating_mul(BYTES_PER_MB));
+        Self::new(limit_bytes)
+    }
+
+    /// Whether this guard actually enforces a limit.
+    #[must_use]
+    pub fn is_enforced(&self) -> bool {
+        self.limit_bytes.unwrap_or(0) > 0
+    }
+
+    /// Number of RSS samples taken so far (interval gating observable in tests).
+    #[must_use]
+    pub fn samples(&self) -> u64 {
+        self.samples
+    }
+
+    /// Enforce the memory limit: sample RSS (at most once per interval) and
+    /// fail with a clear message when the process exceeds `limit_bytes`.
+    pub fn check(&mut self) -> Result<()> {
+        // None / 0 = unlimited: never sample, never error.
+        let Some(limit) = self.limit_bytes.filter(|&l| l > 0) else {
+            return Ok(());
+        };
+
+        // Interval gate: between samples this is one `Instant::elapsed()`.
+        if let Some(last) = self.last_check
+            && last.elapsed() < self.check_interval
+        {
+            return Ok(());
+        }
+        self.last_check = Some(Instant::now());
+        self.samples += 1;
+
+        // Unknown RSS (unsupported platform / failed sample) => cannot enforce.
+        let Some(rss) = current_rss_bytes() else {
+            return Ok(());
+        };
+
+        if rss > limit {
+            return Err(crate::Error::reasoning(format!(
+                "{}: RSS {} MB > max_memory_mb {} MB (raise reasoning.max_memory_mb or reduce ontology scope)",
+                crate::error::MEMORY_LIMIT_MESSAGE_PREFIX,
+                rss / BYTES_PER_MB,
+                limit / BYTES_PER_MB,
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl Default for MemoryGuard {
+    /// Unlimited guard (the safe default when no limit is configured).
+    fn default() -> Self {
+        Self::new(None)
+    }
+}
+
 /// Memory usage snapshot
 #[derive(Debug, Clone)]
 pub struct MemorySnapshot {
@@ -88,72 +277,12 @@ impl MemoryTracker {
         Ok(snapshot)
     }
 
-    /// Get heap allocated memory in bytes
-    #[cfg(target_os = "linux")]
+    /// Get heap allocated memory in bytes (process RSS; `0` when unknown).
+    ///
+    /// Thin wrapper over [`current_rss_bytes`] kept for the existing
+    /// `MemoryTracker::snapshot` call sites.
     fn get_heap_allocated() -> usize {
-        use std::fs;
-
-        // Read from /proc/self/status
-        if let Ok(status) = fs::read_to_string("/proc/self/status") {
-            for line in status.lines() {
-                if line.starts_with("VmRSS:") {
-                    if let Some(value) = line.split_whitespace().nth(1) {
-                        if let Ok(kb) = value.parse::<usize>() {
-                            return kb * 1024; // Convert KB to bytes
-                        }
-                    }
-                }
-            }
-        }
-        0
-    }
-
-    #[cfg(target_os = "macos")]
-    fn get_heap_allocated() -> usize {
-        use std::process::Command;
-
-        // Use ps command to get memory usage
-        if let Ok(output) = Command::new("ps")
-            .args(["-o", "rss=", "-p"])
-            .arg(std::process::id().to_string())
-            .output()
-            && let Ok(output_str) = String::from_utf8(output.stdout)
-            && let Ok(kb) = output_str.trim().parse::<usize>()
-        {
-            return kb * 1024; // Convert KB to bytes
-        }
-        0
-    }
-
-    #[cfg(target_os = "windows")]
-    fn get_heap_allocated() -> usize {
-        use windows::Win32::System::ProcessStatus::{
-            GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX,
-        };
-        use windows::Win32::System::Threading::GetCurrentProcess;
-
-        unsafe {
-            let process = GetCurrentProcess();
-            let mut pmc: PROCESS_MEMORY_COUNTERS_EX = std::mem::zeroed();
-            pmc.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32;
-
-            if GetProcessMemoryInfo(
-                process,
-                &mut pmc as *mut _ as *mut _,
-                std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
-            )
-            .is_ok()
-            {
-                return pmc.WorkingSetSize;
-            }
-        }
-
-        0
-    }
-
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    fn get_heap_allocated() -> usize {
-        0
+        current_rss_bytes().unwrap_or(0)
     }
 
     /// Get system available memory in bytes
@@ -246,29 +375,23 @@ impl MemoryTracker {
         let cache_sizes: Vec<usize> = snapshots.iter().map(|s| s.cache_size).collect();
 
         Ok(MemoryStats {
-            current_total_mb: snapshots
-                .last()
-                .map(MemorySnapshot::total_used_mb)
-                .unwrap_or(0.0),
+            current_total_mb: snapshots.last().map_or(0.0, MemorySnapshot::total_used_mb),
             peak_total_mb: total_used.iter().max().copied().unwrap_or(0) as f64 / (1024.0 * 1024.0),
             avg_total_mb: (total_used.iter().sum::<usize>() as f64 / total_used.len() as f64)
                 / (1024.0 * 1024.0),
             current_heap_mb: snapshots
                 .last()
-                .map(|s| s.heap_allocated as f64 / (1024.0 * 1024.0))
-                .unwrap_or(0.0),
+                .map_or(0.0, |s| s.heap_allocated as f64 / (1024.0 * 1024.0)),
             peak_heap_mb: heap_allocated.iter().max().copied().unwrap_or(0) as f64
                 / (1024.0 * 1024.0),
             current_cache_mb: snapshots
                 .last()
-                .map(|s| s.cache_size as f64 / (1024.0 * 1024.0))
-                .unwrap_or(0.0),
+                .map_or(0.0, |s| s.cache_size as f64 / (1024.0 * 1024.0)),
             peak_cache_mb: cache_sizes.iter().max().copied().unwrap_or(0) as f64
                 / (1024.0 * 1024.0),
             system_available_mb: snapshots
                 .last()
-                .map(MemorySnapshot::system_available_mb)
-                .unwrap_or(0.0),
+                .map_or(0.0, MemorySnapshot::system_available_mb),
         })
     }
 
@@ -422,13 +545,11 @@ impl QueryProfiler {
             slowest_query_ms: total_durations
                 .iter()
                 .max()
-                .map(|d| d.as_millis() as f64)
-                .unwrap_or(0.0),
+                .map_or(0.0, |d| d.as_millis() as f64),
             fastest_query_ms: total_durations
                 .iter()
                 .min()
-                .map(|d| d.as_millis() as f64)
-                .unwrap_or(0.0),
+                .map_or(0.0, |d| d.as_millis() as f64),
             total_atoms_evaluated: timings.iter().map(|t| t.atoms_evaluated).sum(),
             total_joins_performed: timings.iter().map(|t| t.joins_performed).sum(),
         })
@@ -607,6 +728,140 @@ impl PerformanceReport {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 5.4 — Pre-warmed reasoning context
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Pre-warmed reasoning context for zero-latency server-mode queries.
+///
+/// `WarmContext::new()` eagerly classifies the ontology and builds reverse
+/// indexes for O(1) subclass lookups. All `query_*` methods operate on the
+/// cached in-memory structures without actor round-trips.
+pub struct WarmContext {
+    service: std::sync::Arc<crate::reasoning::ReasoningService>,
+    /// Forward: class → direct/indirect superclasses
+    classification: std::sync::Arc<crate::reasoning::ClassificationResult>,
+    /// Reverse: class → all subclasses (built from the forward index)
+    subclass_index: std::collections::HashMap<
+        crate::ontology::ClassExpression,
+        std::collections::HashSet<crate::ontology::ClassExpression>,
+    >,
+    /// When this context was warmed
+    warmed_at: Instant,
+}
+
+impl WarmContext {
+    /// Warm the context — classifies the ontology and builds all indexes.
+    ///
+    /// This is the expensive call; all subsequent `query_*` methods are O(1).
+    pub async fn new(
+        service: std::sync::Arc<crate::reasoning::ReasoningService>,
+    ) -> crate::Result<Self> {
+        let start = Instant::now();
+        let classification = std::sync::Arc::new(service.classify().await?);
+
+        // Build reverse subclass index from the forward superclass hierarchy.
+        let mut subclass_index: std::collections::HashMap<
+            crate::ontology::ClassExpression,
+            std::collections::HashSet<crate::ontology::ClassExpression>,
+        > = std::collections::HashMap::new();
+        for (subclass, superclasses) in &classification.hierarchy {
+            for superclass in superclasses {
+                subclass_index
+                    .entry(superclass.clone())
+                    .or_default()
+                    .insert(subclass.clone());
+            }
+        }
+
+        log::info!(
+            "WarmContext: warmed in {:?} ({} classes indexed)",
+            start.elapsed(),
+            classification.hierarchy.len()
+        );
+
+        Ok(Self {
+            service,
+            classification,
+            subclass_index,
+            warmed_at: start,
+        })
+    }
+
+    /// Get all superclasses of a class (O(1) lookup).
+    #[must_use]
+    pub fn get_superclasses(
+        &self,
+        class: &crate::ontology::ClassExpression,
+    ) -> &std::collections::HashSet<crate::ontology::ClassExpression> {
+        static EMPTY: std::sync::LazyLock<
+            std::collections::HashSet<crate::ontology::ClassExpression>,
+        > = std::sync::LazyLock::new(std::collections::HashSet::new);
+        self.classification.hierarchy.get(class).unwrap_or(&*EMPTY)
+    }
+
+    /// Get all subclasses of a class (O(1) lookup via reverse index).
+    #[must_use]
+    pub fn get_subclasses(
+        &self,
+        class: &crate::ontology::ClassExpression,
+    ) -> &std::collections::HashSet<crate::ontology::ClassExpression> {
+        static EMPTY: std::sync::LazyLock<
+            std::collections::HashSet<crate::ontology::ClassExpression>,
+        > = std::sync::LazyLock::new(std::collections::HashSet::new);
+        self.subclass_index.get(class).unwrap_or(&*EMPTY)
+    }
+
+    /// Check if `subclass ⊑ superclass` (O(1) lookup).
+    #[must_use]
+    pub fn is_subsumed_by(
+        &self,
+        subclass: &crate::ontology::ClassExpression,
+        superclass: &crate::ontology::ClassExpression,
+    ) -> bool {
+        if subclass == superclass {
+            return true;
+        }
+        self.get_superclasses(subclass).contains(superclass)
+    }
+
+    /// Get the full classification result.
+    #[must_use]
+    pub fn classification(&self) -> &crate::reasoning::ClassificationResult {
+        &self.classification
+    }
+
+    /// Get the age of this warm context.
+    #[must_use]
+    pub fn age(&self) -> Duration {
+        self.warmed_at.elapsed()
+    }
+
+    /// Re-warm — re-classify and rebuild all indexes.
+    ///
+    /// Call this after ontology mutations to keep the cached indexes
+    /// consistent with the current ontology state.
+    pub async fn re_warm(&mut self) -> crate::Result<()> {
+        *self = Self::new(std::sync::Arc::clone(&self.service)).await?;
+        Ok(())
+    }
+
+    /// Delegate queries to the underlying service (for queries not served by the warm cache).
+    #[must_use]
+    pub fn service(&self) -> &std::sync::Arc<crate::reasoning::ReasoningService> {
+        &self.service
+    }
+}
+
+impl std::fmt::Debug for WarmContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WarmContext")
+            .field("class_count", &self.classification.hierarchy.len())
+            .field("age_secs", &self.warmed_at.elapsed().as_secs())
+            .finish_non_exhaustive()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -768,5 +1023,105 @@ mod tests {
         assert!(formatted.contains("Performance Report"));
         assert!(formatted.contains("15.00 MB"));
         assert!(formatted.contains("100"));
+    }
+
+    // ── MemoryGuard ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn current_rss_bytes_is_plausible_when_available() {
+        // Supported platforms (Linux/macOS/Windows) must report a non-zero RSS;
+        // anywhere else the sampler is documented to return None.
+        if let Some(rss) = current_rss_bytes() {
+            assert!(rss > 0, "RSS sample must be positive, got {rss}");
+            assert!(
+                rss > 1024 * 1024,
+                "a running Rust test process must use > 1 MB, got {rss} bytes"
+            );
+        }
+    }
+
+    #[test]
+    fn memory_guard_tiny_limit_errors() {
+        // 1 byte: any real process RSS exceeds it, so the first check fails.
+        let mut guard = MemoryGuard::new(Some(1));
+        let err = guard
+            .check()
+            .expect_err("1-byte limit must abort with an error");
+        let msg = err.to_string();
+        assert!(
+            msg.contains(crate::error::MEMORY_LIMIT_MESSAGE_PREFIX),
+            "error must start from the shared memory-limit prefix, got: {msg}"
+        );
+        assert!(
+            msg.contains("max_memory_mb"),
+            "error must mention the config knob, got: {msg}"
+        );
+        assert_eq!(guard.samples(), 1);
+    }
+
+    #[test]
+    fn memory_guard_some_one_mb_errors_on_any_real_process() {
+        // `max_memory_mb = 1` (the integration-test scenario): RSS of a live
+        // process is always > 1 MB, so this must be a graceful Err, not a kill.
+        let mut guard = MemoryGuard::from_max_memory_mb(Some(1));
+        assert!(guard.is_enforced());
+        assert!(guard.check().is_err());
+    }
+
+    #[test]
+    fn memory_guard_unlimited_never_errors() {
+        // None = unlimited.
+        let mut unlimited = MemoryGuard::from_max_memory_mb(None);
+        assert!(!unlimited.is_enforced());
+        for _ in 0..100 {
+            unlimited.check().expect("None must never error");
+        }
+        assert_eq!(unlimited.samples(), 0, "unlimited guard must not sample");
+
+        // Some(0) = unlimited (normalised to None).
+        let mut zero = MemoryGuard::from_max_memory_mb(Some(0));
+        assert!(!zero.is_enforced());
+        for _ in 0..100 {
+            zero.check().expect("0 must never error");
+        }
+        assert_eq!(zero.samples(), 0, "0 MB guard must not sample");
+    }
+
+    #[test]
+    fn memory_guard_sane_limit_passes_on_this_process() {
+        // 1 TB: no test process reaches it, so checks must keep succeeding.
+        let mut guard = MemoryGuard::from_max_memory_mb(Some(1024 * 1024));
+        for _ in 0..10 {
+            guard.check().expect("sane limit must not error");
+        }
+    }
+
+    #[test]
+    fn memory_guard_interval_gates_sampling() {
+        let interval = Duration::from_millis(200);
+        let mut guard = MemoryGuard::with_interval(Some(1), interval);
+
+        // First check always samples (last_check starts as None).
+        assert!(guard.check().is_err());
+        assert_eq!(guard.samples(), 1);
+
+        // Within the interval: no new sample, no error (RSS is over the limit
+        // but the guard is gated).
+        for _ in 0..50 {
+            guard.check().expect("gated check must not re-sample");
+        }
+        assert_eq!(guard.samples(), 1, "sampling must be interval-gated");
+
+        // After the interval a fresh sample is taken (and fails again).
+        std::thread::sleep(interval + Duration::from_millis(50));
+        assert!(guard.check().is_err());
+        assert_eq!(guard.samples(), 2);
+    }
+
+    #[test]
+    fn memory_guard_default_is_unlimited() {
+        let guard = MemoryGuard::default();
+        assert!(!guard.is_enforced());
+        assert_eq!(guard.samples(), 0);
     }
 }

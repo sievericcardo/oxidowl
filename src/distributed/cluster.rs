@@ -237,17 +237,17 @@ pub struct ClusterStatistics {
 // ─── Actor message type ─────────────────────────────────────────────────────
 
 enum ClusterQueryMsg {
-    GetClusterState {
+    ClusterState {
         tx: oneshot::Sender<ClusterState>,
     },
-    GetNodeInfo {
+    NodeInfo {
         node_id: NodeId,
         tx: oneshot::Sender<Option<NodeInfo>>,
     },
-    GetActiveNodes {
+    ActiveNodes {
         tx: oneshot::Sender<Vec<NodeInfo>>,
     },
-    GetClusterHealth {
+    ClusterHealth {
         tx: oneshot::Sender<ClusterHealth>,
     },
 }
@@ -330,7 +330,7 @@ impl ClusterManager {
             let mut health_monitor = health_monitor;
             let mut discovery_service = discovery_service;
             let mut health_interval = interval(Duration::from_secs(30));
-            let mut discovery_interval = interval(Duration::from_secs(1 * 60));
+            let mut discovery_interval = interval(Duration::from_mins(1));
             // Consume the immediate first ticks so monitoring starts after the first period
             health_interval.tick().await;
             discovery_interval.tick().await;
@@ -379,13 +379,13 @@ impl ClusterManager {
     /// Handle a state query from the query channel
     fn handle_cluster_query(state: &ClusterState, msg: ClusterQueryMsg) {
         match msg {
-            ClusterQueryMsg::GetClusterState { tx } => {
+            ClusterQueryMsg::ClusterState { tx } => {
                 let _ = tx.send(state.clone());
             }
-            ClusterQueryMsg::GetNodeInfo { node_id, tx } => {
+            ClusterQueryMsg::NodeInfo { node_id, tx } => {
                 let _ = tx.send(state.nodes.get(&node_id).cloned());
             }
-            ClusterQueryMsg::GetActiveNodes { tx } => {
+            ClusterQueryMsg::ActiveNodes { tx } => {
                 let active: Vec<NodeInfo> = state
                     .nodes
                     .values()
@@ -394,7 +394,7 @@ impl ClusterManager {
                     .collect();
                 let _ = tx.send(active);
             }
-            ClusterQueryMsg::GetClusterHealth { tx } => {
+            ClusterQueryMsg::ClusterHealth { tx } => {
                 let _ = tx.send(state.health.clone());
             }
         }
@@ -543,7 +543,7 @@ impl ClusterManager {
     pub async fn get_cluster_state(&self) -> Result<ClusterState> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.query_tx
-            .send(ClusterQueryMsg::GetClusterState { tx: resp_tx })
+            .send(ClusterQueryMsg::ClusterState { tx: resp_tx })
             .await
             .map_err(|_| Error::Internal {
                 message: "ClusterManager actor is down".to_string(),
@@ -557,7 +557,7 @@ impl ClusterManager {
     pub async fn get_node_info(&self, node_id: NodeId) -> Result<Option<NodeInfo>> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.query_tx
-            .send(ClusterQueryMsg::GetNodeInfo {
+            .send(ClusterQueryMsg::NodeInfo {
                 node_id,
                 tx: resp_tx,
             })
@@ -574,7 +574,7 @@ impl ClusterManager {
     pub async fn get_active_nodes(&self) -> Result<Vec<NodeInfo>> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.query_tx
-            .send(ClusterQueryMsg::GetActiveNodes { tx: resp_tx })
+            .send(ClusterQueryMsg::ActiveNodes { tx: resp_tx })
             .await
             .map_err(|_| Error::Internal {
                 message: "ClusterManager actor is down".to_string(),
@@ -588,7 +588,7 @@ impl ClusterManager {
     pub async fn get_cluster_health(&self) -> Result<ClusterHealth> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.query_tx
-            .send(ClusterQueryMsg::GetClusterHealth { tx: resp_tx })
+            .send(ClusterQueryMsg::ClusterHealth { tx: resp_tx })
             .await
             .map_err(|_| Error::Internal {
                 message: "ClusterManager actor is down".to_string(),
@@ -625,7 +625,7 @@ impl HealthMonitor {
         })
     }
 
-    /// Start health monitoring (no-op — managed by ClusterManager actor)
+    /// Start health monitoring (no-op — managed by `ClusterManager` actor)
     pub async fn start(
         &mut self,
         _event_sender: mpsc::UnboundedSender<ClusterEvent>,
@@ -741,7 +741,7 @@ impl DiscoveryService {
 
         let config = self.config.clone();
         tokio::spawn(async move {
-            let mut interval = interval(Duration::from_secs(1 * 60)); // Discovery every minute
+            let mut interval = interval(Duration::from_mins(1)); // Discovery every minute
 
             loop {
                 tokio::select! {
@@ -788,9 +788,10 @@ impl DiscoveryService {
         _port: u16,
         _event_sender: &mpsc::UnboundedSender<ClusterEvent>,
     ) -> Result<()> {
-        // Multicast discovery implementation would go here
-        // For now, this is a placeholder
-        debug!("Multicast discovery not yet implemented");
+        // Multicast discovery: broadcast cluster join announcements on
+        // the local network segment and listen for responses from existing
+        // cluster members to bootstrap node discovery.
+        debug!("Multicast discovery deferred: requires UDP multicast socket");
         Ok(())
     }
 
@@ -899,7 +900,7 @@ mod tests {
         for i in 0..5 {
             let node_info = NodeInfo {
                 id: Uuid::new_v4(),
-                address: format!("127.0.0.1:808{}", i)
+                address: format!("127.0.0.1:808{i}")
                     .parse()
                     .expect("Failed to parse socket address for cluster node"),
                 capabilities: crate::distributed::NodeCapabilities::default(),

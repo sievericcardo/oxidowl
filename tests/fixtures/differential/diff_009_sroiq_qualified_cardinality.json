@@ -1,0 +1,14 @@
+{
+  "id": "diff_009_sroiq_qualified_cardinality",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff009#>)\nOntology(<http://example.org/diff009>\n  EquivalentClasses(:A ObjectMinCardinality(2 :r :B))\n  ClassAssertion(:A :x)\n)",
+  "base": "http://example.org/diff009#",
+  "axioms": { "min": 2 },
+  "expected": {
+    "consistent": true,
+    "satisfiable": { "A": true },
+    "instances": { "A": ["x"] },
+    "nonSubsumptions": [["A", "B"]]
+  },
+  "rationale": "A ≡ ≥2 r.B (qualified at-least cardinality, SROIQ). x is asserted in A. The class is satisfiable: two fresh r-successors in B can always be created. A ⊑ B is NOT entailed."
+}

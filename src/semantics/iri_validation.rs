@@ -351,7 +351,7 @@ mod tests {
         // Unicode should be percent-encoded
         let encoded = validator.to_uri("http://example.org/日本語");
         assert!(encoded.starts_with("http://example.org/"));
-        assert!(encoded.contains("%")); // Contains percent-encoded characters
+        assert!(encoded.contains('%')); // Contains percent-encoded characters
         assert!(!IriValidator::is_internationalized(&encoded)); // Result should be ASCII
     }
 

@@ -8,7 +8,7 @@ fn main() -> Result<()> {
 
     // Add some SubClassOf axioms
     for i in 0..20 {
-        let class_a = Class::new(IRI::new(&format!("http://example.org/Class{}", i)));
+        let class_a = Class::new(IRI::new(&format!("http://example.org/Class{i}")));
         let class_b = Class::new(IRI::new(&format!("http://example.org/Class{}", i + 1)));
         let expr_a = ClassExpression::Class(class_a);
         let expr_b = ClassExpression::Class(class_b);
@@ -45,11 +45,11 @@ fn main() -> Result<()> {
     }
 
     let elapsed = start.elapsed();
-    let avg_ms = elapsed.as_millis() as f64 / iterations as f64;
+    let avg_ms = elapsed.as_millis() as f64 / f64::from(iterations);
 
-    println!("Ran {} iterations", iterations);
-    println!("Total time: {:?}", elapsed);
-    println!("Average time per consistency check: {:.2} ms", avg_ms);
+    println!("Ran {iterations} iterations");
+    println!("Total time: {elapsed:?}");
+    println!("Average time per consistency check: {avg_ms:.2} ms");
     println!();
 
     if avg_ms < 10.0 {

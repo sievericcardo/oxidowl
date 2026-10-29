@@ -3,6 +3,28 @@
 //! This binary provides a command-line interface
 // supporting all major reasoning tasks and server modes.
 
+// Mirror the library keep-list: these lints encode intentional CLI/design
+// decisions and cannot be inherited from the library crate.
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::missing_errors_doc,
+    clippy::unnecessary_wraps,
+    clippy::unused_self,
+    clippy::unused_async,
+    clippy::match_same_arms,
+    clippy::format_push_string,
+    clippy::needless_pass_by_value,
+    clippy::struct_excessive_bools,
+    clippy::self_only_used_in_recursion,
+    clippy::ref_option,
+    clippy::inline_always,
+    clippy::struct_field_names,
+    clippy::too_many_lines, // complex domain logic (tableau/parsers); splitting these is high-risk
+    clippy::large_enum_variant
+)]
+
 use clap::{Parser, Subcommand, ValueEnum};
 use oxidowl::{
     Result,
@@ -16,11 +38,10 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 /// Options controlling what steps are performed in full reasoning.
-#[allow(clippy::struct_excessive_bools)] // Purpose-built options bag for a reasoning pipeline
 struct FullReasoningOptions {
     skip_classification: bool,
     skip_object_properties: bool,
@@ -31,7 +52,6 @@ struct FullReasoningOptions {
 use tracing::{Level, error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-#[allow(clippy::struct_excessive_bools)] // CLI flag structs naturally have many bool fields
 #[derive(Parser)]
 #[command(name = "oxidowl")]
 #[command(about = "A tableau-based reasoner for the Description Logic SROIQV(D)")]
@@ -46,6 +66,15 @@ struct Cli {
     /// Configuration file
     #[arg(long)]
     config: Option<PathBuf>,
+
+    /// Timeout in seconds for reasoning tasks (no timeout by default)
+    #[arg(long, value_name = "SECONDS")]
+    timeout: Option<u64>,
+
+    /// Memory cap for reasoning tasks in MB (0 = unlimited; overrides
+    /// `reasoning.max_memory_mb` from the config file)
+    #[arg(long, value_name = "MB")]
+    max_memory_mb: Option<u64>,
 
     /// Verbose output
     #[arg(short, long, action = clap::ArgAction::Count)]
@@ -460,8 +489,8 @@ enum Commands {
         pretty_print: bool,
     },
 
-    /// Perform individual realisation (alias: instantiation)
-    #[command(alias = "instantiation")]
+    /// Perform individual realisation (alias: instantiation, realization)
+    #[command(alias = "instantiation", alias = "realization")]
     Realisation {
         /// Input ontology file
         #[arg(short, long, value_name = "FILE")]
@@ -678,6 +707,21 @@ async fn run_with_tokio() -> Result<()> {
         config.server.sparql_port = port;
     }
 
+    // Apply CLI timeout override
+    if let Some(timeout_secs) = cli.timeout {
+        config.reasoning.timeout = Some(Duration::from_secs(timeout_secs));
+    }
+
+    // Apply CLI memory-cap override: `--max-memory-mb 0` = unlimited (None),
+    // any positive value overrides `reasoning.max_memory_mb` from the config.
+    if let Some(max_memory_mb) = cli.max_memory_mb {
+        config.reasoning.max_memory_mb = if max_memory_mb == 0 {
+            None
+        } else {
+            Some(max_memory_mb)
+        };
+    }
+
     // If server is enabled, run in server mode
     if server_enabled {
         return run_server_mode(config, effective_quiet).await;
@@ -713,7 +757,6 @@ async fn run_with_tokio() -> Result<()> {
 #[cfg(feature = "server")]
 async fn run_server_mode(config: ReasonerConfig, quiet: bool) -> Result<()> {
     use std::sync::Arc;
-    use tokio::sync::RwLock;
 
     if !quiet {
         println!("Starting Oxidowl in server mode...");
@@ -776,7 +819,6 @@ async fn run_server_mode(config: ReasonerConfig, quiet: bool) -> Result<()> {
 }
 
 #[cfg(not(feature = "server"))]
-#[allow(clippy::unused_async)]
 async fn run_server_mode(_config: ReasonerConfig, _quiet: bool) -> Result<()> {
     Err(oxidowl::Error::config(
         "Server mode requires the 'server' feature to be enabled. Recompile with --features server"
@@ -784,7 +826,6 @@ async fn run_server_mode(_config: ReasonerConfig, _quiet: bool) -> Result<()> {
     ))
 }
 
-#[allow(clippy::too_many_lines)] // Monolithic HermiT-style flag dispatcher
 fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
     // Check if no input files provided and no help flags
     if cli.input.is_empty() && !cli.print_prefixes && !cli.dump_clauses {
@@ -1141,12 +1182,51 @@ fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
         }
         let conclusion_file = &cli.input[0];
 
-        // For now, we'll report that entailment checking is not yet implemented with this signature
+        // Load conclusion ontology and check entailment
         println!(
-            "Entailment checking between {} and {} is not yet implemented in this version",
-            premise_file.display(),
-            conclusion_file.display()
+            "Checking entailment of {} against {}...",
+            conclusion_file.display(),
+            premise_file.display()
         );
+        let conclusion = match oxidowl::ontology::Ontology::from_file(conclusion_file, None) {
+            Ok(o) => o,
+            Err(e) => {
+                println!("Error loading conclusion ontology: {e}");
+                return Err(e);
+            }
+        };
+        let Some(onto_ref) = reasoner.get_ontology().cloned() else {
+            println!("No ontology loaded in reasoner for entailment checking");
+            return Ok(());
+        };
+        let mut stats = oxidowl::core::reasoner::statistics::ReasoningStatistics::new();
+        let mut all_entailed = true;
+        for axiom in conclusion.axioms() {
+            match reasoner.check_entailment(axiom, &onto_ref, &mut stats) {
+                Ok(true) => {}
+                Ok(false) => {
+                    println!("  Not entailed: {axiom:?}");
+                    all_entailed = false;
+                }
+                Err(e) => {
+                    println!("  Error checking entailment: {e}");
+                    all_entailed = false;
+                }
+            }
+        }
+        if all_entailed {
+            println!(
+                "Entailment holds: all axioms in {} are entailed by {}",
+                conclusion_file.display(),
+                premise_file.display()
+            );
+        } else {
+            println!(
+                "Entailment does NOT hold between {} and {}",
+                premise_file.display(),
+                conclusion_file.display()
+            );
+        }
     }
 
     if cli.print_prefixes {
@@ -1247,7 +1327,6 @@ fn extract_class_names_from_expression(expr: &oxidowl::ontology::ClassExpression
     }
 }
 
-#[allow(clippy::too_many_lines)] // Dispatch function: one arm per subcommand
 async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()> {
     match command {
         Commands::Load {
@@ -2355,10 +2434,47 @@ fn execute_dump_clauses(
 
 // Helper functions for formatting output
 
-#[allow(clippy::items_after_statements)]
 fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationResult) {
     use std::collections::{BTreeSet, HashMap, HashSet};
 
+    // Helper function to print tree with box-drawing characters
+    fn print_tree(
+        node: &str,
+        children_map: &HashMap<String, BTreeSet<String>>,
+        prefix: &str,
+        is_last: bool,
+        visited: &mut HashSet<String>,
+    ) {
+        // Prevent infinite loops in case of cycles
+        if visited.contains(node) {
+            println!(
+                "{}{}  {} [cycle detected]",
+                prefix,
+                if is_last { "└── " } else { "├── " },
+                node
+            );
+            return;
+        }
+        visited.insert(node.to_string());
+
+        // Print current node
+        println!(
+            "{}{}{}",
+            prefix,
+            if is_last { "└── " } else { "├── " },
+            node
+        );
+
+        // Print children
+        if let Some(children) = children_map.get(node) {
+            let child_count = children.len();
+            for (idx, child) in children.iter().enumerate() {
+                let is_last_child = idx == child_count - 1;
+                let new_prefix = format!("{}{}   ", prefix, if is_last { " " } else { "│" });
+                print_tree(child, children_map, &new_prefix, is_last_child, visited);
+            }
+        }
+    }
     // Build a tree structure for better visualization
     let mut children_map: HashMap<String, BTreeSet<String>> = HashMap::new();
     let mut all_classes: HashSet<String> = HashSet::new();
@@ -2404,45 +2520,6 @@ fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationRes
     // Print the tree starting from roots
     for root in &roots {
         print_tree(root, &children_map, "", true, &mut HashSet::new());
-    }
-
-    // Helper function to print tree with box-drawing characters
-    fn print_tree(
-        node: &str,
-        children_map: &HashMap<String, BTreeSet<String>>,
-        prefix: &str,
-        is_last: bool,
-        visited: &mut HashSet<String>,
-    ) {
-        // Prevent infinite loops in case of cycles
-        if visited.contains(node) {
-            println!(
-                "{}{}  {} [cycle detected]",
-                prefix,
-                if is_last { "└── " } else { "├── " },
-                node
-            );
-            return;
-        }
-        visited.insert(node.to_string());
-
-        // Print current node
-        println!(
-            "{}{}{}",
-            prefix,
-            if is_last { "└── " } else { "├── " },
-            node
-        );
-
-        // Print children
-        if let Some(children) = children_map.get(node) {
-            let child_count = children.len();
-            for (idx, child) in children.iter().enumerate() {
-                let is_last_child = idx == child_count - 1;
-                let new_prefix = format!("{}{}   ", prefix, if is_last { " " } else { "│" });
-                print_tree(child, children_map, &new_prefix, is_last_child, visited);
-            }
-        }
     }
 }
 

@@ -4,8 +4,8 @@
 //! classification and instance checking. It allows:
 //!
 //! - Existential quantification (`ObjectSomeValuesFrom`, `DataSomeValuesFrom`)
-//! - Intersection (`ObjectIntersectionOf`)  
-//! - Nominals (`ObjectOneOf`) with some restrictions
+//! - Existential to an individual / literal (`ObjectHasValue`, `DataHasValue`)
+//! - Intersection (`ObjectIntersectionOf`)
 //! - Self restrictions (`ObjectHasSelf`)
 //! - Basic property axioms
 //!
@@ -13,12 +13,25 @@
 //! - Universal quantification (`ObjectAllValuesFrom`, `DataAllValuesFrom`)
 //! - Complement (`ObjectComplementOf`)
 //! - Union (`ObjectUnionOf`)
+//! - Nominals (`ObjectOneOf`)
 //! - Cardinality restrictions
 //! - Disjoint classes/properties
+//!
+//! Note on nominals: the W3C OWL 2 EL grammar ([Profiles §2.2.3]) admits
+//! `ObjectOneOf` with *exactly one* individual, but this validator
+//! conservatively rejects nominals outright — the OWL 2 EL fast path
+//! (`ELReasoner`) has no normal form for them, so classifying them as EL would
+//! route nominal-using ontologies into a reasoner that cannot process them.
+//! Nominal-using ontologies therefore fall back to the general DL path, which
+//! handles them correctly.
+//!
+//! [Profiles §2.2.3]: https://www.w3.org/TR/owl2-profiles/#OWL_2_EL
 
 use crate::error::OxidowlError;
 use crate::ontology::axioms::AxiomTrait;
-use crate::ontology::{Axiom, ClassExpression, DataRange, ObjectPropertyExpression, Ontology};
+use crate::ontology::{
+    Axiom, ClassExpression, DataRange, Entity, ObjectPropertyExpression, Ontology,
+};
 use crate::profiles::{
     OWL2Profile, ProfileValidationReport, ProfileValidator, ProfileViolation, ProfileViolationType,
     ValidationStatistics,
@@ -73,17 +86,23 @@ impl ELValidator {
                 }
                 Ok(())
             }
-            ClassExpression::ObjectOneOf(individuals) => {
-                // Nominals allowed but with restrictions on usage
-                if individuals.len() > 1 {
+            ClassExpression::ObjectHasValue { property, .. } => {
+                // ObjectHasValue is part of the OWL 2 EL grammar
+                // (existential quantification to an individual); only named,
+                // non-inverse object properties are allowed in EL.
+                if !self.is_simple_property_expression(property) {
                     return Err(ProfileViolation::new(
-                        ProfileViolationType::ComplexityViolation(
-                            "Multiple individuals in ObjectOneOf not recommended in OWL 2 EL"
-                                .to_string(),
+                        ProfileViolationType::DisallowedPropertyExpression(
+                            "Inverse properties not allowed in OWL 2 EL".to_string(),
                         ),
-                        "Complex nominal",
+                        "ObjectHasValue with inverse property",
                     ));
                 }
+                Ok(())
+            }
+            ClassExpression::DataHasValue { .. } => {
+                // DataHasValue is part of the OWL 2 EL grammar
+                // (existential quantification to a literal).
                 Ok(())
             }
             ClassExpression::DataSomeValuesFrom {
@@ -96,6 +115,10 @@ impl ELValidator {
             }
 
             // Disallowed constructs
+            ClassExpression::ObjectOneOf { .. } => Err(ProfileViolation::new(
+                ProfileViolationType::DisallowedClassExpression("ObjectOneOf".to_string()),
+                "Nominals (ObjectOneOf) not allowed in OWL 2 EL",
+            )),
             ClassExpression::ObjectUnionOf { .. } => Err(ProfileViolation::new(
                 ProfileViolationType::DisallowedClassExpression("ObjectUnionOf".to_string()),
                 "Union not allowed in OWL 2 EL",
@@ -107,10 +130,6 @@ impl ELValidator {
             ClassExpression::ObjectAllValuesFrom { .. } => Err(ProfileViolation::new(
                 ProfileViolationType::DisallowedClassExpression("ObjectAllValuesFrom".to_string()),
                 "Universal quantification not allowed in OWL 2 EL",
-            )),
-            ClassExpression::ObjectHasValue { .. } => Err(ProfileViolation::new(
-                ProfileViolationType::DisallowedClassExpression("ObjectHasValue".to_string()),
-                "HasValue not allowed in OWL 2 EL",
             )),
             ClassExpression::ObjectMinCardinality { .. }
             | ClassExpression::ObjectMaxCardinality { .. }
@@ -124,10 +143,6 @@ impl ELValidator {
                 ProfileViolationType::DisallowedClassExpression("DataAllValuesFrom".to_string()),
                 "Universal data quantification not allowed in OWL 2 EL",
             )),
-            ClassExpression::DataHasValue { .. } => Err(ProfileViolation::new(
-                ProfileViolationType::DisallowedClassExpression("DataHasValue".to_string()),
-                "Data HasValue not allowed in OWL 2 EL",
-            )),
             ClassExpression::DataMinCardinality { .. }
             | ClassExpression::DataMaxCardinality { .. }
             | ClassExpression::DataExactCardinality { .. } => Err(ProfileViolation::new(
@@ -139,13 +154,13 @@ impl ELValidator {
         }
     }
 
-    /// Check if a property expression is simple (no property chains)
+    /// Check if a property expression is simple for OWL 2 EL.
+    ///
+    /// In OWL 2 EL, only named (non-inverse) object properties are allowed in
+    /// class expressions such as `ObjectSomeValuesFrom`.  Inverse property
+    /// expressions and property chains are NOT permitted.
     fn is_simple_property_expression(&self, expr: &ObjectPropertyExpression) -> bool {
-        matches!(
-            expr,
-            ObjectPropertyExpression::ObjectProperty(_)
-                | ObjectPropertyExpression::InverseObjectProperty(_)
-        )
+        matches!(expr, ObjectPropertyExpression::ObjectProperty(_))
     }
 
     /// Validate a data range for OWL 2 EL
@@ -217,10 +232,14 @@ impl ELValidator {
             Axiom::DataPropertyRange(_) => Ok(()),
 
             // Restricted or disallowed axioms
-            Axiom::DisjointClasses(_) => Err(ProfileViolation::new(
-                ProfileViolationType::DisallowedAxiom("DisjointClasses".to_string()),
-                "Disjoint classes not allowed in OWL 2 EL",
-            )),
+            Axiom::DisjointClasses(ax) => {
+                // OWL 2 EL permits DisjointClasses (each class expression must be an
+                // EL class expression, which validate_class_expression enforces).
+                for class_expr in &ax.classes {
+                    self.validate_class_expression(class_expr)?;
+                }
+                Ok(())
+            }
             Axiom::DisjointUnion(_) => Err(ProfileViolation::new(
                 ProfileViolationType::DisallowedAxiom("DisjointUnion".to_string()),
                 "Disjoint union not allowed in OWL 2 EL",
@@ -247,6 +266,16 @@ impl ELValidator {
                 ProfileViolationType::DisallowedAxiom("FunctionalDataProperty".to_string()),
                 "Functional data properties not allowed in OWL 2 EL",
             )),
+            Axiom::IrreflexiveObjectProperty(_) => Err(ProfileViolation::new(
+                ProfileViolationType::DisallowedAxiom("IrreflexiveObjectProperty".to_string()),
+                "Irreflexive object properties not allowed in OWL 2 EL",
+            )),
+
+            // Inverse object properties — OWL 2 EL does not permit them
+            Axiom::InverseObjectProperties(_) => Err(ProfileViolation::new(
+                ProfileViolationType::DisallowedAxiom("InverseObjectProperties".to_string()),
+                "Inverse object properties not allowed in OWL 2 EL",
+            )),
 
             // Other axioms - allow for now but could be restricted
             _ => Ok(()),
@@ -257,6 +286,40 @@ impl ELValidator {
 impl Default for ELValidator {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl ELValidator {
+    /// Check for illegal punning between classes and datatypes.
+    ///
+    /// OWL 2 EL (like OWL 2 DL) disallows using a single IRI as both a class
+    /// and a datatype, although class/individual punning is permitted.
+    fn check_illegal_punning(&self, ontology: &Ontology, report: &mut ProfileValidationReport) {
+        let mut class_iris = std::collections::HashSet::new();
+        let mut datatype_iris = std::collections::HashSet::new();
+
+        for axiom in ontology.axioms() {
+            if let Axiom::Declaration(decl) = axiom {
+                match &decl.entity {
+                    Entity::Class(iri) => {
+                        class_iris.insert(iri.clone());
+                    }
+                    Entity::Datatype(iri) => {
+                        datatype_iris.insert(iri.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        for iri in class_iris.intersection(&datatype_iris) {
+            report.add_violation(ProfileViolation::new(
+                ProfileViolationType::DisallowedAxiom("IllegalPunning".to_string()),
+                format!(
+                    "IRI {iri} is used both as a class and as a datatype (illegal punning in OWL 2 EL)"
+                ),
+            ));
+        }
     }
 }
 
@@ -276,6 +339,9 @@ impl ProfileValidator for ELValidator {
             }
         }
 
+        // OWL 2 EL disallows punning a single IRI as both a class and a datatype.
+        self.check_illegal_punning(ontology, &mut report);
+
         stats.duration_ms = start_time.elapsed().as_millis() as u64;
         report.stats = stats;
 
@@ -287,6 +353,7 @@ impl ProfileValidator for ELValidator {
     }
 
     fn is_property_expression_allowed(&self, expr: &ObjectPropertyExpression) -> bool {
+        // OWL 2 EL only allows named (non-inverse) object property expressions
         self.is_simple_property_expression(expr)
     }
 
@@ -388,12 +455,54 @@ mod tests {
     }
 
     #[test]
-    fn test_el_allows_simple_nominals() {
+    fn test_el_disallows_nominals() {
         let validator = ELValidator::new();
 
         let individual = Individual::named(IRI::new("http://example.org/john"));
         let nominal = ClassExpression::ObjectOneOf(vec![individual]);
 
-        assert!(validator.is_class_expression_allowed(&nominal));
+        assert!(
+            !validator.is_class_expression_allowed(&nominal),
+            "ObjectOneOf (nominals) must NOT be allowed in OWL 2 EL"
+        );
+    }
+
+    #[test]
+    fn test_el_allows_object_has_value() {
+        let validator = ELValidator::new();
+
+        let property = crate::ontology::ObjectPropertyExpression::ObjectProperty(
+            crate::ontology::ObjectProperty::new(IRI::new("http://example.org/hasChild"))
+                .expect("Failed to create ObjectProperty for test: hasChild"),
+        );
+        let individual = Individual::named(IRI::new("http://example.org/john"));
+        let has_value = ClassExpression::ObjectHasValue {
+            property,
+            value: individual,
+        };
+
+        assert!(
+            validator.is_class_expression_allowed(&has_value),
+            "ObjectHasValue must be allowed in OWL 2 EL"
+        );
+    }
+
+    #[test]
+    fn test_el_allows_data_has_value() {
+        let validator = ELValidator::new();
+
+        let property =
+            crate::ontology::DataPropertyExpression::DataProperty(crate::ontology::DataProperty {
+                iri: IRI::new("http://example.org/age"),
+            });
+        let has_value = ClassExpression::DataHasValue {
+            property,
+            value: crate::ontology::Literal::new("42".to_string()),
+        };
+
+        assert!(
+            validator.is_class_expression_allowed(&has_value),
+            "DataHasValue must be allowed in OWL 2 EL"
+        );
     }
 }

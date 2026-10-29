@@ -29,22 +29,16 @@ pub fn compare_terms(a: &RdfTerm, b: &RdfTerm) -> Option<Ordering> {
                 ..
             },
         ) => {
-            let dta_str = dta
-                .as_ref()
-                .map(url::Url::as_str)
-                .unwrap_or(XSD_STRING_FALLBACK);
-            let dtb_str = dtb
-                .as_ref()
-                .map(url::Url::as_str)
-                .unwrap_or(XSD_STRING_FALLBACK);
+            let dta_str = dta.as_ref().map_or(XSD_STRING_FALLBACK, url::Url::as_str);
+            let rhs_datatype = dtb.as_ref().map_or(XSD_STRING_FALLBACK, url::Url::as_str);
 
             // Both plain string literals without types → compare as strings
-            if dta_str == dtb_str {
+            if dta_str == rhs_datatype {
                 compare_same_type(va, dta_str, vb, la, lb)
             } else {
                 // Try numeric promotion (integer/decimal/float/double can be
                 // cross-compared by promoting to f64)
-                if is_numeric(dta_str) && is_numeric(dtb_str) {
+                if is_numeric(dta_str) && is_numeric(rhs_datatype) {
                     let na = parse_numeric(va)?;
                     let nb = parse_numeric(vb)?;
                     na.partial_cmp(&nb)

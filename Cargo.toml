@@ -1,6 +1,6 @@
 [package]
 name = "oxidowl"
-version = "1.0.0"
+version = "2.0.0"
 edition = "2024"
 description = "A high-performance Description Logic reasoner using tableau algorithms with parallel computation. This project started as a test to explore the capabilities of agentic LLM tools for software development."
 license = "LGPL-3.0-or-later"
@@ -22,36 +22,36 @@ path = "src/bin/performance_tests.rs"
 
 [dependencies]
 # Core dependencies
-tokio = { version = "1.52.3", features = ["full"] }
+tokio = { version = "1.53.1", features = ["full"] }
 rayon = {  version = "1.12", optional = true }
-dashmap = { version = "6.1", optional = true }
+dashmap = { version = "7.0.0-rc2", optional = true }
 # Immutable persistent data structures
 im = "15.1"
-thiserror = "2.0.18"
+thiserror = "2.0.20"
 num_cpus = "1.17"
 crossbeam = { version = "0.8.4", optional = true }
 
 # Serialization
-serde = { version = "1.0.228", features = ["derive", "rc"] }
-serde_json = "1.0.150"
-enumset = { version = "1.1.13", features = ["serde"] }  # Type-safe bitflag-like enums for configuration
+serde = { version = "1.0.229", features = ["derive", "rc"] }
+serde_json = "1.0.151"
+enumset = { version = "1.1.14", features = ["serde"] }  # Type-safe bitflag-like enums for configuration
 
 # Logging and tracing
-log = "0.4.32"
+log = "0.4.33"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 
 # CLI (for binary)
-clap = { version = "4.6.1", features = ["derive"] }
+clap = { version = "4.6.6", features = ["derive"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 iso8601-duration = "0.2"
 
 # Hash computation and advanced data structures
 # Compressed bitmaps for efficient set operations
-lru = "0.18.0"     # LRU cache for blocking candidates
+lru = "0.18.2"     # LRU cache for blocking candidates
 
 # Compile-time perfect hash for keyword lookup
-phf = { version = "0.13.1", features = ["macros"] }
+phf = { version = "0.14.0", features = ["macros"] }
 
 # Performance profiling (optional)
 pprof = { version = "0.15", features = ["flamegraph"], optional = true }
@@ -65,39 +65,83 @@ mimalloc = { version = "0.1.52", default-features = false, optional = true }
 # We'll enable SIMD via std::simd when stable
 
 # OWL integration and reasoning infrastructure
-horned-owl = "1.4.0"  # Core OWL ontology model and parsing
+horned-owl = "4.0.0"  # Core OWL ontology model and parsing
 curie = "0.1.4"         # Prefix mapping support for horned-owl
 # sophia = { version = "0.8", optional = true }   # May need specific version
 
 # SPARQL and RDF graph support
-oxigraph = { version = "0.5.8", features = ["rocksdb"], optional = true }
+oxigraph = { version = "=0.5.13", features = ["rocksdb"], optional = true }
+
+# RDF/JSON-LD I/O (B5 Slice 1 — JSON-LD 1.1 parse/serialize).
+# Exact pins = the versions already present in Cargo.lock via the oxigraph
+# dependency tree (oxrdf 0.3.3, oxrdfio 0.2.5, oxjsonld 0.2.5) — never a
+# second copy of any ox crate. Non-optional: `parsers/rio` (incl. jsonld) is
+# compiled unconditionally, so these must be too.
+oxrdf = "=0.3.5"
+oxrdfio = "=0.2.7"
+oxjsonld = "=0.2.7"
+# N3 (B5 Slice 2): the oxttl N3 parser (`oxttl::n3::N3Parser`) is the engine
+# behind `oxrdfio::RdfFormat::N3`, so the version is exactly the one already
+# in Cargo.lock via `oxrdfio`.  No extra features are needed: the `n3` module
+# is always compiled in oxttl (`rdf-12`/`async-tokio` stay off, matching the
+# rest of the workspace).
+oxttl = "=0.2.5"
+# RDFa 1.1 (B5 Slice 4): real HTML5 DOM parsing + RDFa core processing.
+# html5ever 0.40 is the WHATWG-conformant HTML5 tokenizer/tree-builder;
+# markup5ever 0.40 holds its shared vocabulary/QualName types.  The DOM is a
+# small vendored `RcDom` (`src/parsers/rio/rcdom.rs`) — a subset of the
+# html5ever project's `markup5ever_rcdom`, because that crate has no
+# 0.40-compatible release (its only published version, 0.39, pins
+# html5ever/markup5ever to 0.39).  The vendored DOM keeps
+# namespace-qualified attribute names, doctype/comment nodes and raw text
+# nodes intact, all of which the RDFa evaluation (xml:lang, xmlns prefix
+# declarations, <base href> pre-scan, descendant text concatenation) needs.
+html5ever = "0.40.1"
+markup5ever = "0.40.0"
+# HDT (B5 Slice 5): spec-compliant Header Dictionary Triples read/write via
+# the `hdt` crate (hdt-rs by KonradHoeffner, v0.7.3).  The `nt` feature
+# (experimental upstream, but the only N-Triples/in-memory -> HDT conversion
+# path: `Hdt::from_triples`) is required for *writing* real HDT files;
+# reading (`Hdt::read`) and serialization (`Hdt::write`) work without any
+# feature.  The default `sophia` feature is disabled: triples are iterated
+# through the crate's native `triples_all()` / `triples_with_pattern()` API,
+# so the Sophia adapter (and its dependency tree) is not needed.  `nt` pulls
+# `oxttl ^0.2.1`, which unifies with the `=0.2.3` pin above.
+hdt = { version = "0.7.3", default-features = false, features = ["nt"] }
 
 # String handling and utilities
-regex = "1.12.4"
-uuid = { version = "1.23.3", features = ["v4", "serde"] }
+regex = "1.13.1"
+uuid = { version = "1.24.1", features = ["v4", "serde"] }
 url = { version = "2.5.8", features = ["serde"] }
 lazy_static = "1.5.0"
 
 # File I/O and path handling
 tempfile = "3.27.0"
 
+# Compression for ontology document sources
+flate2 = "1.1.9"
+xz2 = "0.1.7"
+
 # Machine Learning - Candle framework
-candle-core = { version = "0.10.2", optional = true }
-candle-nn = { version = "0.10.2", optional = true }
+candle-core = { version = "0.11.0", optional = true }
+candle-nn = { version = "0.11.0", optional = true }
 
 # Server interfaces and web support
-tokio-tungstenite = { version = "0.29.0", optional = true }
+tokio-tungstenite = { version = "0.30.0", optional = true }
 warp = { version = "0.4.3", features = ["server"], optional = true }
-bytes = { version = "1.11.1", optional = true }
-futures = { version = "0.3.32", optional = true }
-quick-xml = { version = "0.40.1", features = ["serialize"] }
+bytes = { version = "1.12.1", optional = true }
+futures = { version = "0.3.34", optional = true }
+quick-xml = { version = "0.42.0", features = ["serialize"] }
 
 # JSON and XML parsing for ontology formats
 roxmltree = "0.21.1"
-toml = "1.1.2"
+toml = "1.1.4"
 
 # HTTP client for fetching ontologies
 reqwest = { version = "0.13.4", features = ["json", "blocking"], optional = true }
+
+# Zip archive support for ontology imports
+zip = { version = "8.6.0", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = [
@@ -109,7 +153,7 @@ windows = { version = "0.62.2", features = [
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports"] }
-env_logger = "0.11.10"
+env_logger = "0.11.11"
 tempfile = "3.27"
 
 [features]
@@ -128,6 +172,7 @@ sparql-store = ["oxigraph"]
 explanations = []
 ml = ["candle-core", "candle-nn"]  # Machine learning features
 http-imports = ["reqwest"]  # HTTP import fetching for ontologies
+zip-imports = ["zip"]  # Zip archive support for ontology imports
 # owl-integration = ["owlapi", "rdf", "sophia"]  # Disabled until proper deps are available
 # Kani formal verification harnesses (enabled by `cargo kani` or `--features kani`)
 kani = []
@@ -146,6 +191,10 @@ harness = false
 
 [[bench]]
 name = "shacl_benchmark"
+harness = false
+
+[[bench]]
+name = "classification_benchmark"
 harness = false
 
 [profile.release]

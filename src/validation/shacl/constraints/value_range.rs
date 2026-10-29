@@ -10,7 +10,10 @@ use crate::validation::shacl::{
     constraints::literal_compare::compare_terms,
     model::{ShaclMessage, ShaclSeverity},
     report::ShaclValidationResult,
-    vocabulary::*,
+    vocabulary::{
+        SH_MAX_EXCLUSIVE_CONSTRAINT_COMPONENT, SH_MAX_INCLUSIVE_CONSTRAINT_COMPONENT,
+        SH_MIN_EXCLUSIVE_CONSTRAINT_COMPONENT, SH_MIN_INCLUSIVE_CONSTRAINT_COMPONENT,
+    },
 };
 
 macro_rules! range_check {

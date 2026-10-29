@@ -8,7 +8,7 @@ use crate::error::Error;
 pub struct IriValueSpace;
 
 impl ValueSpaceHandler for IriValueSpace {
-    fn datatype_iri(&self) -> &str {
+    fn datatype_iri(&self) -> &'static str {
         "http://www.w3.org/2001/XMLSchema#anyURI"
     }
 

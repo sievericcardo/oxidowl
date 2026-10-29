@@ -234,6 +234,11 @@ impl ImportDependencyGraph {
     }
 
     /// Get topological ordering of ontologies (for safe import order)
+    ///
+    /// # Panics
+    ///
+    /// Panics if the import graph is internally inconsistent (an ontology IRI
+    /// is missing from the in-degree map).
     pub fn topological_sort(&self) -> Result<Vec<IRI>, ImportError> {
         // Check for cycles first
         let cycles = self.detect_cycles();
@@ -437,9 +442,15 @@ impl ImportManager {
         Ok(results)
     }
 
-    /// Extract import declarations from ontology annotations
+    /// Extract import declarations from ontology annotations and the structured
+    /// `imports` field (populated by the functional-syntax parser for `Import(...)`).
     fn extract_import_declarations(&self, ontology: &Ontology) -> Vec<ImportDeclaration> {
         let mut imports = Vec::new();
+
+        // Structured import declarations recorded by parsers (e.g. functional syntax).
+        for import in &ontology.imports {
+            imports.push(ImportDeclaration::new(import.imported_ontology_iri.clone()));
+        }
 
         // Look for import annotations
         for annotation in &ontology.annotations {
@@ -612,8 +623,10 @@ impl ImportManager {
                 .headers()
                 .get("content-type")
                 .and_then(|v| v.to_str().ok())
-                .map(std::string::ToString::to_string)
-                .unwrap_or_else(|| "application/rdf+xml".to_string());
+                .map_or_else(
+                    || "application/rdf+xml".to_string(),
+                    std::string::ToString::to_string,
+                );
 
             // Download content
             let content = response.text().map_err(|e| OxidowlError::ImportError {
@@ -808,8 +821,8 @@ impl ImportManager {
         }
 
         // If source has a version IRI and target doesn't, inherit it
-        if target.version_iri.is_none() && source.version_iri.is_some() {
-            target.set_version_iri(source.version_iri.clone());
+        if target.id.version_iri.is_none() && source.id.version_iri.is_some() {
+            target.set_version_iri(source.id.version_iri.clone());
         }
 
         Ok(())

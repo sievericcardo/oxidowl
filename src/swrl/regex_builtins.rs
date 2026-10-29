@@ -199,7 +199,7 @@ impl SWRLBuiltIn for MatchesBuiltIn {
         Ok(SWRLValue::Boolean(regex.is_match(text)))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#matches"
     }
 
@@ -238,7 +238,7 @@ impl SWRLBuiltIn for ReplaceBuiltIn {
         Ok(SWRLValue::Boolean(*expected_result == actual_result))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#replace"
     }
 
@@ -278,7 +278,7 @@ impl SWRLBuiltIn for RegexReplaceBuiltIn {
         Ok(SWRLValue::Boolean(*expected_result == actual_result))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#regexReplace"
     }
 
@@ -319,7 +319,7 @@ impl SWRLBuiltIn for TokenizeBuiltIn {
         Ok(SWRLValue::String(result))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#tokenize"
     }
 
@@ -360,7 +360,7 @@ impl SWRLBuiltIn for SplitBuiltIn {
         Ok(SWRLValue::String(result))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#split"
     }
 
@@ -402,7 +402,7 @@ impl SWRLBuiltIn for ExtractBuiltIn {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#extract"
     }
 
@@ -443,7 +443,7 @@ impl SWRLBuiltIn for ExtractAllBuiltIn {
         Ok(SWRLValue::String(result))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#extractAll"
     }
 
@@ -470,7 +470,7 @@ impl SWRLBuiltIn for IsValidPatternBuiltIn {
         Ok(SWRLValue::Boolean(is_valid))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#isValidPattern"
     }
 

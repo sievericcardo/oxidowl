@@ -1,76 +1,34 @@
 //! Oxidowl: A Rust OWL 2 DL reasoner
 //!
-// Suppress pedantic lints that represent intentional design decisions:
-// - missing_errors_doc / missing_panics_doc: too many public functions to document individually
-// - unused_self: kept for API extensibility and trait conformance
-// - unnecessary_wraps: kept for API consistency across the codebase
-// - cast_precision_loss: floating-point stats calculations accept minor precision loss
-// - cast_possible_truncation / cast_sign_loss: SWRL datetime components and query counts
-//   are small-range values; truncation is intentional (e.g., seconds < 60, months 0-11)
-// - cast_possible_wrap: usize→i64 for string lengths / collection counts; values are
-//   always well within i64::MAX range in any realistic ontology
-// - unnecessary_literal_bound: lifetime parameter design choices
-// - unused_async: async functions in trait impls / server APIs kept for API symmetry
-// - too_many_lines: complex domain logic in single functions is acceptable
-// - must_use_candidate: callers decide whether to use return values
-// - similar_names: domain-specific naming (ci/cj, sub/sup, etc.) is intentional
-// - if_not_else: both forms are equally readable in context
-// - struct_excessive_bools: configuration structs with many flags are acceptable
-// - self_only_used_in_recursion / items_after_statements: style preferences
-// - wildcard_imports: used in internal modules for convenience
-// - match_same_arms: some patterns require listing all arms for clarity
-// - struct_field_names: domain-specific naming conventions
-// - inline_always: performance-critical paths with explicit inline annotations
-// - too_many_arguments: complex domain operations require many parameters
+// Deliberately small keep-list of pedantic lints that encode intentional design
+// decisions. Everything removed from this list is fixed (or thresholded in
+// clippy.toml) rather than blanket-allowed.
 #![allow(
-    clippy::missing_errors_doc,
-    clippy::missing_panics_doc,
-    clippy::unused_self,
-    clippy::unnecessary_wraps,
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap,
-    clippy::unnecessary_literal_bound,
-    clippy::unused_async,
-    clippy::too_many_lines,
-    clippy::must_use_candidate,
-    clippy::similar_names,
-    clippy::if_not_else,
-    clippy::struct_excessive_bools,
-    clippy::self_only_used_in_recursion,
-    clippy::items_after_statements,
-    clippy::wildcard_imports,
-    clippy::match_same_arms,
-    clippy::struct_field_names,
-    clippy::inline_always,
-    clippy::too_many_arguments,
-    clippy::needless_pass_by_value,
-    clippy::return_self_not_must_use,
-    clippy::format_push_string,
-    clippy::map_unwrap_or,
-    clippy::doc_markdown,    // match_wildcard_for_single_variants: wildcard arms on extensible enums are acceptable
-    clippy::match_wildcard_for_single_variants,
-    // ref_option: &Option<T> in many existing function signatures; refactoring callers is out-of-scope
-    clippy::ref_option,
-    // no_effect_underscore_binding: _name bindings are used to move ownership into closures
-    clippy::no_effect_underscore_binding,
-    // type_complexity: complex SPARQL async types in store APIs are acceptable
-    clippy::type_complexity,
-    // fn_params_excessive_bools: some domain configuration functions need many flags
-    clippy::fn_params_excessive_bools,
-    // enum_variant_names: domain naming with common prefix is intentional (e.g. GetXxx pattern)
-    clippy::enum_variant_names,
-    // large_enum_variant: boxing large enum variants is out-of-scope for this refactoring
-    clippy::large_enum_variant,
-    // missing_fields_in_debug: manually omitting fields from Debug impls is intentional
-    clippy::missing_fields_in_debug,
-    // format_collect: collecting formatted strings with map/format is the clearest approach
-    clippy::format_collect,
-    // default_trait_access: Default::default() is used where the type is clear from context
-    clippy::default_trait_access,
-    // non_std_lazy_statics: lazy_static! vocabulary module is widely used and stable
-    clippy::non_std_lazy_statics,
+    clippy::missing_errors_doc,          // large public API; error docs tracked separately
+    clippy::unused_self,                 // methods kept on self for API/trait conformance
+    clippy::unnecessary_wraps,           // Result/Option kept for API consistency
+    clippy::cast_precision_loss,         // numeric stats accept minor precision loss
+    clippy::cast_possible_truncation,    // intentional small-range casts (datetimes, counts)
+    clippy::cast_sign_loss,              // intentional small-range casts
+    clippy::unused_async,                // async kept for API symmetry
+    clippy::unused_async_trait_impl,     // async trait-impls required by the trait contract; cannot be de-async'd
+    clippy::match_same_arms,             // explicit arms preferred for clarity
+    clippy::format_push_string,          // push_str(&format!(..)) is clearest here
+    clippy::needless_pass_by_value,      // signatures fixed by API contract
+    clippy::struct_excessive_bools,      // config/CLI structs legitimately have many bools
+    clippy::self_only_used_in_recursion, // recursive helper shape
+    clippy::ref_option,                  // &Option<T> in established API signatures
+    clippy::inline_always,               // performance-critical explicit inlining
+    clippy::struct_field_names,          // domain naming
+    clippy::too_many_lines,              // complex domain logic (tableau/parsers); splitting these is high-risk
+    clippy::large_enum_variant,          // changing variant sizes would break the public API
+)]
+// Guardrails: forbid vacuous/placeholder assertions in tests so that reasoning
+// behaviour is always genuinely verified.
+#![warn(
+    clippy::assertions_on_constants,
+    clippy::nonminimal_bool,
+    clippy::absurd_extreme_comparisons
 )]
 //!
 //! This crate provides a complete Description Logic reasoner for SROIQV(D),
@@ -109,30 +67,40 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+pub mod adapter;
 pub mod cache;
-pub mod cache_lockfree; // Lock-free cache using DashMap
-pub mod cache_strategies; // Advanced cache eviction strategies (LRU, LFU)
+pub mod cache_lockfree;
+pub mod cache_strategies;
 pub mod config;
 pub mod core;
-pub mod dl_clauses; // DL clause generation and dumping
-pub mod error;
-pub mod import;
-pub mod performance; // Performance monitoring and profiling
-pub mod prelude;
-pub mod profiling; // Flamegraph and heap profiling infrastructure // Common imports and type aliases for internal use // Import management and dependency resolution
-// pub mod network;
-pub mod adapter; // Horned-OWL adapter for enhanced parsing
+pub mod debug;
 pub mod distributed;
+pub mod dl_clauses;
+pub mod error;
+pub mod factory;
+pub mod functional_syntax_factory;
+pub mod import;
+pub mod inference;
+pub mod manager;
+pub mod modularity;
 pub mod ontology;
-// pub mod ontology_lockfree; // Lock-free ontology access using ArcSwap - TODO: Create file
+pub mod owl_manager;
 pub mod parsers;
-pub mod profiles; // OWL 2 profiles support and validation
+pub mod performance;
+pub mod prelude;
+pub mod profiles;
+pub mod profiling;
 pub mod query;
+pub mod reasoner_api;
 pub mod reasoning;
-pub mod semantics; // RDF, RDFS, and OWL 2 semantics implementation
-pub mod swrl; // SWRL (Semantic Web Rule Language) support
-pub mod validation; // OWL 2 DL validation and profile checking
-pub mod visitor; // Visitor pattern for ontology traversal // Distributed query processing and cluster management
+pub mod render;
+pub mod searcher;
+pub mod semantics;
+pub mod swrl;
+pub mod transform;
+pub mod validation;
+pub mod visitor;
+pub mod walk;
 
 // Server interfaces (REST API, OWLlink, SPARQL)
 #[cfg(feature = "server")]
@@ -155,9 +123,50 @@ mod proofs;
 pub use crate::adapter::{HornedOwlAdapter, RdfStarCapable};
 pub use crate::core::reasoner::Reasoner;
 pub use crate::dl_clauses::{DLAtom, DLClause, DLClauseGenerator, DLClauseSet};
+pub use crate::factory::DataFactory;
+pub use crate::factory::functional_syntax::FunctionalSyntaxFactory;
 pub use crate::import::{ImportDeclaration, ImportError, ImportManager};
+pub use crate::manager::OntologyManager;
+pub use crate::manager::changes::{
+    ChangeAuditLog, ChangeData, ChangeRecord, OntologyChange, OntologyDocumentTarget,
+};
+pub use crate::manager::composite::{
+    amalgamate_sub_class_axioms, convert_equivalent_to_sub_classes,
+    convert_property_assertions_to_annotations, split_sub_class_axioms,
+};
+pub use crate::manager::convenience::OWLManager;
+pub use crate::manager::history::ChangeHistory;
+pub use crate::manager::iri_mapper::{
+    AutoIRIMapper, CompositeIRIMapper, NonMappingOntologyIRIMapper, OntologyIRIMapper,
+    SimpleIRIMapper, ZipIRIMapper,
+};
+pub use crate::manager::listeners::{
+    ImportProgressListener, LoggingChangeListener, MissingImportListener, NoOpChangeListener,
+    OntologyChangeListener, ReasonerChangeAwareListener,
+};
+pub use crate::manager::loader::OntologyLoader;
+pub use crate::manager::loader_config::{LoaderConfig, MissingImportStrategy};
+pub use crate::manager::sources::{
+    FileDocumentSource, GzipDocumentSource, GzipStringDocumentSource, OntologyDocumentSource,
+    StringDocumentSource, UrlDocumentSource,
+};
+pub use crate::manager::{
+    ChangeApplied, ChangeBroadcastStrategy, ManagerConfig, OntologyManagerRef, Snapshot,
+};
+pub use crate::parsers::{
+    DLSyntaxParser, DLSyntaxRenderer, ErrorVerbosity, FormatParser, FunctionalParser,
+    FunctionalSyntaxSerializer, KRSSParser, KRSSRenderer, KRSSVariant, LatexRenderer,
+    ManchesterParser, ManchesterParserConfig, ManchesterRenderer, NTriplesParser,
+    NTriplesSerializer, OwlXmlParser, OwlXmlSerializer, ParserConfig, ParserFactory,
+    RdfCompatibilityMode, RdfXmlParser, RdfXmlSerializer, SerializerConfig, SyntaxValidator,
+    TurtleParser, TurtleSerializer, parse_bytes, parse_functional_file, parse_ntriples_file,
+    parse_owl_xml_file, parse_rdf_xml_file, parse_str, parse_turtle_file, save_file,
+    save_file_gzip, save_to_bytes, save_to_string,
+};
 pub use crate::profiles::{
-    OWL2Profile as ProfileType, ProfileValidator, el::ELValidator, validator::OWL2ProfileValidator,
+    OWL2Profile as ProfileType, ProfileDetectionResult, ProfileValidationReport, ProfileValidator,
+    ProfileViolation, ProfileViolationType, ValidationStatistics, el::ELValidator,
+    el_reasoner::ELReasoner, rl_reasoner::RLReasoner, validator::OWL2ProfileValidator,
 };
 // Query system exports (both DL queries and advanced conjunctive queries)
 pub use crate::query::{
@@ -201,10 +210,97 @@ pub use crate::config::{PerformanceConfig, PerformanceProfile, ReasonerConfig, T
 #[cfg(feature = "sparql-store")]
 pub use crate::core::reasoner::extract_owl_rules_from_tbox;
 pub use crate::core::reasoner::{ReasoningResult, ReasoningTask, abox_classification_rules};
+pub use crate::debug::definitions::DefinitionTracker;
+pub use crate::debug::{BlackBoxOWLDebugger, DebuggerConfig, OWLDebugger};
 pub use crate::error::{Error, Result};
-pub use crate::ontology::{
-    ClassExpression, IRI, Individual, Ontology, OntologyFormat, OntologyRef,
+pub use crate::explanation::blackbox::{BlackBoxConfig, BlackBoxExplanation};
+pub use crate::explanation::converter::SatisfiabilityConverter;
+pub use crate::explanation::generator::{Explanation as Justification, ExplanationGenerator};
+pub use crate::explanation::hst::{HSTConfig, HSTExplanationGenerator};
+pub use crate::explanation::ordering::{
+    CompositeExplanationOrderer, ExplanationOrderer, ExplanationProgressMonitor,
+    JustificationSizeOrderer, SilentExplanationProgressMonitor,
 };
+pub use crate::explanation::renderer::{
+    ConciseExplanationRenderer, ExplanationRenderer, SilentExplanationRenderer,
+};
+pub use crate::inference::InferredAxiomGenerator;
+pub use crate::inference::metrics::{
+    AverageClassDepth, AverageNamedSuperclassCount, AverageNumberOfNamedSuperclasses,
+    DLExpressivityMetric, MaxNamedSuperclassCount, MaxNumberOfNamedSuperclasses, MaximumClassDepth,
+    Metric, NumberOfAnnotationAxioms, NumberOfAnnotationProperties,
+    NumberOfAsymmetricPropertyAxioms, NumberOfAxioms, NumberOfAxiomsByType, NumberOfClasses,
+    NumberOfDataProperties, NumberOfDatatypes, NumberOfDisjointClassesAxioms,
+    NumberOfEquivalentClassAxioms, NumberOfFunctionalPropertyAxioms, NumberOfGCI,
+    NumberOfGCIAxioms, NumberOfHasKeyAxioms, NumberOfHiddenGCI, NumberOfImports,
+    NumberOfIndividuals, NumberOfInverseFunctionalPropertyAxioms,
+    NumberOfIrreflexivePropertyAxioms, NumberOfLogicalAxioms, NumberOfObjectProperties,
+    NumberOfSWRLRuleAxioms, NumberOfSWRLRules, NumberOfSubClassAxioms,
+    NumberOfSymmetricPropertyAxioms, NumberOfTransitivePropertyAxioms, OntologyMetrics, OwlMetric,
+    PerPropertyAxiomTypeCounts,
+};
+pub use crate::inference::{
+    InferredClassAssertionAxiomGenerator, InferredDataPropertyAssertionGenerator,
+    InferredDisjointClassesAxiomGenerator, InferredEquivalentClassAxiomGenerator,
+    InferredEquivalentDataPropertyAxiomGenerator, InferredEquivalentObjectPropertyAxiomGenerator,
+    InferredInverseObjectPropertiesAxiomGenerator, InferredObjectPropertyAssertionGenerator,
+    InferredPropertyCharacteristicAxiomGenerator, InferredSubClassOfAxiomGenerator,
+    InferredSubDataPropertyAxiomGenerator, InferredSubObjectPropertyAxiomGenerator,
+};
+pub use crate::modularity::decomposer::{AtomicDecomposer, DecomposerConfig};
+pub use crate::modularity::decomposition::{Atom, AtomicDecomposition};
+pub use crate::modularity::extractor::{ModuleExtractor, ModuleExtractorConfig, ModuleType};
+pub use crate::modularity::locality::{
+    LocalityClass, LocalityEvaluator, SyntacticLocalityEvaluator,
+};
+pub use crate::modularity::segmenter::OntologySegmenter;
+pub use crate::ontology::axioms::{
+    Axiom, AxiomTrait, AxiomType, EntityType, SWRLAtom, SWRLDArgument, SWRLIArgument, SWRLRule,
+    SWRLVariable,
+};
+pub use crate::ontology::datatypes::{
+    ConstrainingFacet, DatatypeCategory, DatatypeDefinitionAxiom, OWL2Datatype, OWLFacet,
+};
+pub use crate::ontology::shortform::{
+    AnnotationValueShortFormProvider, BidirectionalShortFormProvider, OntologyIRIShortFormProvider,
+    QNameShortFormProvider, ShortFormProvider, SimpleShortFormProvider,
+};
+pub use crate::ontology::vocabulary::{Namespaces, PrefixManager};
+pub use crate::ontology::{
+    Annotation, AnnotationProperty, AnnotationSubject, AnnotationValue, Class, ClassExpression,
+    DataProperty, DataPropertyExpression, DataRange, FacetRestriction, IRI, ImportsDeclaration,
+    Individual, Literal, NamedIndividual, ObjectProperty, ObjectPropertyExpression, Ontology,
+    OntologyFormat, OntologyID, OntologyRef, Signature,
+};
+pub use crate::parsers::obo::{
+    OBOOutputConfig, OBOParser, OBOParserConfig, OBOWriter, Obo2Owl, Owl2Obo,
+};
+pub use crate::parsers::rio::{
+    binary_rdf::{BinaryRdfParser, BinaryRdfRenderer},
+    hdt::{HdtParser, HdtRenderer},
+    jsonld::{JsonLdParser, JsonLdRenderer},
+    n3::{N3Parser, N3Renderer},
+    nquads::{NQuadsParser, NQuadsRenderer},
+    rdf_json::{RdfJsonParser, RdfJsonRenderer},
+    rdfa::{RdfaParser, RdfaRenderer},
+    trig::{TriGParser, TriGRenderer},
+    trix::{TriXParser, TriXRenderer},
+};
+pub use crate::reasoner_api::structural::{StructuralReasoner, StructuralReasonerFactory};
+pub use crate::reasoner_api::{
+    BufferingMode, FreshEntityPolicy, IndividualNodeSetPolicy, InferenceDepth, InferenceType, Node,
+    NodeSet, OWLReasoner, OWLReasonerConfiguration, ReasonerFactory, ReasonerProgressMonitor,
+    TableauOWLReasoner, TableauReasonerFactory,
+};
+pub use crate::render::{ConciseObjectRenderer, OWLObjectRenderer};
+pub use crate::searcher::{EntityIndex, EntitySearcher};
+pub use crate::transform::cnf::ClausalNormalFormConverter;
+pub use crate::transform::expressivity::{DLExpressivity, DLExpressivityChecker};
+pub use crate::transform::nnf::NNFConverter;
+pub use crate::transform::{OWLEntityRemover, OWLEntityRenamer, OWLObjectTransformer};
+pub use crate::visitor::{OntologyChangeVisitor, dispatch_change};
+pub use crate::walk::merge::OWLOntologyMerger;
+pub use crate::walk::{OWLObjectVisitor, OntologyWalker, StructureWalker};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const NAME: &str = "Oxidowl";

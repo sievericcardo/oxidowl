@@ -1,6 +1,5 @@
 use crate::error::OxidowlError;
-use crate::ontology::axioms::*;
-use horned_owl::model::*;
+use crate::ontology::axioms::AxiomId;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
@@ -50,6 +49,27 @@ pub enum OWL2Datatype {
     // OWL 2 specific datatypes (Section 4.1)
     Real,
     Rational,
+
+    // ── Extended XSD string subtypes ──
+    NormalizedString,
+    Token,
+    Language,
+    Name,
+    NCName,
+    NMTOKEN,
+    NMTOKENS,
+
+    // ── XSD duration subtypes ──
+    DayTimeDuration,
+    YearMonthDuration,
+
+    // ── RDF extended datatypes ──
+    LangString,
+    RdfText,
+
+    // ── OWL extended ──
+    RdfPlainLiteral,
+    RdfXMLLiteral,
 }
 
 impl OWL2Datatype {
@@ -104,6 +124,29 @@ impl OWL2Datatype {
             // OWL 2 datatypes
             OWL2Datatype::Real => "http://www.w3.org/2002/07/owl#real",
             OWL2Datatype::Rational => "http://www.w3.org/2002/07/owl#rational",
+
+            // Extended string subtypes
+            OWL2Datatype::NormalizedString => "http://www.w3.org/2001/XMLSchema#normalizedString",
+            OWL2Datatype::Token => "http://www.w3.org/2001/XMLSchema#token",
+            OWL2Datatype::Language => "http://www.w3.org/2001/XMLSchema#language",
+            OWL2Datatype::Name => "http://www.w3.org/2001/XMLSchema#Name",
+            OWL2Datatype::NCName => "http://www.w3.org/2001/XMLSchema#NCName",
+            OWL2Datatype::NMTOKEN => "http://www.w3.org/2001/XMLSchema#NMTOKEN",
+            OWL2Datatype::NMTOKENS => "http://www.w3.org/2001/XMLSchema#NMTOKENS",
+
+            // Duration subtypes
+            OWL2Datatype::DayTimeDuration => "http://www.w3.org/2001/XMLSchema#dayTimeDuration",
+            OWL2Datatype::YearMonthDuration => "http://www.w3.org/2001/XMLSchema#yearMonthDuration",
+
+            // RDF extended
+            OWL2Datatype::LangString => "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString",
+            OWL2Datatype::RdfText => "http://www.w3.org/1999/02/22-rdf-syntax-ns#HTML",
+
+            // OWL extended (aliases)
+            OWL2Datatype::RdfPlainLiteral => {
+                "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral"
+            }
+            OWL2Datatype::RdfXMLLiteral => "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral",
         };
 
         crate::ontology::IRI::new(iri_string)
@@ -234,6 +277,21 @@ impl FromStr for OWL2Datatype {
             }
             "http://www.w3.org/2002/07/owl#real" => Ok(OWL2Datatype::Real),
             "http://www.w3.org/2002/07/owl#rational" => Ok(OWL2Datatype::Rational),
+            "http://www.w3.org/2001/XMLSchema#normalizedString" => {
+                Ok(OWL2Datatype::NormalizedString)
+            }
+            "http://www.w3.org/2001/XMLSchema#token" => Ok(OWL2Datatype::Token),
+            "http://www.w3.org/2001/XMLSchema#language" => Ok(OWL2Datatype::Language),
+            "http://www.w3.org/2001/XMLSchema#Name" => Ok(OWL2Datatype::Name),
+            "http://www.w3.org/2001/XMLSchema#NCName" => Ok(OWL2Datatype::NCName),
+            "http://www.w3.org/2001/XMLSchema#NMTOKEN" => Ok(OWL2Datatype::NMTOKEN),
+            "http://www.w3.org/2001/XMLSchema#NMTOKENS" => Ok(OWL2Datatype::NMTOKENS),
+            "http://www.w3.org/2001/XMLSchema#dayTimeDuration" => Ok(OWL2Datatype::DayTimeDuration),
+            "http://www.w3.org/2001/XMLSchema#yearMonthDuration" => {
+                Ok(OWL2Datatype::YearMonthDuration)
+            }
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString" => Ok(OWL2Datatype::LangString),
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#HTML" => Ok(OWL2Datatype::RdfText),
             _ => Err(OxidowlError::InvalidDatatype(format!(
                 "Unknown datatype IRI: {iri}"
             ))),
@@ -241,22 +299,293 @@ impl FromStr for OWL2Datatype {
     }
 }
 
+// ── DatatypeCategory ─────────────────────────────────────────────────────────
+
+/// Category for OWL 2 datatype classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DatatypeCategory {
+    Numeric,
+    String,
+    Time,
+    Boolean,
+    Binary,
+    URI,
+    RdfSpecial,
+    OwlSpecial,
+}
+
+// ── OWLFacet ─────────────────────────────────────────────────────────────────
+
+/// Constraining facets as defined in OWL 2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OWLFacet {
+    XsdLength,
+    XsdMinLength,
+    XsdMaxLength,
+    XsdPattern,
+    XsdMinInclusive,
+    XsdMaxInclusive,
+    XsdMinExclusive,
+    XsdMaxExclusive,
+    XsdTotalDigits,
+    XsdFractionDigits,
+    RdfLangRange,
+}
+
+impl OWLFacet {
+    #[must_use]
+    pub fn iri(&self) -> crate::ontology::IRI {
+        let xsd = "http://www.w3.org/2001/XMLSchema#";
+        crate::ontology::IRI::new(
+            match self {
+                OWLFacet::XsdLength => format!("{xsd}length"),
+                OWLFacet::XsdMinLength => format!("{xsd}minLength"),
+                OWLFacet::XsdMaxLength => format!("{xsd}maxLength"),
+                OWLFacet::XsdPattern => format!("{xsd}pattern"),
+                OWLFacet::XsdMinInclusive => format!("{xsd}minInclusive"),
+                OWLFacet::XsdMaxInclusive => format!("{xsd}maxInclusive"),
+                OWLFacet::XsdMinExclusive => format!("{xsd}minExclusive"),
+                OWLFacet::XsdMaxExclusive => format!("{xsd}maxExclusive"),
+                OWLFacet::XsdTotalDigits => format!("{xsd}totalDigits"),
+                OWLFacet::XsdFractionDigits => format!("{xsd}fractionDigits"),
+                OWLFacet::RdfLangRange => {
+                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#langRange".to_string()
+                }
+            }
+            .as_str(),
+        )
+    }
+
+    #[must_use]
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            OWLFacet::XsdLength => "length",
+            OWLFacet::XsdMinLength => "minLength",
+            OWLFacet::XsdMaxLength => "maxLength",
+            OWLFacet::XsdPattern => "pattern",
+            OWLFacet::XsdMinInclusive => "minInclusive",
+            OWLFacet::XsdMaxInclusive => "maxInclusive",
+            OWLFacet::XsdMinExclusive => "minExclusive",
+            OWLFacet::XsdMaxExclusive => "maxExclusive",
+            OWLFacet::XsdTotalDigits => "totalDigits",
+            OWLFacet::XsdFractionDigits => "fractionDigits",
+            OWLFacet::RdfLangRange => "langRange",
+        }
+    }
+}
+
+// ── Extended OWL2Datatype Methods ────────────────────────────────────────────
+
+impl OWL2Datatype {
+    /// Human-readable short name.
+    #[must_use]
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            OWL2Datatype::String => "string",
+            OWL2Datatype::Boolean => "boolean",
+            OWL2Datatype::Decimal => "decimal",
+            OWL2Datatype::Float => "float",
+            OWL2Datatype::Double => "double",
+            OWL2Datatype::DateTime => "dateTime",
+            OWL2Datatype::Time => "time",
+            OWL2Datatype::Date => "date",
+            OWL2Datatype::GYearMonth => "gYearMonth",
+            OWL2Datatype::GYear => "gYear",
+            OWL2Datatype::GMonthDay => "gMonthDay",
+            OWL2Datatype::GDay => "gDay",
+            OWL2Datatype::GMonth => "gMonth",
+            OWL2Datatype::Duration => "duration",
+            OWL2Datatype::DateTimeStamp => "dateTimeStamp",
+            OWL2Datatype::Base64Binary => "base64Binary",
+            OWL2Datatype::HexBinary => "hexBinary",
+            OWL2Datatype::AnyURI => "anyURI",
+            OWL2Datatype::Integer => "integer",
+            OWL2Datatype::NonNegativeInteger => "nonNegativeInteger",
+            OWL2Datatype::NonPositiveInteger => "nonPositiveInteger",
+            OWL2Datatype::PositiveInteger => "positiveInteger",
+            OWL2Datatype::NegativeInteger => "negativeInteger",
+            OWL2Datatype::Long => "long",
+            OWL2Datatype::Int => "int",
+            OWL2Datatype::Short => "short",
+            OWL2Datatype::Byte => "byte",
+            OWL2Datatype::UnsignedLong => "unsignedLong",
+            OWL2Datatype::UnsignedInt => "unsignedInt",
+            OWL2Datatype::UnsignedShort => "unsignedShort",
+            OWL2Datatype::UnsignedByte => "unsignedByte",
+            OWL2Datatype::XMLLiteral => "XMLLiteral",
+            OWL2Datatype::Literal => "Literal",
+            OWL2Datatype::PlainLiteral => "PlainLiteral",
+            OWL2Datatype::Real => "real",
+            OWL2Datatype::Rational => "rational",
+            OWL2Datatype::NormalizedString => "normalizedString",
+            OWL2Datatype::Token => "token",
+            OWL2Datatype::Language => "language",
+            OWL2Datatype::Name => "Name",
+            OWL2Datatype::NCName => "NCName",
+            OWL2Datatype::NMTOKEN => "NMTOKEN",
+            OWL2Datatype::NMTOKENS => "NMTOKENS",
+            OWL2Datatype::DayTimeDuration => "dayTimeDuration",
+            OWL2Datatype::YearMonthDuration => "yearMonthDuration",
+            OWL2Datatype::LangString => "langString",
+            OWL2Datatype::RdfText => "rdf:HTML",
+            OWL2Datatype::RdfPlainLiteral => "rdf:PlainLiteral",
+            OWL2Datatype::RdfXMLLiteral => "rdf:XMLLiteral",
+        }
+    }
+
+    /// Category for reasoning purposes.
+    #[must_use]
+    pub fn category(&self) -> DatatypeCategory {
+        if self.is_numeric() {
+            DatatypeCategory::Numeric
+        } else if self.is_datetime()
+            || matches!(
+                self,
+                OWL2Datatype::Duration
+                    | OWL2Datatype::DayTimeDuration
+                    | OWL2Datatype::YearMonthDuration
+            )
+        {
+            DatatypeCategory::Time
+        } else if matches!(self, OWL2Datatype::Boolean) {
+            DatatypeCategory::Boolean
+        } else if matches!(self, OWL2Datatype::Base64Binary | OWL2Datatype::HexBinary) {
+            DatatypeCategory::Binary
+        } else if matches!(self, OWL2Datatype::AnyURI) {
+            DatatypeCategory::URI
+        } else if matches!(self, OWL2Datatype::Real | OWL2Datatype::Rational) {
+            DatatypeCategory::OwlSpecial
+        } else if matches!(
+            self,
+            OWL2Datatype::XMLLiteral
+                | OWL2Datatype::PlainLiteral
+                | OWL2Datatype::RdfXMLLiteral
+                | OWL2Datatype::RdfPlainLiteral
+                | OWL2Datatype::LangString
+                | OWL2Datatype::RdfText
+                | OWL2Datatype::Literal
+        ) {
+            DatatypeCategory::RdfSpecial
+        } else {
+            DatatypeCategory::String
+        }
+    }
+
+    /// Whether this is a built-in OWL 2 datatype.
+    #[must_use]
+    pub fn is_built_in(&self) -> bool {
+        true
+    }
+
+    /// Get allowed constraining facets.
+    #[must_use]
+    pub fn facets(&self) -> Vec<OWLFacet> {
+        match self.category() {
+            DatatypeCategory::Numeric => vec![
+                OWLFacet::XsdMinInclusive,
+                OWLFacet::XsdMaxInclusive,
+                OWLFacet::XsdMinExclusive,
+                OWLFacet::XsdMaxExclusive,
+                OWLFacet::XsdTotalDigits,
+                OWLFacet::XsdFractionDigits,
+            ],
+            DatatypeCategory::String => vec![
+                OWLFacet::XsdLength,
+                OWLFacet::XsdMinLength,
+                OWLFacet::XsdMaxLength,
+                OWLFacet::XsdPattern,
+                OWLFacet::RdfLangRange,
+            ],
+            DatatypeCategory::Time => vec![
+                OWLFacet::XsdMinInclusive,
+                OWLFacet::XsdMaxInclusive,
+                OWLFacet::XsdMinExclusive,
+                OWLFacet::XsdMaxExclusive,
+            ],
+            DatatypeCategory::Binary => vec![
+                OWLFacet::XsdLength,
+                OWLFacet::XsdMinLength,
+                OWLFacet::XsdMaxLength,
+            ],
+            _ => vec![],
+        }
+    }
+
+    /// Check if this datatype is a subtype of another.
+    #[must_use]
+    pub fn is_subtype_of(&self, other: &OWL2Datatype) -> bool {
+        if self == other {
+            return true;
+        }
+        let mut current = self.parent_datatype();
+        while let Some(parent) = current {
+            if &parent == other {
+                return true;
+            }
+            current = parent.parent_datatype();
+        }
+        false
+    }
+
+    /// Validate a lexical form for this datatype.
+    pub fn validate_lexical_form(&self, form: &str) -> crate::Result<()> {
+        match self.category() {
+            DatatypeCategory::Numeric => {
+                form.parse::<f64>().map_err(|_| {
+                    crate::Error::InvalidLiteral(format!("Not a valid number: {form}"))
+                })?;
+            }
+            DatatypeCategory::Boolean
+                if form != "true" && form != "false" && form != "1" && form != "0" =>
+            {
+                return Err(crate::Error::InvalidLiteral(format!(
+                    "Not a boolean: {form}"
+                )));
+            }
+            DatatypeCategory::Binary
+                if self == &OWL2Datatype::HexBinary
+                    && !form.chars().all(|c| c.is_ascii_hexdigit()) =>
+            {
+                return Err(crate::Error::InvalidLiteral(format!("Not hex: {form}")));
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Parse a lexical form into a literal.
+    #[must_use]
+    pub fn parse_literal(&self, form: &str) -> crate::ontology::Literal {
+        crate::ontology::Literal::with_datatype(form.to_string(), self.iri())
+    }
+
+    /// Lookup from IRI string.
+    #[must_use]
+    pub fn from_iri(iri: &crate::ontology::IRI) -> Option<Self> {
+        iri.as_str().parse().ok()
+    }
+}
+
 /// Datatype definition axiom implementation (OWL 2 Section 9.4)
+///
+/// The definition uses native oxidowl types exclusively: the datatype being
+/// defined is a plain `IRI`, the data range is the native [`crate::ontology::DataRange`],
+/// and annotations are native [`crate::ontology::Annotation`]s.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DatatypeDefinitionAxiom {
     pub id: AxiomId,
-    pub datatype: IRI<String>,
-    pub data_range: horned_owl::model::DataRange<String>,
-    pub annotations: Vec<Annotation<String>>,
+    pub datatype: crate::ontology::IRI,
+    pub data_range: crate::ontology::DataRange,
+    pub annotations: Vec<crate::ontology::Annotation>,
 }
 
 impl DatatypeDefinitionAxiom {
     #[must_use]
     pub fn new(
         id: AxiomId,
-        datatype: IRI<String>,
-        data_range: horned_owl::model::DataRange<String>,
-        annotations: Vec<Annotation<String>>,
+        datatype: crate::ontology::IRI,
+        data_range: crate::ontology::DataRange,
+        annotations: Vec<crate::ontology::Annotation>,
     ) -> Self {
         Self {
             id,
@@ -265,33 +594,6 @@ impl DatatypeDefinitionAxiom {
             annotations,
         }
     }
-}
-
-/// Enhanced `DataRange` enum to support all OWL 2 data range constructs
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum DataRange {
-    /// Named datatype
-    Datatype(IRI<String>),
-    /// Datatype restriction with facet constraints
-    DatatypeRestriction {
-        datatype: IRI<String>,
-        facets: Vec<FacetRestriction>,
-    },
-    /// Intersection of data ranges
-    DataIntersectionOf(Vec<DataRange>),
-    /// Union of data ranges
-    DataUnionOf(Vec<DataRange>),
-    /// Complement of a data range
-    DataComplementOf(Box<DataRange>),
-    /// Enumeration of literals
-    DataOneOf(Vec<horned_owl::model::Literal<String>>),
-}
-
-/// Facet restrictions for datatype restrictions
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FacetRestriction {
-    pub facet: ConstrainingFacet,
-    pub literal: horned_owl::model::Literal<String>,
 }
 
 /// OWL 2 constraining facets (Section 4.3)
@@ -361,13 +663,48 @@ impl ConstrainingFacet {
             }
         }
     }
+
+    /// Look up a constraining facet from its IRI.
+    ///
+    /// This bridges the native [`crate::ontology::FacetRestriction`] (which stores
+    /// the facet as an `IRI`) to the typed [`ConstrainingFacet`] used for
+    /// applicability/conflict validation.
+    #[must_use]
+    pub fn from_iri(iri: &crate::ontology::IRI) -> Option<Self> {
+        match iri.as_str() {
+            "http://www.w3.org/2001/XMLSchema#length" => Some(ConstrainingFacet::Length),
+            "http://www.w3.org/2001/XMLSchema#minLength" => Some(ConstrainingFacet::MinLength),
+            "http://www.w3.org/2001/XMLSchema#maxLength" => Some(ConstrainingFacet::MaxLength),
+            "http://www.w3.org/2001/XMLSchema#pattern" => Some(ConstrainingFacet::Pattern),
+            "http://www.w3.org/2001/XMLSchema#enumeration" => Some(ConstrainingFacet::Enumeration),
+            "http://www.w3.org/2001/XMLSchema#whiteSpace" => Some(ConstrainingFacet::WhiteSpace),
+            "http://www.w3.org/2001/XMLSchema#maxInclusive" => {
+                Some(ConstrainingFacet::MaxInclusive)
+            }
+            "http://www.w3.org/2001/XMLSchema#maxExclusive" => {
+                Some(ConstrainingFacet::MaxExclusive)
+            }
+            "http://www.w3.org/2001/XMLSchema#minInclusive" => {
+                Some(ConstrainingFacet::MinInclusive)
+            }
+            "http://www.w3.org/2001/XMLSchema#minExclusive" => {
+                Some(ConstrainingFacet::MinExclusive)
+            }
+            "http://www.w3.org/2001/XMLSchema#totalDigits" => Some(ConstrainingFacet::TotalDigits),
+            "http://www.w3.org/2001/XMLSchema#fractionDigits" => {
+                Some(ConstrainingFacet::FractionDigits)
+            }
+            _ => None,
+        }
+    }
 }
 
 /// Datatype manager for handling OWL 2 datatypes
+#[derive(Debug)]
 pub struct DatatypeManager {
     datatype_definitions: HashMap<url::Url, DatatypeDefinitionAxiom>,
     #[allow(dead_code)]
-    facet_restrictions: HashMap<url::Url, Vec<FacetRestriction>>,
+    facet_restrictions: HashMap<url::Url, Vec<crate::ontology::FacetRestriction>>,
     datatype_hierarchy: HashMap<OWL2Datatype, HashSet<OWL2Datatype>>,
 }
 
@@ -441,8 +778,21 @@ impl DatatypeManager {
 
     /// Add a datatype definition
     pub fn add_datatype_definition(&mut self, definition: DatatypeDefinitionAxiom) {
-        if let Ok(url) = url::Url::parse(definition.datatype.as_ref()) {
+        if let Ok(url) = url::Url::parse(definition.datatype.as_str()) {
             self.datatype_definitions.insert(url, definition);
+        }
+    }
+
+    /// Register all `DatatypeDefinition` axioms from an ontology.
+    ///
+    /// The value-space checkers (`crate::core::reasoner::datatype_validation`) consult this
+    /// table so that literals of a user-defined datatype are validated against its defining
+    /// `DataRange` (e.g. `AdultAge` defined as `xsd:int [minInclusive 18]`).
+    pub fn register_definitions_from_ontology(&mut self, ontology: &crate::ontology::Ontology) {
+        for axiom in ontology.axioms() {
+            if let crate::ontology::Axiom::DatatypeDefinition(def) = axiom {
+                self.add_datatype_definition(def.clone());
+            }
         }
     }
 
@@ -460,6 +810,18 @@ impl DatatypeManager {
         } else {
             false
         }
+    }
+
+    /// Look up the defining data range for a user-defined datatype IRI, if any.
+    #[must_use]
+    pub fn get_datatype_definition(
+        &self,
+        datatype_iri: &crate::ontology::IRI,
+    ) -> Option<&DatatypeDefinitionAxiom> {
+        datatype_iri
+            .to_url()
+            .ok()
+            .and_then(|url| self.datatype_definitions.get(&url))
     }
 
     /// Validate a literal value against its datatype

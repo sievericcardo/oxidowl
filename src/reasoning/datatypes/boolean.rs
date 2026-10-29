@@ -8,7 +8,7 @@ use crate::error::Error;
 pub struct BooleanValueSpace;
 
 impl ValueSpaceHandler for BooleanValueSpace {
-    fn datatype_iri(&self) -> &str {
+    fn datatype_iri(&self) -> &'static str {
         "http://www.w3.org/2001/XMLSchema#boolean"
     }
 

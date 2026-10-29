@@ -78,7 +78,7 @@ impl SaturationRuleSet {
 pub struct ConjunctionRule;
 
 impl SaturationRule for ConjunctionRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Conjunction"
     }
 
@@ -101,11 +101,11 @@ impl SaturationRule for ConjunctionRule {
             }
         }
 
-        if !new_concepts.is_empty() {
+        if new_concepts.is_empty() {
+            Ok(false)
+        } else {
             node.add_saturated_concepts(new_concepts);
             Ok(true)
-        } else {
-            Ok(false)
         }
     }
 
@@ -119,7 +119,7 @@ impl SaturationRule for ConjunctionRule {
 pub struct SubClassOfRule;
 
 impl SaturationRule for SubClassOfRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "SubClassOf"
     }
 
@@ -145,11 +145,11 @@ impl SaturationRule for SubClassOfRule {
             }
         }
 
-        if !new_concepts.is_empty() {
+        if new_concepts.is_empty() {
+            Ok(false)
+        } else {
             node.add_saturated_concepts(new_concepts);
             Ok(true)
-        } else {
-            Ok(false)
         }
     }
 
@@ -163,7 +163,7 @@ impl SaturationRule for SubClassOfRule {
 pub struct EquivalentClassRule;
 
 impl SaturationRule for EquivalentClassRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "EquivalentClasses"
     }
 
@@ -195,11 +195,11 @@ impl SaturationRule for EquivalentClassRule {
             }
         }
 
-        if !new_concepts.is_empty() {
+        if new_concepts.is_empty() {
+            Ok(false)
+        } else {
             node.add_saturated_concepts(new_concepts);
             Ok(true)
-        } else {
-            Ok(false)
         }
     }
 
@@ -213,7 +213,7 @@ impl SaturationRule for EquivalentClassRule {
 pub struct UniversalRestrictionRule;
 
 impl SaturationRule for UniversalRestrictionRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "UniversalRestriction"
     }
 
@@ -249,7 +249,7 @@ impl SaturationRule for UniversalRestrictionRule {
 pub struct DomainRule;
 
 impl SaturationRule for DomainRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Domain"
     }
 
@@ -293,11 +293,11 @@ impl SaturationRule for DomainRule {
             }
         }
 
-        if !new_concepts.is_empty() {
+        if new_concepts.is_empty() {
+            Ok(false)
+        } else {
             node.add_saturated_concepts(new_concepts);
             Ok(true)
-        } else {
-            Ok(false)
         }
     }
 
@@ -311,7 +311,7 @@ impl SaturationRule for DomainRule {
 pub struct RangeRule;
 
 impl SaturationRule for RangeRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Range"
     }
 
@@ -350,7 +350,7 @@ impl SaturationRule for RangeRule {
 pub struct TransitivePropertyRule;
 
 impl SaturationRule for TransitivePropertyRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "TransitiveProperty"
     }
 
@@ -410,7 +410,7 @@ impl SaturationRule for TransitivePropertyRule {
 pub struct PropertyChainRule;
 
 impl SaturationRule for PropertyChainRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "PropertyChain"
     }
 
@@ -518,7 +518,7 @@ impl SaturationRule for PropertyChainRule {
 pub struct InversePropertyRule;
 
 impl SaturationRule for InversePropertyRule {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "InverseProperty"
     }
 

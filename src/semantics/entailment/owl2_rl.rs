@@ -32,9 +32,9 @@ impl Owl2RlEngine {
 
     /// Run the rule engine to completion
     pub fn reason(&mut self) -> Result<()> {
+        const MAX_ITERATIONS: usize = 1000; // Prevent infinite loops
         let mut changed = true;
         let mut iterations = 0;
-        const MAX_ITERATIONS: usize = 1000; // Prevent infinite loops
 
         while changed && iterations < MAX_ITERATIONS {
             let initial_size = self.closure.triples.len();

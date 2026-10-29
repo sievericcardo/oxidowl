@@ -125,11 +125,18 @@ impl SatExpanderCache {
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
     }
+
+    /// Clear all cached expansion results.
+    pub fn clear(&self) {
+        self.cache.clear();
+        self.hits.store(0, Ordering::Relaxed);
+        self.misses.store(0, Ordering::Relaxed);
+    }
 }
 
 impl Default for SatExpanderCache {
     fn default() -> Self {
-        Self::new(50_000, Duration::from_secs(1 * 3600))
+        Self::new(50_000, Duration::from_hours(1))
     }
 }
 

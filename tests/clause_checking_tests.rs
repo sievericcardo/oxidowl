@@ -1,4 +1,4 @@
-//! Integration tests for ClauseChecker with TableauExecutor
+//! Integration tests for `ClauseChecker` with `TableauExecutor`
 //!
 //! These tests verify that DL clause checking works correctly during tableau expansion,
 //! detecting violations that only appear during reasoning.
@@ -39,7 +39,7 @@ fn intersection(classes: Vec<ClassExpression>) -> ClassExpression {
     ClassExpression::ObjectIntersectionOf(classes)
 }
 
-/// Create a DisjointClasses axiom
+/// Create a `DisjointClasses` axiom
 fn disjoint_classes(classes: Vec<ClassExpression>) -> Axiom {
     use oxidowl::ontology::DisjointClassesAxiom;
     Axiom::DisjointClasses(DisjointClassesAxiom {
@@ -49,7 +49,7 @@ fn disjoint_classes(classes: Vec<ClassExpression>) -> Axiom {
     })
 }
 
-/// Create an EquivalentClasses axiom
+/// Create an `EquivalentClasses` axiom
 #[allow(dead_code)]
 fn equivalent_classes(classes: Vec<ClassExpression>) -> Axiom {
     use oxidowl::ontology::EquivalentClassesAxiom;
@@ -434,9 +434,9 @@ fn test_performance_many_clauses() {
     let clauses: Vec<DLClause> = (0..100)
         .map(|i| {
             create_deterministic_clause(
-                &format!("clause{}", i),
-                vec!["A", &format!("B{}", i)],
-                vec![&format!("C{}", i)],
+                &format!("clause{i}"),
+                vec!["A", &format!("B{i}")],
+                vec![&format!("C{i}")],
             )
         })
         .collect();
@@ -454,8 +454,7 @@ fn test_performance_many_clauses() {
     assert!(violation.is_none());
     assert!(
         duration.as_millis() < 100,
-        "Checking 100 clauses should take < 100ms, took {:?}",
-        duration
+        "Checking 100 clauses should take < 100ms, took {duration:?}"
     );
 }
 
@@ -465,7 +464,7 @@ fn test_performance_large_node() {
 
     // Create node with 100 concepts
     let concepts: Vec<&str> = (0..100)
-        .map(|i| Box::leak(format!("Concept{}", i).into_boxed_str()) as &str)
+        .map(|i| Box::leak(format!("Concept{i}").into_boxed_str()) as &str)
         .collect();
     let node = create_node_with_concepts(0, concepts);
 
@@ -480,7 +479,6 @@ fn test_performance_large_node() {
 
     assert!(
         duration.as_millis() < 50,
-        "Checking large node should take < 50ms, took {:?}",
-        duration
+        "Checking large node should take < 50ms, took {duration:?}"
     );
 }

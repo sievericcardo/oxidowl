@@ -1,0 +1,14 @@
+{
+  "id": "diff_007_shoin_nominal_cardinality",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff007#>)\nOntology(<http://example.org/diff007>\n  EquivalentClasses(:Parent ObjectMinCardinality(1 :hasChild :Person))\n  ClassAssertion(:Parent :p)\n)",
+  "base": "http://example.org/diff007#",
+  "axioms": { "min": 2 },
+  "expected": {
+    "consistent": true,
+    "instances": { "Parent": ["p"] },
+    "satisfiable": { "Parent": true },
+    "nonSubsumptions": [["Parent", "Person"]]
+  },
+  "rationale": "Parent ≡ ∃hasChild.Person (ObjectMinCardinality 1 with filler Person). p is asserted in Parent, so p is an instance; the class is satisfiable because a fresh hasChild-successor in Person can always be created. Parent ⊑ Person is NOT entailed (having a child in Person does not make you a Person)."
+}

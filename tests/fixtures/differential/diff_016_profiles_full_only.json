@@ -1,0 +1,12 @@
+{
+  "id": "diff_016_profiles_full_only",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff016#>)\nOntology(<http://example.org/diff016>\n  Declaration(Class(:x))\n  Declaration(Datatype(:x))\n  SubClassOf(:x :B)\n)",
+  "base": "http://example.org/diff016#",
+  "axioms": { "min": 3 },
+  "expected": {
+    "consistent": true,
+    "profiles": { "el": false, "ql": false, "rl": false, "dl": false, "full": true }
+  },
+  "rationale": "The IRI :x is used as both a Class and a Datatype — illegal punning under OWL 2 DL (and hence rejected by EL, QL, RL and DL profile conformance). OWL 2 Full imposes no structural restrictions, so it conforms to Full only. This is the canonical 'Full-only' ontology."
+}

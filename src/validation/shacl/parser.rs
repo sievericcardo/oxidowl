@@ -8,7 +8,25 @@ use std::collections::HashMap;
 use crate::error::{Error, Result};
 use crate::query::sparql_store::SparqlStore;
 use crate::semantics::RdfTerm;
-use crate::validation::shacl::{model::*, vocabulary::*};
+use crate::validation::shacl::{
+    model::{
+        NodeShape, PropertyShape, ShaclConstraint, ShaclMessage, ShaclNodeKind, ShaclPath,
+        ShaclSeverity, ShaclShape, ShaclTarget, SparqlConstraint,
+    },
+    vocabulary::{
+        OWL_NS, RDF_FIRST, RDF_NIL, RDF_NS, RDF_REST, RDFS_NS, SH_ALTERNATIVE_PATH, SH_AND,
+        SH_CLASS, SH_CLOSED, SH_DATATYPE, SH_DEACTIVATED, SH_DECLARE, SH_DISJOINT, SH_EQUALS,
+        SH_FLAGS, SH_HAS_VALUE, SH_IGNORED_PROPERTIES, SH_IN, SH_INVERSE_PATH, SH_LANGUAGE_IN,
+        SH_LESS_THAN, SH_LESS_THAN_OR_EQUALS, SH_MAX_COUNT, SH_MAX_EXCLUSIVE, SH_MAX_INCLUSIVE,
+        SH_MAX_LENGTH, SH_MESSAGE, SH_MIN_COUNT, SH_MIN_EXCLUSIVE, SH_MIN_INCLUSIVE, SH_MIN_LENGTH,
+        SH_NAMESPACE, SH_NODE, SH_NODE_KIND, SH_NODE_SHAPE, SH_NOT, SH_NS, SH_ONE_OR_MORE_PATH,
+        SH_OR, SH_PATH, SH_PATTERN, SH_PREFIX, SH_PREFIXES, SH_PROPERTY, SH_PROPERTY_SHAPE,
+        SH_QUALIFIED_MAX_COUNT, SH_QUALIFIED_MIN_COUNT, SH_QUALIFIED_VALUE_SHAPE,
+        SH_QUALIFIED_VALUE_SHAPES_DISJOINT, SH_SELECT, SH_SEVERITY, SH_SPARQL, SH_TARGET_CLASS,
+        SH_TARGET_NODE, SH_TARGET_OBJECTS_OF, SH_TARGET_SUBJECTS_OF, SH_UNIQUE_LANG, SH_XONE,
+        SH_ZERO_OR_MORE_PATH, SH_ZERO_OR_ONE_PATH,
+    },
+};
 
 /// Parse a Turtle shapes graph and return a list of `ShaclShape`s.
 ///
@@ -544,7 +562,7 @@ fn walk_rdf_list(store: &SparqlStore, head: &RdfTerm) -> Result<Vec<RdfTerm>> {
     let mut current = head.clone();
 
     loop {
-        if nil.as_ref().map(|n| n == &current).unwrap_or(false) {
+        if nil.as_ref().is_some_and(|n| n == &current) {
             break;
         }
         let first_vals = direct_objects(store, &current, RDF_FIRST)?;

@@ -248,17 +248,36 @@ impl ImportResolver {
                     ))
                 }),
             ImportType::Remote => {
-                // For now, return error - would implement HTTP client
-                Err(Error::import_error(format!(
-                    "Remote import loading not yet implemented: {}",
-                    resolved.location
-                )))
+                #[cfg(feature = "http-imports")]
+                {
+                    let response = reqwest::get(&resolved.location).await.map_err(|e| {
+                        Error::import_error(format!(
+                            "HTTP request failed for {}: {}",
+                            resolved.location, e
+                        ))
+                    })?;
+                    response.text().await.map_err(|e| {
+                        Error::import_error(format!(
+                            "Failed to read HTTP response body {}: {}",
+                            resolved.location, e
+                        ))
+                    })
+                }
+                #[cfg(not(feature = "http-imports"))]
+                {
+                    Err(Error::import_error(format!(
+                        "Remote import loading requires the 'http-imports' feature: {}",
+                        resolved.location
+                    )))
+                }
             }
         }
     }
 
     fn extract_imports(&self, content: &str) -> Result<Vec<String>> {
-        // Simplified import extraction - would use proper parser
+        // Extract owl:imports declarations via pattern matching on RDF/Turtle syntax.
+        // For full precision, a proper RDF parser (e.g., horned-owl) should be used
+        // to extract import triples rather than line-based pattern matching.
         let mut imports = Vec::new();
 
         // Look for owl:imports patterns

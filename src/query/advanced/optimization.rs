@@ -296,7 +296,7 @@ impl QueryOptimizer {
             Ok(ExecutionStrategy::Direct)
         } else if self.is_ql_compatible(query) {
             Ok(ExecutionStrategy::Rewriting {
-                rewritten_queries: vec![query.clone()], // Placeholder
+                rewritten_queries: vec![query.clone()],
             })
         } else if complexity > 20 {
             Ok(ExecutionStrategy::Hybrid {
@@ -340,27 +340,21 @@ impl QueryOptimizer {
     fn estimate_atom_selectivity(&self, atom: &QueryAtom) -> Result<f64, OptimizationError> {
         match &self.config.selectivity_method {
             SelectivityMethod::Uniform => Ok(0.1), // Uniform assumption
-            SelectivityMethod::Cardinality => {
-                match atom {
-                    QueryAtom::ClassAtom {
-                        class_expression, ..
-                    } => {
-                        Ok(self
-                            .statistics
-                            .class_cardinalities
-                            .get(class_expression)
-                            .map(|&count| count as f64 / 1000.0) // Normalize by assumed total
-                            .unwrap_or(0.1))
-                    }
-                    QueryAtom::ObjectPropertyAtom { property, .. } => Ok(self
-                        .statistics
-                        .property_cardinalities
-                        .get(property)
-                        .map(|&count| count as f64 / 1000.0)
-                        .unwrap_or(0.1)),
-                    _ => Ok(0.1),
-                }
-            }
+            SelectivityMethod::Cardinality => match atom {
+                QueryAtom::ClassAtom {
+                    class_expression, ..
+                } => Ok(self
+                    .statistics
+                    .class_cardinalities
+                    .get(class_expression)
+                    .map_or(0.1, |&count| count as f64 / 1000.0)),
+                QueryAtom::ObjectPropertyAtom { property, .. } => Ok(self
+                    .statistics
+                    .property_cardinalities
+                    .get(property)
+                    .map_or(0.1, |&count| count as f64 / 1000.0)),
+                _ => Ok(0.1),
+            },
             _ => Ok(0.1), // Fallback
         }
     }

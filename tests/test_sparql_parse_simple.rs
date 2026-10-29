@@ -1,6 +1,6 @@
 #[test]
 fn test_parse_insert_query() {
-    let query = r#"INSERT DATA { <http://a> <http://b> <http://c> }"#;
+    let query = r"INSERT DATA { <http://a> <http://b> <http://c> }";
     let query_upper = query.to_uppercase();
     let keyword = "INSERT DATA";
 
@@ -19,7 +19,7 @@ fn test_parse_insert_query() {
 
             if let Some(brace_end) = remaining_after.find('}') {
                 let content = &query[content_start..content_start + brace_end];
-                println!("Content: '{}'", content);
+                println!("Content: '{content}'");
                 assert!(!content.trim().is_empty());
             }
         }

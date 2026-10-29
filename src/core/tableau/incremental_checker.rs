@@ -99,7 +99,8 @@ impl NodeFingerprint {
             .map(|(role, successors)| {
                 let mut sorted_successors: Vec<NodeId> = successors.iter().copied().collect();
                 sorted_successors.sort_unstable();
-                (role.clone(), sorted_successors)
+                // Convert Arc<str> key to String so the Vec type stays (String, Vec<NodeId>)
+                (role.to_string(), sorted_successors)
             })
             .collect();
         role_edges.sort_by(|a, b| a.0.cmp(&b.0));
@@ -204,6 +205,10 @@ impl CheckResultCache {
     /// - 10,000 entries ≈ 880 KB
     /// - 50,000 entries ≈ 4.4 MB
     /// - 100,000 entries ≈ 8.8 MB
+    ///
+    /// # Panics
+    ///
+    /// Panics if `capacity` is zero.
     #[must_use]
     pub fn new(capacity: usize) -> Self {
         let cache = LruCache::new(NonZeroUsize::new(capacity).expect("capacity must be > 0"));
@@ -497,14 +502,16 @@ mod tests {
     #[test]
     fn test_fingerprint_with_roles() {
         let mut node1 = create_test_node(0, vec!["Person"]);
-        node1
-            .role_successors
-            .insert("knows".to_string(), vec![1, 2].into_iter().collect());
+        node1.role_successors.insert(
+            std::sync::Arc::from("knows"),
+            vec![1, 2].into_iter().collect(),
+        );
 
         let mut node2 = create_test_node(0, vec!["Person"]);
-        node2
-            .role_successors
-            .insert("knows".to_string(), vec![2, 1].into_iter().collect()); // Different order
+        node2.role_successors.insert(
+            std::sync::Arc::from("knows"),
+            vec![2, 1].into_iter().collect(),
+        ); // Different order
 
         let fp1 = NodeFingerprint::from_node(&node1);
         let fp2 = NodeFingerprint::from_node(&node2);
@@ -696,7 +703,7 @@ mod tests {
         cache.get(fp, 2); // Miss
 
         let stats = cache.statistics();
-        let display = format!("{}", stats);
+        let display = format!("{stats}");
 
         // Should contain key metrics
         assert!(display.contains("Cache:"));

@@ -11,9 +11,9 @@ use crate::core::tableau::equivalence::{ConceptId, EquivalenceClosure};
 use crate::core::tableau::incremental_checker::{
     CachedCheckResult, ChangeTracker, CheckResultCache, NodeFingerprint,
 };
-use crate::core::tableau::node::{ConceptLabel, TableauNode};
+use crate::core::tableau::node::{ConceptLabel, NodeId, TableauNode};
 use crate::dl_clauses::{DLAtom, DLClause, DLClauseSet};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Configuration for clause checking optimizations
 #[derive(Debug, Clone)]
@@ -358,7 +358,14 @@ impl ClauseChecker {
                 })
                 .collect();
 
-            if !predicates.is_empty() {
+            if predicates.is_empty() {
+                // No atomic concepts, but still check clauses with empty bodies
+                index
+                    .deterministic_clauses()
+                    .iter()
+                    .filter(|c| c.body.is_empty())
+                    .collect()
+            } else {
                 let mut candidates = index.get_candidate_clause_refs(&predicates);
 
                 // IMPORTANT: Also include clauses with empty bodies (they always apply!)
@@ -372,13 +379,6 @@ impl ClauseChecker {
                 }
 
                 candidates
-            } else {
-                // No atomic concepts, but still check clauses with empty bodies
-                index
-                    .deterministic_clauses()
-                    .iter()
-                    .filter(|c| c.body.is_empty())
-                    .collect()
             }
         } else {
             // No index - check all clauses (O(n) approach)
@@ -395,6 +395,13 @@ impl ClauseChecker {
         for clause in clauses_to_check {
             // Skip if empty head (handled by negative clause checking)
             if clause.head.is_empty() {
+                continue;
+            }
+
+            // Workstream A5: clauses mentioning binary (role) atoms are evaluated at the
+            // tableau level (against the edge set), not per-node. A per-node evaluation would
+            // spuriously report role-assertion facts like `P(a,b)` (empty body) as violated.
+            if Self::clause_has_binary_atom_anywhere(clause) {
                 continue;
             }
 
@@ -464,6 +471,11 @@ impl ClauseChecker {
         );
 
         for clause in negative_clauses {
+            // Workstream A5: role-atom constraint clauses are checked at the tableau level.
+            if Self::clause_has_binary_atom_anywhere(clause) {
+                continue;
+            }
+
             // Check if body is satisfied
             if !self.matches_body(node, &clause.body) {
                 continue;
@@ -510,6 +522,9 @@ impl ClauseChecker {
         node: &TableauNode,
         fingerprint: Option<NodeFingerprint>,
     ) -> Option<ClauseViolation> {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
         // If no cache or no fingerprint, fall back to regular checking
         if self.check_cache.is_none() || fingerprint.is_none() {
             return self.check_deterministic_clauses(node);
@@ -530,7 +545,14 @@ impl ClauseChecker {
                 })
                 .collect();
 
-            if !predicates.is_empty() {
+            if predicates.is_empty() {
+                index
+                    .deterministic_clauses()
+                    .iter()
+                    .filter(|c| c.body.is_empty())
+                    .cloned()
+                    .collect()
+            } else {
                 let mut candidates = index
                     .get_candidate_clause_refs(&predicates)
                     .into_iter()
@@ -548,25 +570,20 @@ impl ClauseChecker {
                 }
 
                 candidates
-            } else {
-                index
-                    .deterministic_clauses()
-                    .iter()
-                    .filter(|c| c.body.is_empty())
-                    .cloned()
-                    .collect()
             }
         } else {
             self.clauses.deterministic_clauses.clone()
         };
 
         // Get clause ID to usize mapping (use hash of clause id string)
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
         for clause in &clauses_to_check {
             // Skip empty heads
             if clause.head.is_empty() {
+                continue;
+            }
+
+            // Workstream A5: role-atom clauses are checked at the tableau level.
+            if Self::clause_has_binary_atom_anywhere(clause) {
                 continue;
             }
 
@@ -680,6 +697,9 @@ impl ClauseChecker {
         node: &TableauNode,
         fingerprint: Option<NodeFingerprint>,
     ) -> Option<ClauseViolation> {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
         // If no cache or no fingerprint, fall back to regular checking
         if self.check_cache.is_none() || fingerprint.is_none() {
             return self.check_negative_clauses(node);
@@ -701,10 +721,12 @@ impl ClauseChecker {
                 .collect()
         };
 
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
         for clause in &negative_clauses {
+            // Workstream A5: role-atom constraint clauses are checked at the tableau level.
+            if Self::clause_has_binary_atom_anywhere(clause) {
+                continue;
+            }
+
             // Compute clause ID hash
             let mut hasher = DefaultHasher::new();
             clause.id.hash(&mut hasher);
@@ -864,6 +886,19 @@ impl ClauseChecker {
 
     /// Check if a single atom matches the node state
     fn matches_atom(&self, node: &TableauNode, atom: &DLAtom) -> bool {
+        // Workstream A5: a binary atom `R(x, x)` whose two arguments are the *same* variable
+        // is evaluated against the node's self-loop edges (an R-successor that is the node
+        // itself). This is the only binary-atom case the per-node checker can decide on its
+        // own; general binary atoms range over node *pairs* and are evaluated at the tableau
+        // level by `check_role_constraint_clauses`.
+        if atom.arguments.len() == 2 && atom.arguments[0] == atom.arguments[1] {
+            let present = node
+                .role_successors
+                .get(atom.predicate.as_str())
+                .is_some_and(|s| s.contains(&node.id));
+            return if atom.is_positive { present } else { !present };
+        }
+
         // For now, only handle unary predicates (concept assertions)
         if atom.arguments.len() != 1 {
             log::trace!("Skipping non-unary atom: {atom:?}");
@@ -883,6 +918,138 @@ impl ClauseChecker {
         } else {
             !concept_present
         }
+    }
+
+    /// Whether a clause mentions any binary (role) atom or equality atom in its body or head.
+    fn clause_has_binary_atom_anywhere(clause: &DLClause) -> bool {
+        clause.body.iter().chain(clause.head.iter()).any(|a| {
+            a.arguments.len() >= 2 || (a.arguments.is_empty() && a.predicate.starts_with('['))
+        })
+    }
+
+    /// Whether a clause body mentions any binary (role) atom or equality atom.
+    fn clause_has_binary_atom(clause: &DLClause) -> bool {
+        clause.body.iter().any(|a| {
+            a.arguments.len() >= 2 || (a.arguments.is_empty() && a.predicate.starts_with('['))
+        })
+    }
+
+    /// The deterministic clauses that act as role-level constraints: empty head (a
+    /// contradiction) and a body containing at least one binary (role) atom.
+    #[must_use]
+    pub fn role_constraint_clauses(&self) -> Vec<&DLClause> {
+        self.clauses
+            .deterministic_clauses
+            .iter()
+            .filter(|c| c.head.is_empty() && Self::clause_has_binary_atom(c))
+            .collect()
+    }
+
+    /// The deterministic clauses whose body contains at least one binary (role) atom,
+    /// including head-bearing rules (transitivity, symmetry, role inclusions, …). These are
+    /// the clauses that the per-node checker cannot evaluate and that the executor applies
+    /// via [`crate::core::tableau::executor::TableauExecutor::apply_role_rules`].
+    #[must_use]
+    pub fn role_body_clauses(&self) -> Vec<&DLClause> {
+        self.clauses
+            .deterministic_clauses
+            .iter()
+            .filter(|c| Self::clause_has_binary_atom(c))
+            .collect()
+    }
+
+    /// Check role-level *constraint* clauses (empty head, at least one binary atom in the
+    /// body) against the current tableau edge set.
+    ///
+    /// **Architecture choice (workstream A5):** the clause checker is invoked *per-node* by
+    /// the executor, which is the right granularity for unary clauses. Binary atoms range
+    /// over node *pairs* connected by edges, so clauses containing them are evaluated at the
+    /// **tableau level** instead — this method — and the executor calls it once per loop
+    /// iteration. Role-hierarchy is honoured when matching: an edge labelled `r` also
+    /// satisfies an atom whose predicate is any transitive super-property of `r`.
+    ///
+    /// Returns the first violation found (a body satisfied with an empty head ⇒ ⊥), or
+    /// `None`. Head-bearing role clauses are *not* checked here: they derive new facts and
+    /// are applied by the executor's `RBox` rule pass.
+    #[must_use]
+    pub fn check_role_constraint_clauses(
+        &self,
+        tableau: &super::Tableau,
+    ) -> Option<ClauseViolation> {
+        let clauses = self.role_constraint_clauses();
+        if clauses.is_empty() {
+            return None;
+        }
+
+        // Lightweight role fact base over the current tableau.
+        let edges: Vec<(NodeId, NodeId, String)> = tableau
+            .edges
+            .iter()
+            .map(|e| (e.from, e.to, e.role.to_string()))
+            .collect();
+        let node_count = tableau.nodes.len();
+        let mut node_atomics: Vec<HashSet<String>> = Vec::with_capacity(node_count);
+        for n in &tableau.nodes {
+            let mut s: HashSet<String> = HashSet::new();
+            for c in &n.concepts {
+                match c {
+                    ConceptLabel::Atomic(name) => {
+                        s.insert(name.clone());
+                    }
+                    ConceptLabel::NegatedAtomic(name) => {
+                        s.insert(format!("!{name}"));
+                    }
+                    ConceptLabel::Complex(expr) => {
+                        if let crate::ontology::ClassExpression::Class(cl) = expr.as_ref() {
+                            s.insert(cl.iri.as_str().to_string());
+                        }
+                    }
+                    ConceptLabel::Nominal(name) => {
+                        s.insert(format!("{{{name}}}"));
+                    }
+                    _ => {}
+                }
+            }
+            node_atomics.push(s);
+        }
+        let supers = super_properties_of(tableau.ontology.as_ref());
+
+        for clause in clauses {
+            let mut subst: HashMap<String, NodeId> = HashMap::new();
+            if role_body_satisfiable(
+                tableau,
+                &edges,
+                &node_atomics,
+                &supers,
+                &clause.body,
+                &mut subst,
+            ) {
+                log::warn!(
+                    "Role constraint clause violated at tableau level: {}",
+                    clause.id
+                );
+                let violating_concepts: Vec<String> = clause
+                    .body
+                    .iter()
+                    .map(|atom| atom.predicate.clone())
+                    .collect();
+                return Some(ClauseViolation {
+                    clause: clause.clone(),
+                    violating_concepts,
+                    explanation: format!(
+                        "role constraint clause violated: all body atoms {} are satisfied, deriving ⊥",
+                        clause
+                            .body
+                            .iter()
+                            .map(std::string::ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                    node_id: subst.values().next().copied().unwrap_or(0),
+                });
+            }
+        }
+        None
     }
 
     /// Get statistics about the clause set
@@ -977,6 +1144,238 @@ impl ClauseChecker {
             tracker.clear();
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tableau-level role (binary) atom matching — workstream A5.
+//
+// A clause body is satisfied when there exists a variable substitution mapping the
+// clause variables to tableau nodes such that every body atom holds. Unary atoms
+// (`C(x)`) are checked against node concept labels; binary atoms (`P(x,y)`) are
+// checked against the current edge set with role-hierarchy awareness; equality atoms
+// (`[a == b]`) are checked against node identity.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Whether `atom_predicate` is satisfied by an edge labelled `edge_role`, honouring the
+/// role hierarchy: an `edge_role`-edge also satisfies any transitive super-property.
+fn role_matches(
+    atom_predicate: &str,
+    edge_role: &str,
+    supers: &HashMap<String, HashSet<String>>,
+) -> bool {
+    if atom_predicate == edge_role {
+        return true;
+    }
+    supers
+        .get(edge_role)
+        .is_some_and(|s| s.contains(atom_predicate))
+}
+
+/// The transitive sub-property closure of the ontology: `role → {super-roles}`.
+/// Only simple (non-chain) sub/super property expressions are considered.
+fn super_properties_of(ontology: &crate::ontology::Ontology) -> HashMap<String, HashSet<String>> {
+    use crate::ontology::{Axiom, ObjectPropertyExpression};
+    let mut supers: HashMap<String, HashSet<String>> = HashMap::new();
+    for ax in ontology.axioms() {
+        if let Axiom::SubObjectPropertyOf(a) = ax {
+            if matches!(a.sub_property, ObjectPropertyExpression::PropertyChain(_))
+                || matches!(a.super_property, ObjectPropertyExpression::PropertyChain(_))
+            {
+                continue;
+            }
+            let sub = a.sub_property.to_string();
+            let sup = a.super_property.to_string();
+            if sub != sup {
+                supers.entry(sub).or_default().insert(sup);
+            }
+        }
+    }
+    // Transitive closure by fixpoint.
+    loop {
+        let mut changed = false;
+        let keys: Vec<String> = supers.keys().cloned().collect();
+        for k in &keys {
+            let direct: HashSet<String> = supers.get(k).cloned().unwrap_or_default();
+            let mut extra: HashSet<String> = HashSet::new();
+            for m in &direct {
+                if let Some(ms) = supers.get(m) {
+                    extra.extend(ms.iter().cloned());
+                }
+            }
+            if !extra.is_empty() {
+                let t = supers.entry(k.clone()).or_default();
+                for v in extra {
+                    if t.insert(v) {
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    supers
+}
+
+/// Resolve a ground individual name in a DL clause to a tableau node id.
+///
+/// DL clauses store individuals in prefix-shortened form (`iri_to_string`), so the exact
+/// `individual_map` lookup is tried first and a local-name suffix match on nominal labels is
+/// used as a fallback. `None` means the constant is unknown to the tableau (a clause body
+/// mentioning it cannot be satisfied).
+fn resolve_constant(tableau: &super::Tableau, name: &str) -> Option<NodeId> {
+    if let Some(&id) = tableau.individual_map.get(name) {
+        return Some(id);
+    }
+    for (i, n) in tableau.nodes.iter().enumerate() {
+        for c in &n.concepts {
+            if let ConceptLabel::Nominal(nom) = c
+                && (nom == name
+                    || nom.ends_with(&format!("/{name}"))
+                    || nom.ends_with(&format!("#{name}")))
+            {
+                return Some(i);
+            }
+        }
+    }
+    None
+}
+
+/// Extend `subst` by binding `arg` to `node`, or verify consistency when already bound.
+/// Clause variables are uppercase; anything else is treated as a ground individual constant.
+fn try_bind(
+    tableau: &super::Tableau,
+    subst: &HashMap<String, NodeId>,
+    arg: &str,
+    node: NodeId,
+) -> Option<HashMap<String, NodeId>> {
+    if arg.is_empty() {
+        return None;
+    }
+    if arg.chars().next().is_some_and(char::is_uppercase) {
+        if let Some(&v) = subst.get(arg) {
+            if v == node {
+                return Some(subst.clone());
+            }
+            return None;
+        }
+        let mut s = subst.clone();
+        s.insert(arg.to_string(), node);
+        Some(s)
+    } else {
+        // Ground constant: must resolve to exactly `node`.
+        match resolve_constant(tableau, arg) {
+            Some(id) if id == node => Some(subst.clone()),
+            _ => None,
+        }
+    }
+}
+
+/// Whether the body atoms of a role clause can be satisfied against the tableau edge set.
+///
+/// A backtracking search over the body atoms, extending `subst` with one candidate binding
+/// per atom and recursing. The first satisfying substitution is written back to `subst`.
+fn role_body_satisfiable(
+    tableau: &super::Tableau,
+    edges: &[(NodeId, NodeId, String)],
+    node_atomics: &[HashSet<String>],
+    supers: &HashMap<String, HashSet<String>>,
+    body: &[DLAtom],
+    subst: &mut HashMap<String, NodeId>,
+) -> bool {
+    role_body_at_index(tableau, edges, node_atomics, supers, body, 0, subst)
+}
+
+fn role_body_at_index(
+    tableau: &super::Tableau,
+    edges: &[(NodeId, NodeId, String)],
+    node_atomics: &[HashSet<String>],
+    supers: &HashMap<String, HashSet<String>>,
+    body: &[DLAtom],
+    idx: usize,
+    subst: &mut HashMap<String, NodeId>,
+) -> bool {
+    if idx == body.len() {
+        return true;
+    }
+    let atom = &body[idx];
+
+    if atom.arguments.len() >= 2 {
+        // Binary (role) atom: enumerate candidate edges whose role matches the predicate
+        // (with role-hierarchy), consistent with the current substitution.
+        let (from, to) = (atom.arguments[0].clone(), atom.arguments[1].clone());
+        for (e_from, e_to, e_role) in edges {
+            if !role_matches(&atom.predicate, e_role, supers) {
+                continue;
+            }
+            let Some(s) = try_bind(tableau, subst, &from, *e_from) else {
+                continue;
+            };
+            let Some(s) = try_bind(tableau, &s, &to, *e_to) else {
+                continue;
+            };
+            let mut s = s;
+            if role_body_at_index(tableau, edges, node_atomics, supers, body, idx + 1, &mut s) {
+                *subst = s;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if atom.arguments.len() == 1 {
+        // Unary (concept) atom: enumerate nodes carrying the concept.
+        let arg = atom.arguments[0].clone();
+        for (node, concepts) in node_atomics.iter().enumerate() {
+            if !concepts.contains(&atom.predicate) {
+                continue;
+            }
+            let Some(s) = try_bind(tableau, subst, &arg, node) else {
+                continue;
+            };
+            let mut s = s;
+            if role_body_at_index(tableau, edges, node_atomics, supers, body, idx + 1, &mut s) {
+                *subst = s;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Equality atom `[a == b]`: both operands must resolve to the same node.
+    let pred = &atom.predicate;
+    if pred.starts_with('[') && pred.ends_with(']') {
+        let inner = &pred[1..pred.len() - 1];
+        let Some(eq_pos) = inner.find("==") else {
+            return false;
+        };
+        let left = inner[..eq_pos].trim().to_string();
+        let right = inner[eq_pos + 2..].trim().to_string();
+        if left.is_empty() || right.is_empty() {
+            return false;
+        }
+        // Bind left to its (resolved) node, then require right to resolve to the same.
+        let left_node = if left.chars().next().is_some_and(char::is_uppercase) {
+            subst.get(&left).copied()
+        } else {
+            resolve_constant(tableau, &left)
+        };
+        let right_node = if right.chars().next().is_some_and(char::is_uppercase) {
+            subst.get(&right).copied()
+        } else {
+            resolve_constant(tableau, &right)
+        };
+        if let (Some(l), Some(r)) = (left_node, right_node)
+            && l == r
+        {
+            return role_body_at_index(tableau, edges, node_atomics, supers, body, idx + 1, subst);
+        }
+        // The operands may not be bound yet in this branch — try binding via unification.
+        return false;
+    }
+
+    false
 }
 
 #[cfg(test)]

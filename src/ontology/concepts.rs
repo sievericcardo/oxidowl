@@ -164,6 +164,10 @@ impl ClassExpression {
     }
 
     /// Create an intersection of class expressions
+    ///
+    /// # Panics
+    ///
+    /// Panics if internal length invariants are violated.
     #[must_use]
     pub fn intersection_of(expressions: Vec<ClassExpression>) -> Self {
         if expressions.is_empty() {
@@ -179,6 +183,10 @@ impl ClassExpression {
     }
 
     /// Create a union of class expressions
+    ///
+    /// # Panics
+    ///
+    /// Panics if internal length invariants are violated.
     #[must_use]
     pub fn union_of(expressions: Vec<ClassExpression>) -> Self {
         if expressions.is_empty() {
@@ -284,11 +292,11 @@ impl ClassExpression {
                 // ObjectHasValue has an individual value, not a class expression
                 // No classes to collect from individuals
             }
-            ClassExpression::DataSomeValuesFrom { filler: _, .. }
-            | ClassExpression::DataAllValuesFrom { filler: _, .. }
-            | ClassExpression::DataMinCardinality { filler: _, .. }
-            | ClassExpression::DataMaxCardinality { filler: _, .. }
-            | ClassExpression::DataExactCardinality { filler: _, .. } => {
+            ClassExpression::DataSomeValuesFrom { .. }
+            | ClassExpression::DataAllValuesFrom { .. }
+            | ClassExpression::DataMinCardinality { .. }
+            | ClassExpression::DataMaxCardinality { .. }
+            | ClassExpression::DataExactCardinality { .. } => {
                 // Data ranges do not contain named classes
             }
             ClassExpression::ObjectComplementOf(expr) => {
@@ -397,11 +405,11 @@ impl ClassExpression {
                 // Cardinality restrictions are in NNF if filler is in NNF
                 filler.is_nnf()
             }
-            ClassExpression::DataSomeValuesFrom { filler: _, .. }
-            | ClassExpression::DataAllValuesFrom { filler: _, .. }
-            | ClassExpression::DataMinCardinality { filler: _, .. }
-            | ClassExpression::DataMaxCardinality { filler: _, .. }
-            | ClassExpression::DataExactCardinality { filler: _, .. } => {
+            ClassExpression::DataSomeValuesFrom { .. }
+            | ClassExpression::DataAllValuesFrom { .. }
+            | ClassExpression::DataMinCardinality { .. }
+            | ClassExpression::DataMaxCardinality { .. }
+            | ClassExpression::DataExactCardinality { .. } => {
                 // Data ranges do not contain negations
                 true
             }
@@ -413,6 +421,10 @@ impl ClassExpression {
     }
 
     /// Simplify the class expression by applying logic rules
+    ///
+    /// # Panics
+    ///
+    /// Panics if internal length invariants are violated.
     pub fn simplify(&self) -> crate::Result<ClassExpression> {
         match self {
             ClassExpression::ObjectIntersectionOf(expressions) => {

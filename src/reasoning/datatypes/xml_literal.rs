@@ -1,4 +1,4 @@
-//! RDF XMLLiteral Value Space Handler (`rdf:XMLLiteral`)
+//! RDF `XMLLiteral` Value Space Handler (`rdf:XMLLiteral`)
 //!
 //! Per RDF 1.2, `rdf:XMLLiteral` literals must contain well-formed XML content.
 //! Equality is defined by XML Canonical-form comparison; here we approximate it
@@ -28,7 +28,7 @@ fn is_well_formed_xml(value: &str) -> bool {
 }
 
 impl ValueSpaceHandler for XmlLiteralValueSpace {
-    fn datatype_iri(&self) -> &str {
+    fn datatype_iri(&self) -> &'static str {
         "http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral"
     }
 

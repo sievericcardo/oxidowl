@@ -5,7 +5,12 @@
 
 use crate::Result;
 use crate::core::lock_helpers::read_lock;
-use crate::ontology::*;
+use crate::ontology::{
+    Axiom, ClassAssertionAxiom, ClassExpression, DataPropertyAssertionAxiom,
+    DataPropertyExpression, DataRange, DifferentIndividualsAxiom, IRI, Individual, Literal,
+    ObjectPropertyAssertionAxiom, ObjectPropertyExpression, Ontology, SWRLAtom, SWRLDArgument,
+    SWRLIArgument, SWRLRule, SWRLVariable, SameIndividualAxiom,
+};
 use crate::swrl::{
     SWRLExecutionContext, SWRLExecutionResult,
     builtins::{SWRLBuiltInRegistry, SWRLValue},

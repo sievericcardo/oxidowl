@@ -10,6 +10,8 @@
 //! - Structural properties: sizes of operand lists, cardinality bounds.
 //! - OWL 2 complement double-negation structural identity.
 
+#![cfg(kani)]
+
 use crate::ontology::{
     Individual, ObjectProperty, ObjectPropertyExpression,
     concepts::{Class, ClassExpression},

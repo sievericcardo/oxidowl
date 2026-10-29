@@ -1,0 +1,13 @@
+{
+  "id": "diff_008_sroiq_role_chain",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff008#>)\nOntology(<http://example.org/diff008>\n  SubObjectPropertyOf(ObjectPropertyChain(:r :s) :t)\n  ObjectPropertyAssertion(:r :a :b)\n  ObjectPropertyAssertion(:s :b :c)\n)",
+  "base": "http://example.org/diff008#",
+  "axioms": { "min": 3 },
+  "expected": {
+    "consistent": true,
+    "entailed": ["ObjectPropertyAssertion(:t :a :c)"],
+    "notEntailed": ["ObjectPropertyAssertion(:t :a :b)", "ObjectPropertyAssertion(:r :a :c)"]
+  },
+  "rationale": "Complex role inclusion r ∘ s ⊑ t (SROIQ RIA). a r b and b s c entail a t c via the chain. t is only defined by the chain, so t(a,b) is not entailed (the chain needs a two-step path), and r is not transitive so a r c is not entailed."
+}

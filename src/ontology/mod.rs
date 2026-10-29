@@ -5,17 +5,58 @@
 use crate::{Error, Result};
 use url::Url;
 
+// ─── Global IRI intern pool (Phase 2.1) ─────────────────────────────────────
+
+/// Global IRI intern pool — deduplicates `Arc<str>` allocations across all ontologies.
+/// Maps IRI string → `Weak<str>` so interned IRIs are dropped when no longer referenced.
+///
+/// Guarded by the `cache` feature because it depends on `dashmap`.
+#[cfg(feature = "cache")]
+static IRI_INTERN_POOL: std::sync::OnceLock<dashmap::DashMap<Box<str>, std::sync::Weak<str>>> =
+    std::sync::OnceLock::new();
+
+#[cfg(feature = "cache")]
+fn get_intern_pool() -> &'static dashmap::DashMap<Box<str>, std::sync::Weak<str>> {
+    IRI_INTERN_POOL.get_or_init(dashmap::DashMap::new)
+}
+
+/// Intern an IRI string, returning a shared `Arc<str>`.
+///
+/// If an equal IRI already exists in the pool the existing `Arc` is returned,
+/// avoiding a new heap allocation.  Stale `Weak` entries are evicted lazily
+/// whenever a new value is inserted for the same key.
+#[cfg(feature = "cache")]
+#[must_use]
+pub fn intern_iri(s: &str) -> std::sync::Arc<str> {
+    let pool = get_intern_pool();
+    // Fast path: check if already interned and still alive.
+    if let Some(weak) = pool.get(s)
+        && let Some(strong) = weak.upgrade()
+    {
+        return strong;
+    }
+    // Slow path: create new interned value and store the weak reference.
+    let arc: std::sync::Arc<str> = std::sync::Arc::from(s);
+    let weak = std::sync::Arc::downgrade(&arc);
+    pool.insert(s.into(), weak);
+    arc
+}
+
 pub mod axioms;
 pub mod concepts;
 pub mod datatypes;
+pub mod indexes;
 pub mod individuals;
+pub mod owl_xml_vocabulary;
 pub mod properties;
+pub mod shortform;
 pub mod vocabulary;
 
 // Re-export main types
 pub use axioms::*;
 pub use concepts::*;
 pub use datatypes::*;
+pub use indexes::AxiomIndex;
 pub use individuals::*;
 pub use properties::*;
 
@@ -34,11 +75,24 @@ pub struct IRI {
 }
 
 impl IRI {
-    /// Create a new IRI from a string
+    /// Create a new IRI from a string.
+    ///
+    /// When the `cache` feature is enabled the string is deduplicated through
+    /// the global IRI intern pool so that equal IRIs share a single `Arc`
+    /// allocation.  Without the feature a fresh `Arc` is allocated each time.
     #[must_use]
     pub fn new(value: &str) -> Self {
-        Self {
-            value: std::sync::Arc::from(value),
+        #[cfg(feature = "cache")]
+        {
+            Self {
+                value: intern_iri(value),
+            }
+        }
+        #[cfg(not(feature = "cache"))]
+        {
+            Self {
+                value: std::sync::Arc::from(value),
+            }
         }
     }
 
@@ -89,7 +143,12 @@ impl std::fmt::Display for ObjectPropertyExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ObjectPropertyExpression::ObjectProperty(prop) => write!(f, "{}", prop.iri),
-            ObjectPropertyExpression::InverseObjectProperty(prop) => write!(f, "{}⁻", prop.iri),
+            // Canonical inverse-role string form: `inv(IRI)`. This is the form used by
+            // the DL-clause layer (dl_clauses/helpers.rs), by `RoleLabel` Display/parse,
+            // and by the tableau executor's `prop_to_role_name` (which uses Display).
+            // Keeping a single canonical form guarantees that role-successor keys, edge
+            // role labels and blocking signatures agree across all layers.
+            ObjectPropertyExpression::InverseObjectProperty(prop) => write!(f, "inv({})", prop.iri),
             ObjectPropertyExpression::PropertyChain(chain) => {
                 write!(f, "PropertyChain(")?;
                 for (i, prop) in chain.iter().enumerate() {
@@ -138,6 +197,12 @@ pub enum ObjectPropertyExpression {
 /// Data Property
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct DataProperty {
+    pub iri: IRI,
+}
+
+/// Named Datatype
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct Datatype {
     pub iri: IRI,
 }
 
@@ -329,6 +394,23 @@ pub enum AnnotationValue {
 pub struct Annotation {
     pub property: AnnotationProperty,
     pub value: AnnotationValue,
+    pub annotations: Vec<Annotation>,
+}
+
+impl Annotation {
+    /// Create a new annotation with annotations.
+    #[must_use]
+    pub fn new(
+        property: AnnotationProperty,
+        value: AnnotationValue,
+        annotations: Vec<Annotation>,
+    ) -> Self {
+        Self {
+            property,
+            value,
+            annotations,
+        }
+    }
 }
 
 /// Ontology signature containing all entities
@@ -342,6 +424,10 @@ pub struct Signature {
     pub data_properties: Vec<DataProperty>,
     /// All individuals in the ontology
     pub individuals: Vec<individuals::Individual>,
+    /// All annotation properties in the ontology
+    pub annotation_properties: Vec<AnnotationProperty>,
+    /// All datatypes in the ontology
+    pub datatypes: Vec<Datatype>,
 }
 
 impl Signature {
@@ -352,6 +438,96 @@ impl Signature {
     }
 }
 
+/// OWL Imports Declaration
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ImportsDeclaration {
+    pub imported_ontology_iri: IRI,
+}
+
+/// Ontology identity (OWL 2 `OWLOntologyID`)
+#[derive(Debug, Clone)]
+pub struct OntologyID {
+    pub ontology_iri: Option<IRI>,
+    pub version_iri: Option<IRI>,
+    /// Unique identifier for distinguishing anonymous ontologies.
+    /// Set to 0 for ontologies with an explicit IRI.
+    internal_id: u64,
+}
+
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static ANON_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+impl OntologyID {
+    /// Create a new anonymous `OntologyID` with a unique internal identifier.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            ontology_iri: None,
+            version_iri: None,
+            internal_id: ANON_COUNTER.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+
+    /// Create an `OntologyID` with explicit IRIs.
+    #[must_use]
+    pub fn new_with_iris(ontology_iri: IRI, version_iri: Option<IRI>) -> Self {
+        Self {
+            ontology_iri: Some(ontology_iri),
+            version_iri,
+            internal_id: 0,
+        }
+    }
+
+    /// Get the ontology IRI.
+    #[must_use]
+    pub fn get_ontology_iri(&self) -> Option<&IRI> {
+        self.ontology_iri.as_ref()
+    }
+
+    /// Get the version IRI.
+    #[must_use]
+    pub fn get_version_iri(&self) -> Option<&IRI> {
+        self.version_iri.as_ref()
+    }
+
+    /// Check if this is an anonymous ontology (no ontology IRI).
+    #[must_use]
+    pub fn is_anonymous(&self) -> bool {
+        self.ontology_iri.is_none()
+    }
+}
+
+impl PartialEq for OntologyID {
+    fn eq(&self, other: &Self) -> bool {
+        self.ontology_iri == other.ontology_iri
+            && self.version_iri == other.version_iri
+            && match (&self.ontology_iri, &other.ontology_iri) {
+                (None, None) => self.internal_id == other.internal_id,
+                (Some(_), Some(_)) => true,
+                _ => false,
+            }
+    }
+}
+
+impl Eq for OntologyID {}
+
+impl std::hash::Hash for OntologyID {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.ontology_iri.hash(state);
+        self.version_iri.hash(state);
+        if self.ontology_iri.is_none() {
+            self.internal_id.hash(state);
+        }
+    }
+}
+
+impl Default for OntologyID {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Main ontology structure containing all axioms and metadata
 #[derive(Debug, Clone)]
 pub struct Ontology {
@@ -359,14 +535,23 @@ pub struct Ontology {
     pub axioms: Vec<axioms::Axiom>,
     /// Ontology annotations
     pub annotations: Vec<Annotation>,
-    /// Ontology IRI
-    pub iri: Option<IRI>,
-    /// Version IRI
-    pub version_iri: Option<IRI>,
+    /// Ontology identity
+    pub id: OntologyID,
     /// Imports
-    pub imports: Vec<IRI>,
+    pub imports: Vec<ImportsDeclaration>,
+    /// Prefix mappings (prefix name -> namespace IRI)
+    pub prefixes: std::collections::HashMap<String, IRI>,
     /// Next axiom ID
     next_id: u64,
+    /// Monotonically increasing version counter.
+    /// Bumped on every mutation (`add_axiom`, `remove_axiom`).
+    /// Cache layers compare their recorded version against this value
+    /// to detect staleness instantly — no TTL wait required.
+    version: u64,
+    /// Incremental axiom index, kept in sync with `add_axiom` / `remove_axiom`.
+    /// Rebuild from scratch with [`build_index`](Self::build_index) if the
+    /// axioms vector is mutated directly.
+    index: AxiomIndex,
     /// RDF graph for RDF-star and RDF 1.2 support
     /// Contains triples that may include quoted triples (RDF-star) or RDF 1.2 features
     pub rdf_graph: Option<crate::semantics::RdfGraph>,
@@ -379,10 +564,12 @@ impl Ontology {
         Self {
             axioms: Vec::new(),
             annotations: Vec::new(),
-            iri: None,
-            version_iri: None,
+            id: OntologyID::new(),
             imports: Vec::new(),
             next_id: 1,
+            version: 1,
+            prefixes: std::collections::HashMap::new(),
+            index: indexes::AxiomIndex::default(),
             rdf_graph: None,
         }
     }
@@ -394,25 +581,67 @@ impl Ontology {
         id
     }
 
+    /// Return the current version stamp.
+    ///
+    /// This counter starts at `1` and is incremented by every call to
+    /// [`add_axiom`](Self::add_axiom) or [`remove_axiom`](Self::remove_axiom).
+    /// Cache layers record the version at which they computed a result and
+    /// treat their entry as stale whenever the ontology version has advanced.
+    #[must_use]
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+
+    /// Bump the version counter — call after **any** mutation.
+    ///
+    /// Using saturating arithmetic prevents overflow: after `u64::MAX` mutations
+    /// the counter stays at `u64::MAX`, which will cause all caches to remain
+    /// permanently stale (safe, just mildly wasteful for extreme edge cases).
+    pub fn bump_version(&mut self) {
+        self.version = self.version.saturating_add(1);
+    }
+
     /// Set the ontology IRI
     pub fn set_iri(&mut self, iri: IRI) {
-        self.iri = Some(iri);
+        self.id.ontology_iri = Some(iri);
     }
 
     /// Set the ontology IRI (alternative method name used by adapter)
     pub fn set_ontology_iri(&mut self, iri: Option<IRI>) {
-        self.iri = iri;
+        self.id.ontology_iri = iri;
     }
 
     /// Set the version IRI  
     pub fn set_version_iri(&mut self, iri: Option<IRI>) {
-        self.version_iri = iri;
+        self.id.version_iri = iri;
     }
 
     /// Get the ontology IRI
     #[must_use]
     pub fn get_iri(&self) -> Option<&IRI> {
-        self.iri.as_ref()
+        self.id.ontology_iri.as_ref()
+    }
+
+    /// Set all prefix mappings at once
+    pub fn set_prefixes(&mut self, prefixes: std::collections::HashMap<String, IRI>) {
+        self.prefixes = prefixes;
+    }
+
+    /// Get all prefix mappings
+    #[must_use]
+    pub fn get_prefixes(&self) -> &std::collections::HashMap<String, IRI> {
+        &self.prefixes
+    }
+
+    /// Add a single prefix mapping
+    pub fn add_prefix(&mut self, prefix: String, iri: IRI) {
+        self.prefixes.insert(prefix, iri);
+    }
+
+    /// Get a single prefix mapping
+    #[must_use]
+    pub fn get_prefix(&self, prefix: &str) -> Option<&IRI> {
+        self.prefixes.get(prefix)
     }
 
     /// Get the RDF graph (if present)
@@ -463,18 +692,407 @@ impl Ontology {
 
     /// Add an axiom to the ontology
     pub fn add_axiom(&mut self, axiom: axioms::Axiom) {
+        self.index.add_axiom(axiom.clone());
         self.axioms.push(axiom);
+        self.bump_version();
     }
 
     /// Remove an axiom from the ontology
     pub fn remove_axiom(&mut self, axiom: &axioms::Axiom) {
+        self.index.remove_axiom(axiom);
         self.axioms.retain(|a| a != axiom);
+        self.bump_version();
     }
 
     /// Get all axioms
     #[must_use]
     pub fn axioms(&self) -> &[axioms::Axiom] {
         &self.axioms
+    }
+
+    /// Replace the whole axiom set (snapshot restore, bulk loaders) and keep
+    /// the incremental [`axiom_index`](Self::axiom_index) in sync.
+    ///
+    /// Direct mutations of the public `axioms` field bypass the index and
+    /// would make index-backed queries (e.g. `is_subclass_of`) silently
+    /// stale — always go through here instead (CR-011 M1).
+    pub fn set_axioms(&mut self, axioms: Vec<axioms::Axiom>) {
+        self.axioms = axioms;
+        self.index = indexes::AxiomIndex::build(&self.axioms);
+    }
+
+    /// Access the incrementally-maintained axiom index.
+    ///
+    /// The index is updated on every `add_axiom` / `remove_axiom` call. If the
+    /// `axioms` vector was mutated directly, call [`build_index`](Self::build_index)
+    /// to rebuild a fresh snapshot instead.
+    #[must_use]
+    pub fn axiom_index(&self) -> &indexes::AxiomIndex {
+        &self.index
+    }
+
+    /// Build a bidirectional axiom index from the current axiom set.
+    ///
+    /// The caller should build the index once and reuse it across multiple
+    /// queries rather than rebuilding it on every call.
+    #[must_use]
+    pub fn build_index(&self) -> indexes::AxiomIndex {
+        indexes::AxiomIndex::build(&self.axioms)
+    }
+
+    /// Check if the ontology is empty (no axioms and no annotations)
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.axioms.is_empty() && self.annotations.is_empty()
+    }
+
+    /// Check if an entity has a declaration axiom in this ontology
+    #[must_use]
+    pub fn is_declared(&self, entity: &axioms::Entity) -> bool {
+        self.axioms
+            .iter()
+            .any(|a| matches!(a, axioms::Axiom::Declaration(d) if &d.entity == entity))
+    }
+
+    /// Get all axioms of a specific type
+    #[must_use]
+    pub fn get_axioms_by_type(&self, axiom_type: &axioms::AxiomType) -> Vec<&axioms::Axiom> {
+        self.axioms
+            .iter()
+            .filter(|a| &a.axiom_type() == axiom_type)
+            .collect()
+    }
+
+    /// Get the count of a specific axiom type
+    #[must_use]
+    pub fn get_axiom_count_by_type(&self, axiom_type: &axioms::AxiomType) -> usize {
+        self.axioms
+            .iter()
+            .filter(|a| &a.axiom_type() == axiom_type)
+            .count()
+    }
+
+    /// Get all `TBox` (class-level) axioms
+    #[must_use]
+    pub fn get_tbox_axioms(&self) -> Vec<&axioms::Axiom> {
+        self.axioms
+            .iter()
+            .filter(|a| {
+                matches!(
+                    a.axiom_type(),
+                    axioms::AxiomType::SubClassOf
+                        | axioms::AxiomType::EquivalentClasses
+                        | axioms::AxiomType::DisjointClasses
+                        | axioms::AxiomType::DisjointUnion
+                )
+            })
+            .collect()
+    }
+
+    /// Get all `RBox` (property-level) axioms
+    #[must_use]
+    pub fn get_rbox_axioms(&self) -> Vec<&axioms::Axiom> {
+        self.axioms
+            .iter()
+            .filter(|a| {
+                let t = a.axiom_type();
+                matches!(
+                    t,
+                    axioms::AxiomType::SubObjectPropertyOf
+                        | axioms::AxiomType::EquivalentObjectProperties
+                        | axioms::AxiomType::DisjointObjectProperties
+                        | axioms::AxiomType::InverseObjectProperties
+                        | axioms::AxiomType::ObjectPropertyDomain
+                        | axioms::AxiomType::ObjectPropertyRange
+                        | axioms::AxiomType::FunctionalObjectProperty
+                        | axioms::AxiomType::InverseFunctionalObjectProperty
+                        | axioms::AxiomType::ReflexiveObjectProperty
+                        | axioms::AxiomType::IrreflexiveObjectProperty
+                        | axioms::AxiomType::SymmetricObjectProperty
+                        | axioms::AxiomType::AsymmetricObjectProperty
+                        | axioms::AxiomType::TransitiveObjectProperty
+                        | axioms::AxiomType::SubDataPropertyOf
+                        | axioms::AxiomType::EquivalentDataProperties
+                        | axioms::AxiomType::DisjointDataProperties
+                        | axioms::AxiomType::DataPropertyDomain
+                        | axioms::AxiomType::DataPropertyRange
+                        | axioms::AxiomType::FunctionalDataProperty
+                )
+            })
+            .collect()
+    }
+
+    /// Get all `ABox` (individual-level) axioms
+    #[must_use]
+    pub fn get_abox_axioms(&self) -> Vec<&axioms::Axiom> {
+        self.axioms
+            .iter()
+            .filter(|a| {
+                matches!(
+                    a.axiom_type(),
+                    axioms::AxiomType::ClassAssertion
+                        | axioms::AxiomType::SameIndividual
+                        | axioms::AxiomType::DifferentIndividuals
+                        | axioms::AxiomType::ObjectPropertyAssertion
+                        | axioms::AxiomType::DataPropertyAssertion
+                        | axioms::AxiomType::NegativeObjectPropertyAssertion
+                        | axioms::AxiomType::NegativeDataPropertyAssertion
+                )
+            })
+            .collect()
+    }
+
+    /// Count logical (non-annotation) axioms
+    #[must_use]
+    pub fn get_logical_axiom_count(&self) -> usize {
+        self.axioms.iter().filter(|a| a.is_logical()).count()
+    }
+
+    /// Get all classes from the signature (Declaration axioms)
+    #[must_use]
+    pub fn get_classes_in_signature(&self) -> Vec<concepts::Class> {
+        let mut classes = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::Class(iri) = &d.entity
+            {
+                classes.push(concepts::Class { iri: iri.clone() });
+            }
+        }
+        classes
+    }
+
+    /// Get all object properties from the signature
+    ///
+    /// Includes `owl:topObjectProperty` if the ontology uses any object properties,
+    /// matching OWL API v5 behaviour.
+    #[must_use]
+    pub fn get_object_properties_in_signature(&self) -> Vec<ObjectProperty> {
+        let mut props = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::ObjectProperty(iri) = &d.entity
+            {
+                props.push(ObjectProperty { iri: iri.clone() });
+            }
+        }
+        // OWL API v5 always includes owl:topObjectProperty when there are object properties
+        if !props.is_empty() {
+            let top_iri = IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty");
+            if !props.iter().any(|p| p.iri == top_iri) {
+                props.push(ObjectProperty { iri: top_iri });
+            }
+        }
+        props
+    }
+
+    /// Get all data properties from the signature
+    #[must_use]
+    pub fn get_data_properties_in_signature(&self) -> Vec<DataProperty> {
+        // OWL API v5 includes owl:topDataProperty in the signature whenever it is
+        // referenced as the super-property in a SubDataPropertyOf axiom, even if it
+        // was never explicitly declared.  Mirror that behaviour.
+        const TOP_DATA_PROP: &str = "http://www.w3.org/2002/07/owl#topDataProperty";
+        let mut props = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::DataProperty(iri) = &d.entity
+            {
+                props.push(DataProperty { iri: iri.clone() });
+            }
+        }
+
+        let references_top = self.axioms.iter().any(|a| {
+            if let axioms::Axiom::SubDataPropertyOf(ax) = a {
+                let DataPropertyExpression::DataProperty(p) = &ax.super_property;
+                p.iri.as_str() == TOP_DATA_PROP
+            } else {
+                false
+            }
+        });
+        if references_top {
+            let top_iri = IRI::new(TOP_DATA_PROP);
+            if !props.iter().any(|p| p.iri == top_iri) {
+                props.push(DataProperty { iri: top_iri });
+            }
+        }
+
+        props
+    }
+
+    /// Get all named individuals from the signature
+    #[must_use]
+    pub fn get_individuals_in_signature(&self) -> Vec<individuals::NamedIndividual> {
+        let mut inds = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::NamedIndividual(iri) = &d.entity
+            {
+                inds.push(individuals::NamedIndividual { iri: iri.clone() });
+            }
+        }
+        inds
+    }
+
+    /// Get all datatypes from the signature.
+    ///
+    /// Includes explicitly declared datatypes AND OWL 2 built-in XSD datatypes
+    /// that are actually *used* in the ontology (in `DataPropertyRange` axioms or
+    /// typed literals in `DataPropertyAssertion` axioms), matching OWL API v5.
+    #[must_use]
+    pub fn get_datatypes_in_signature(&self) -> Vec<Datatype> {
+        // Known OWL 2 / XSD built-in datatypes that should appear in the signature
+        // when actually used.
+        const BUILTIN_DATATYPES: &[&str] = &[
+            "http://www.w3.org/2001/XMLSchema#string",
+            "http://www.w3.org/2001/XMLSchema#integer",
+            "http://www.w3.org/2001/XMLSchema#decimal",
+            "http://www.w3.org/2001/XMLSchema#double",
+            "http://www.w3.org/2001/XMLSchema#float",
+            "http://www.w3.org/2001/XMLSchema#boolean",
+            "http://www.w3.org/2001/XMLSchema#dateTime",
+            "http://www.w3.org/2001/XMLSchema#int",
+            "http://www.w3.org/2001/XMLSchema#long",
+            "http://www.w3.org/2001/XMLSchema#short",
+            "http://www.w3.org/2001/XMLSchema#date",
+            "http://www.w3.org/2001/XMLSchema#anyURI",
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+        ];
+
+        /// Recursively gather datatype IRIs from a `DataRange`.
+        fn collect_from_range(range: &DataRange, out: &mut std::collections::HashSet<String>) {
+            match range {
+                DataRange::Datatype(iri) => {
+                    out.insert(iri.as_str().to_owned());
+                }
+                DataRange::DataIntersectionOf(rs) => {
+                    for r in rs {
+                        collect_from_range(r, out);
+                    }
+                }
+                DataRange::DataUnionOf(rs) => {
+                    for r in rs {
+                        collect_from_range(r, out);
+                    }
+                }
+                DataRange::DataComplementOf(inner) => collect_from_range(inner, out),
+                DataRange::DatatypeRestriction { datatype, .. } => {
+                    out.insert(datatype.as_str().to_owned());
+                }
+                DataRange::DataOneOf(_) => {}
+            }
+        }
+
+        let mut dts = Vec::new();
+
+        // Step 1: collect explicitly declared datatypes
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::Datatype(iri) = &d.entity
+            {
+                dts.push(Datatype { iri: iri.clone() });
+            }
+        }
+
+        let builtin_set: std::collections::HashSet<&str> =
+            BUILTIN_DATATYPES.iter().copied().collect();
+
+        // Step 2: collect IRI strings of all used datatypes from axioms
+        let mut used: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        for a in &self.axioms {
+            match a {
+                // DataPropertyRange axioms reference datatypes directly
+                axioms::Axiom::DataPropertyRange(ax) => {
+                    collect_from_range(&ax.range, &mut used);
+                }
+                // Typed literals in DataPropertyAssertion
+                axioms::Axiom::DataPropertyAssertion(ax) => {
+                    if let Some(url) = &ax.value.datatype {
+                        used.insert(url.to_string());
+                    }
+                }
+                // Typed literals in NegativeDataPropertyAssertion
+                axioms::Axiom::NegativeDataPropertyAssertion(ax) => {
+                    if let Some(url) = &ax.value.datatype {
+                        used.insert(url.to_string());
+                    }
+                }
+                // Typed literals in AnnotationAssertion — OWL API v5 includes any
+                // explicitly-typed literal's datatype in the ontology signature.
+                // Also include built-in datatype IRIs used as IRI-valued annotations
+                // (e.g. dcam:rangeIncludes xsd:date).
+                axioms::Axiom::AnnotationAssertion(ax) => match &ax.value {
+                    AnnotationValue::Literal(lit) => {
+                        if let Some(url) = &lit.datatype {
+                            used.insert(url.to_string());
+                        }
+                    }
+                    AnnotationValue::IRI(iri) => {
+                        used.insert(iri.as_str().to_owned());
+                    }
+                    AnnotationValue::AnonymousIndividual(_) => {}
+                },
+                _ => {}
+            }
+        }
+
+        // Step 3: add built-in datatypes that are actually used and not yet listed
+        for iri_str in &used {
+            if builtin_set.contains(iri_str.as_str()) {
+                let iri = IRI::new(iri_str);
+                if !dts.iter().any(|d| d.iri == iri) {
+                    dts.push(Datatype { iri });
+                }
+            }
+        }
+
+        dts
+    }
+
+    /// Get all annotation properties from the signature.
+    ///
+    /// Includes explicitly declared annotation properties AND built-in RDFS/OWL
+    /// annotation properties that are actually *used* in `AnnotationAssertion`
+    /// axioms, matching OWL API v5 behaviour.
+    #[must_use]
+    pub fn get_annotation_properties_in_signature(&self) -> Vec<AnnotationProperty> {
+        // Built-in annotation properties that should appear in the signature when used
+        const BUILTIN_ANNOTATION_PROPS: &[&str] = &[
+            "http://www.w3.org/2000/01/rdf-schema#label",
+            "http://www.w3.org/2000/01/rdf-schema#comment",
+            "http://www.w3.org/2000/01/rdf-schema#isDefinedBy",
+            "http://www.w3.org/2000/01/rdf-schema#seeAlso",
+            "http://www.w3.org/2002/07/owl#deprecated",
+            "http://www.w3.org/2002/07/owl#versionInfo",
+            "http://www.w3.org/2002/07/owl#priorVersion",
+        ];
+        let mut props = Vec::new();
+        for a in &self.axioms {
+            if let axioms::Axiom::Declaration(d) = a
+                && let axioms::Entity::AnnotationProperty(iri) = &d.entity
+            {
+                props.push(AnnotationProperty { iri: iri.clone() });
+            }
+        }
+
+        let builtin_set: std::collections::HashSet<&str> =
+            BUILTIN_ANNOTATION_PROPS.iter().copied().collect();
+
+        // Scan AnnotationAssertion axioms and add built-in properties that are used
+        for a in &self.axioms {
+            if let axioms::Axiom::AnnotationAssertion(ax) = a {
+                let iri_str = ax.property.iri.as_str();
+                if builtin_set.contains(iri_str) {
+                    let iri = ax.property.iri.clone();
+                    if !props.iter().any(|p| p.iri == iri) {
+                        props.push(AnnotationProperty { iri });
+                    }
+                }
+            }
+        }
+
+        props
     }
 
     /// Count axioms by type
@@ -487,21 +1105,28 @@ impl Ontology {
         counts
     }
 
-    /// Get the signature of the ontology
+    /// Get the signature of the ontology.
+    ///
+    /// Covers **all** axiom types: classes, object/data/annotation properties,
+    /// named individuals and datatypes referenced anywhere in the axiom set,
+    /// matching OWL API v5 behaviour (e.g. built-in datatypes used in data
+    /// ranges are included, and `owl:topObjectProperty` / `owl:topDataProperty`
+    /// are included when the corresponding entity family is non-empty).
     pub fn signature(&self) -> Result<Signature> {
-        let mut signature = Signature::new();
+        // ── Local extraction helpers ────────────────────────────────────────
 
-        // Helper function to extract classes from class expressions
+        fn push_class(classes: &mut Vec<concepts::Class>, class: concepts::Class) {
+            if !classes.iter().any(|c| c.iri == class.iri) {
+                classes.push(class);
+            }
+        }
+
         fn extract_classes_from_expression(
             expr: &concepts::ClassExpression,
             classes: &mut Vec<concepts::Class>,
         ) {
             match expr {
-                concepts::ClassExpression::Class(class) => {
-                    if !classes.iter().any(|c| c.iri == class.iri) {
-                        classes.push(class.clone());
-                    }
-                }
+                concepts::ClassExpression::Class(class) => push_class(classes, class.clone()),
                 concepts::ClassExpression::ObjectIntersectionOf(exprs)
                 | concepts::ClassExpression::ObjectUnionOf(exprs) => {
                     for expr in exprs {
@@ -528,148 +1153,641 @@ impl Ontology {
                 | concepts::ClassExpression::DataMinCardinality { .. }
                 | concepts::ClassExpression::DataMaxCardinality { .. }
                 | concepts::ClassExpression::DataExactCardinality { .. }
-                | concepts::ClassExpression::DataHasValue { .. } => {
-                    // These don't contain nested class expressions
+                | concepts::ClassExpression::DataHasValue { .. } => {}
+            }
+        }
+
+        // Individuals can occur *inside* class expressions — `ObjectOneOf({a})`
+        // and `ObjectHasValue(r.{a})` are the nominal carriers — but the class
+        // extractor above deliberately skips them (it only collects classes).
+        // Without this pass, `A ≡ {a}` never surfaces `a` in
+        // `signature().individuals`, so `realize()`, `get_instances()` and the
+        // OWL API trait surface all miss nominal-only individuals
+        // (CR-008 MAJOR #2).
+        fn extract_individuals_from_expression(
+            expr: &concepts::ClassExpression,
+            inds: &mut Vec<individuals::Individual>,
+        ) {
+            match expr {
+                concepts::ClassExpression::ObjectOneOf(members) => {
+                    for member in members {
+                        extract_individual(member, inds);
+                    }
+                }
+                concepts::ClassExpression::ObjectHasValue { value, .. } => {
+                    extract_individual(value, inds);
+                }
+                concepts::ClassExpression::ObjectIntersectionOf(exprs)
+                | concepts::ClassExpression::ObjectUnionOf(exprs) => {
+                    for expr in exprs {
+                        extract_individuals_from_expression(expr, inds);
+                    }
+                }
+                concepts::ClassExpression::ObjectComplementOf(expr)
+                | concepts::ClassExpression::ObjectSomeValuesFrom { filler: expr, .. }
+                | concepts::ClassExpression::ObjectAllValuesFrom { filler: expr, .. }
+                | concepts::ClassExpression::ObjectMinCardinality { filler: expr, .. }
+                | concepts::ClassExpression::ObjectMaxCardinality { filler: expr, .. }
+                | concepts::ClassExpression::ObjectExactCardinality { filler: expr, .. } => {
+                    extract_individuals_from_expression(expr, inds);
+                }
+                concepts::ClassExpression::Class(_)
+                | concepts::ClassExpression::ObjectHasSelf { .. }
+                | concepts::ClassExpression::DataSomeValuesFrom { .. }
+                | concepts::ClassExpression::DataAllValuesFrom { .. }
+                | concepts::ClassExpression::DataMinCardinality { .. }
+                | concepts::ClassExpression::DataMaxCardinality { .. }
+                | concepts::ClassExpression::DataExactCardinality { .. }
+                | concepts::ClassExpression::DataHasValue { .. } => {}
+            }
+        }
+
+        /// Scan a class expression for *both* entity families it can carry:
+        /// classes (via [`extract_classes_from_expression`]) and nominals
+        /// (via [`extract_individuals_from_expression`]).  Every class
+        /// expression scanned by `signature()` must go through this helper so
+        /// nominal individuals are never dropped (CR-008 MAJOR #2).
+        fn extract_from_class_expression(
+            expr: &concepts::ClassExpression,
+            classes: &mut Vec<concepts::Class>,
+            inds: &mut Vec<individuals::Individual>,
+        ) {
+            extract_classes_from_expression(expr, classes);
+            extract_individuals_from_expression(expr, inds);
+        }
+
+        fn push_object_property(props: &mut Vec<ObjectProperty>, prop: ObjectProperty) {
+            if !props.iter().any(|p| p.iri == prop.iri) {
+                props.push(prop);
+            }
+        }
+
+        fn extract_object_property_expression(
+            expr: &ObjectPropertyExpression,
+            props: &mut Vec<ObjectProperty>,
+        ) {
+            match expr {
+                ObjectPropertyExpression::ObjectProperty(prop) => {
+                    push_object_property(props, prop.clone());
+                }
+                ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                    push_object_property(props, prop.clone());
+                }
+                ObjectPropertyExpression::PropertyChain(chain) => {
+                    for link in chain {
+                        extract_object_property_expression(link, props);
+                    }
                 }
             }
         }
+
+        fn push_data_property(props: &mut Vec<DataProperty>, prop: DataProperty) {
+            if !props.iter().any(|p| p.iri == prop.iri) {
+                props.push(prop);
+            }
+        }
+
+        fn extract_data_property_expression(
+            expr: &DataPropertyExpression,
+            props: &mut Vec<DataProperty>,
+        ) {
+            match expr {
+                DataPropertyExpression::DataProperty(prop) => {
+                    push_data_property(props, prop.clone());
+                }
+            }
+        }
+
+        fn extract_individual(
+            ind: &individuals::Individual,
+            inds: &mut Vec<individuals::Individual>,
+        ) {
+            if !inds.contains(ind) {
+                inds.push(ind.clone());
+            }
+        }
+
+        fn push_datatype(dts: &mut Vec<Datatype>, iri: &IRI) {
+            if !dts.iter().any(|d| d.iri == *iri) {
+                dts.push(Datatype { iri: iri.clone() });
+            }
+        }
+
+        fn extract_literal(lit: &Literal, dts: &mut Vec<Datatype>) {
+            if let Some(url) = &lit.datatype {
+                push_datatype(dts, &IRI::new(url.as_str()));
+            }
+        }
+
+        fn extract_data_range(range: &DataRange, dts: &mut Vec<Datatype>) {
+            match range {
+                DataRange::Datatype(iri) => push_datatype(dts, iri),
+                DataRange::DataIntersectionOf(ranges) | DataRange::DataUnionOf(ranges) => {
+                    for r in ranges {
+                        extract_data_range(r, dts);
+                    }
+                }
+                DataRange::DataComplementOf(inner) => extract_data_range(inner, dts),
+                DataRange::DataOneOf(literals) => {
+                    for lit in literals {
+                        extract_literal(lit, dts);
+                    }
+                }
+                DataRange::DatatypeRestriction {
+                    datatype,
+                    restrictions,
+                } => {
+                    push_datatype(dts, datatype);
+                    for fr in restrictions {
+                        extract_literal(&fr.value, dts);
+                    }
+                }
+            }
+        }
+
+        fn extract_swrl_atom(
+            atom: &axioms::SWRLAtom,
+            classes: &mut Vec<concepts::Class>,
+            obj_props: &mut Vec<ObjectProperty>,
+            data_props: &mut Vec<DataProperty>,
+            dts: &mut Vec<Datatype>,
+            inds: &mut Vec<individuals::Individual>,
+        ) {
+            match atom {
+                axioms::SWRLAtom::ClassAtom {
+                    predicate,
+                    argument,
+                } => {
+                    extract_from_class_expression(predicate, classes, inds);
+                    if let axioms::SWRLIArgument::Individual(ind) = argument {
+                        extract_individual(ind, inds);
+                    }
+                }
+                axioms::SWRLAtom::ObjectPropertyAtom {
+                    predicate,
+                    first_argument,
+                    second_argument,
+                } => {
+                    extract_object_property_expression(predicate, obj_props);
+                    if let axioms::SWRLIArgument::Individual(ind) = first_argument {
+                        extract_individual(ind, inds);
+                    }
+                    if let axioms::SWRLIArgument::Individual(ind) = second_argument {
+                        extract_individual(ind, inds);
+                    }
+                }
+                axioms::SWRLAtom::DataPropertyAtom {
+                    predicate,
+                    first_argument,
+                    second_argument,
+                } => {
+                    extract_data_property_expression(predicate, data_props);
+                    if let axioms::SWRLIArgument::Individual(ind) = first_argument {
+                        extract_individual(ind, inds);
+                    }
+                    if let axioms::SWRLDArgument::Literal(lit) = second_argument {
+                        extract_literal(lit, dts);
+                    }
+                }
+                axioms::SWRLAtom::DataRangeAtom { predicate, .. } => {
+                    extract_data_range(predicate, dts);
+                }
+                axioms::SWRLAtom::SameIndividualAtom {
+                    first_argument,
+                    second_argument,
+                }
+                | axioms::SWRLAtom::DifferentIndividualsAtom {
+                    first_argument,
+                    second_argument,
+                } => {
+                    if let axioms::SWRLIArgument::Individual(ind) = first_argument {
+                        extract_individual(ind, inds);
+                    }
+                    if let axioms::SWRLIArgument::Individual(ind) = second_argument {
+                        extract_individual(ind, inds);
+                    }
+                }
+                axioms::SWRLAtom::BuiltInAtom { arguments, .. } => {
+                    for arg in arguments {
+                        if let axioms::SWRLDArgument::Literal(lit) = arg {
+                            extract_literal(lit, dts);
+                        }
+                    }
+                }
+            }
+        }
+
+        fn push_annotation_property(props: &mut Vec<AnnotationProperty>, prop: AnnotationProperty) {
+            if !props.iter().any(|p| p.iri == prop.iri) {
+                props.push(prop);
+            }
+        }
+
+        let mut signature = Signature::new();
 
         log::debug!("Computing signature from {} axioms", self.axioms.len());
 
-        // Extract entities from axioms
         for axiom in &self.axioms {
-            let discriminant = std::mem::discriminant(axiom);
-            log::debug!("Processing axiom discriminant: {discriminant:?}");
             match axiom {
-                axioms::Axiom::Declaration(decl) => {
-                    match &decl.entity {
-                        axioms::Entity::Class(iri) => {
-                            signature.classes.push(concepts::Class { iri: iri.clone() });
-                            log::debug!("Added class from declaration: {iri}");
-                        }
-                        axioms::Entity::ObjectProperty(iri) => {
-                            signature
-                                .object_properties
-                                .push(ObjectProperty { iri: iri.clone() });
-                        }
-                        axioms::Entity::DataProperty(iri) => {
-                            signature
-                                .data_properties
-                                .push(DataProperty { iri: iri.clone() });
-                        }
-                        axioms::Entity::NamedIndividual(iri) => {
-                            signature.individuals.push(individuals::Individual::Named(
-                                individuals::NamedIndividual { iri: iri.clone() },
-                            ));
-                        }
-                        axioms::Entity::AnnotationProperty(_prop) => {
-                            // Handle annotation property
-                        }
-                        axioms::Entity::Datatype(_datatype) => {
-                            // Handle datatype
-                        }
+                axioms::Axiom::Declaration(decl) => match &decl.entity {
+                    axioms::Entity::Class(iri) => {
+                        push_class(&mut signature.classes, concepts::Class { iri: iri.clone() });
                     }
-                }
+                    axioms::Entity::ObjectProperty(iri) => {
+                        push_object_property(
+                            &mut signature.object_properties,
+                            ObjectProperty { iri: iri.clone() },
+                        );
+                    }
+                    axioms::Entity::DataProperty(iri) => {
+                        push_data_property(
+                            &mut signature.data_properties,
+                            DataProperty { iri: iri.clone() },
+                        );
+                    }
+                    axioms::Entity::NamedIndividual(iri) => {
+                        extract_individual(
+                            &individuals::Individual::Named(individuals::NamedIndividual {
+                                iri: iri.clone(),
+                            }),
+                            &mut signature.individuals,
+                        );
+                    }
+                    axioms::Entity::AnnotationProperty(iri) => {
+                        push_annotation_property(
+                            &mut signature.annotation_properties,
+                            AnnotationProperty { iri: iri.clone() },
+                        );
+                    }
+                    axioms::Entity::Datatype(iri) => {
+                        push_datatype(&mut signature.datatypes, iri);
+                    }
+                },
                 axioms::Axiom::SubClassOf(axiom) => {
-                    log::debug!("Processing SubClassOf axiom");
-                    extract_classes_from_expression(&axiom.subclass, &mut signature.classes);
-                    extract_classes_from_expression(&axiom.superclass, &mut signature.classes);
+                    extract_from_class_expression(
+                        &axiom.subclass,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                    extract_from_class_expression(
+                        &axiom.superclass,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
                 }
                 axioms::Axiom::EquivalentClasses(axiom) => {
-                    log::debug!(
-                        "Processing EquivalentClasses axiom with {} classes",
-                        axiom.classes.len()
-                    );
                     for class_expr in &axiom.classes {
-                        extract_classes_from_expression(class_expr, &mut signature.classes);
-                    }
-                }
-                axioms::Axiom::ClassAssertion(axiom) => {
-                    log::debug!("Processing ClassAssertion axiom");
-                    extract_classes_from_expression(&axiom.class, &mut signature.classes);
-                    // Also add the individual
-                    if !signature.individuals.iter().any(|i| match i {
-                        individuals::Individual::Named(named) => {
-                            named.iri
-                                == match &axiom.individual {
-                                    individuals::Individual::Named(named) => named.iri.clone(),
-                                    _ => return false,
-                                }
-                        }
-                        _ => false,
-                    }) {
-                        signature.individuals.push(axiom.individual.clone());
-                    }
-                }
-                axioms::Axiom::DisjointUnion(axiom) => {
-                    log::debug!("Processing DisjointUnion axiom");
-                    extract_classes_from_expression(&axiom.class, &mut signature.classes);
-                    for disjoint_class in &axiom.disjoint_classes {
-                        extract_classes_from_expression(disjoint_class, &mut signature.classes);
+                        extract_from_class_expression(
+                            class_expr,
+                            &mut signature.classes,
+                            &mut signature.individuals,
+                        );
                     }
                 }
                 axioms::Axiom::DisjointClasses(axiom) => {
-                    log::debug!("Processing DisjointClasses axiom");
                     for class_expr in &axiom.classes {
-                        extract_classes_from_expression(class_expr, &mut signature.classes);
+                        extract_from_class_expression(
+                            class_expr,
+                            &mut signature.classes,
+                            &mut signature.individuals,
+                        );
                     }
+                }
+                axioms::Axiom::DisjointUnion(axiom) => {
+                    extract_from_class_expression(
+                        &axiom.class,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                    for disjoint_class in &axiom.disjoint_classes {
+                        extract_from_class_expression(
+                            disjoint_class,
+                            &mut signature.classes,
+                            &mut signature.individuals,
+                        );
+                    }
+                }
+                axioms::Axiom::ClassAssertion(axiom) => {
+                    extract_from_class_expression(
+                        &axiom.class,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                    extract_individual(&axiom.individual, &mut signature.individuals);
                 }
                 axioms::Axiom::ObjectPropertyAssertion(axiom) => {
-                    log::debug!("Processing ObjectPropertyAssertion axiom");
-                    // Add individuals but these don't typically contain classes
-                    if !signature.individuals.contains(&axiom.source) {
-                        signature.individuals.push(axiom.source.clone());
-                    }
-                    if !signature.individuals.contains(&axiom.target) {
-                        signature.individuals.push(axiom.target.clone());
-                    }
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                    extract_individual(&axiom.source, &mut signature.individuals);
+                    extract_individual(&axiom.target, &mut signature.individuals);
                 }
                 axioms::Axiom::DataPropertyAssertion(axiom) => {
-                    log::debug!("Processing DataPropertyAssertion axiom");
-                    if !signature.individuals.contains(&axiom.individual) {
-                        signature.individuals.push(axiom.individual.clone());
+                    extract_data_property_expression(
+                        &axiom.property,
+                        &mut signature.data_properties,
+                    );
+                    extract_individual(&axiom.individual, &mut signature.individuals);
+                    extract_literal(&axiom.value, &mut signature.datatypes);
+                }
+                axioms::Axiom::NegativeObjectPropertyAssertion(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                    extract_individual(&axiom.source, &mut signature.individuals);
+                    extract_individual(&axiom.target, &mut signature.individuals);
+                }
+                axioms::Axiom::NegativeDataPropertyAssertion(axiom) => {
+                    extract_data_property_expression(
+                        &axiom.property,
+                        &mut signature.data_properties,
+                    );
+                    extract_individual(&axiom.individual, &mut signature.individuals);
+                    extract_literal(&axiom.value, &mut signature.datatypes);
+                }
+                axioms::Axiom::SubObjectPropertyOf(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.sub_property,
+                        &mut signature.object_properties,
+                    );
+                    extract_object_property_expression(
+                        &axiom.super_property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::EquivalentObjectProperties(axiom) => {
+                    for prop in &axiom.properties {
+                        extract_object_property_expression(prop, &mut signature.object_properties);
                     }
                 }
-                // Handle other axiom types as needed
-                axiom => {
-                    log::debug!(
-                        "Processing other axiom type: {:?}",
-                        std::mem::discriminant(axiom)
+                axioms::Axiom::DisjointObjectProperties(axiom) => {
+                    for prop in &axiom.properties {
+                        extract_object_property_expression(prop, &mut signature.object_properties);
+                    }
+                }
+                axioms::Axiom::InverseObjectProperties(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property1,
+                        &mut signature.object_properties,
                     );
+                    extract_object_property_expression(
+                        &axiom.property2,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::ObjectPropertyDomain(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                    extract_from_class_expression(
+                        &axiom.domain,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                }
+                axioms::Axiom::ObjectPropertyRange(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                    extract_from_class_expression(
+                        &axiom.range,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                }
+                axioms::Axiom::FunctionalObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::InverseFunctionalObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::ReflexiveObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::IrreflexiveObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::SymmetricObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::AsymmetricObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::TransitiveObjectProperty(axiom) => {
+                    extract_object_property_expression(
+                        &axiom.property,
+                        &mut signature.object_properties,
+                    );
+                }
+                axioms::Axiom::SubDataPropertyOf(axiom) => {
+                    extract_data_property_expression(
+                        &axiom.sub_property,
+                        &mut signature.data_properties,
+                    );
+                    extract_data_property_expression(
+                        &axiom.super_property,
+                        &mut signature.data_properties,
+                    );
+                }
+                axioms::Axiom::EquivalentDataProperties(axiom) => {
+                    for prop in &axiom.properties {
+                        extract_data_property_expression(prop, &mut signature.data_properties);
+                    }
+                }
+                axioms::Axiom::DisjointDataProperties(axiom) => {
+                    for prop in &axiom.properties {
+                        extract_data_property_expression(prop, &mut signature.data_properties);
+                    }
+                }
+                axioms::Axiom::DataPropertyDomain(axiom) => {
+                    extract_data_property_expression(
+                        &axiom.property,
+                        &mut signature.data_properties,
+                    );
+                    extract_from_class_expression(
+                        &axiom.domain,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                }
+                axioms::Axiom::DataPropertyRange(axiom) => {
+                    extract_data_property_expression(
+                        &axiom.property,
+                        &mut signature.data_properties,
+                    );
+                    extract_data_range(&axiom.range, &mut signature.datatypes);
+                }
+                axioms::Axiom::FunctionalDataProperty(axiom) => {
+                    extract_data_property_expression(
+                        &axiom.property,
+                        &mut signature.data_properties,
+                    );
+                }
+                axioms::Axiom::SameIndividual(axiom) => {
+                    for ind in &axiom.individuals {
+                        extract_individual(ind, &mut signature.individuals);
+                    }
+                }
+                axioms::Axiom::DifferentIndividuals(axiom) => {
+                    for ind in &axiom.individuals {
+                        extract_individual(ind, &mut signature.individuals);
+                    }
+                }
+                axioms::Axiom::HasKey(axiom) => {
+                    extract_from_class_expression(
+                        &axiom.class,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                    for obj_prop in &axiom.object_properties {
+                        extract_object_property_expression(
+                            obj_prop,
+                            &mut signature.object_properties,
+                        );
+                    }
+                    for data_prop in &axiom.data_properties {
+                        extract_data_property_expression(data_prop, &mut signature.data_properties);
+                    }
+                }
+                axioms::Axiom::DatatypeDefinition(axiom) => {
+                    push_datatype(&mut signature.datatypes, &axiom.datatype);
+                    extract_data_range(&axiom.data_range, &mut signature.datatypes);
+                }
+                axioms::Axiom::Rule(axiom) => {
+                    for atom in &axiom.rule.head {
+                        extract_swrl_atom(
+                            atom,
+                            &mut signature.classes,
+                            &mut signature.object_properties,
+                            &mut signature.data_properties,
+                            &mut signature.datatypes,
+                            &mut signature.individuals,
+                        );
+                    }
+                    for atom in &axiom.rule.body {
+                        extract_swrl_atom(
+                            atom,
+                            &mut signature.classes,
+                            &mut signature.object_properties,
+                            &mut signature.data_properties,
+                            &mut signature.datatypes,
+                            &mut signature.individuals,
+                        );
+                    }
+                }
+                axioms::Axiom::AnnotationAssertion(axiom) => {
+                    push_annotation_property(
+                        &mut signature.annotation_properties,
+                        axiom.property.clone(),
+                    );
+                    if let AnnotationValue::Literal(lit) = &axiom.value {
+                        extract_literal(lit, &mut signature.datatypes);
+                    }
+                }
+                axioms::Axiom::SubAnnotationPropertyOf(axiom) => {
+                    push_annotation_property(
+                        &mut signature.annotation_properties,
+                        axiom.sub_property.clone(),
+                    );
+                    push_annotation_property(
+                        &mut signature.annotation_properties,
+                        axiom.super_property.clone(),
+                    );
+                }
+                axioms::Axiom::AnnotationPropertyDomain(axiom) => {
+                    push_annotation_property(
+                        &mut signature.annotation_properties,
+                        axiom.property.clone(),
+                    );
+                    extract_from_class_expression(
+                        &axiom.domain,
+                        &mut signature.classes,
+                        &mut signature.individuals,
+                    );
+                }
+                axioms::Axiom::AnnotationPropertyRange(axiom) => {
+                    push_annotation_property(
+                        &mut signature.annotation_properties,
+                        axiom.property.clone(),
+                    );
+                    extract_data_range(&axiom.range, &mut signature.datatypes);
                 }
             }
         }
 
+        // ── OWL API v5 compatibility extras ─────────────────────────────────
+        // `owl:topObjectProperty` is part of the object-property signature
+        // whenever the ontology uses any object property.
+        if !signature.object_properties.is_empty()
+            && !signature
+                .object_properties
+                .iter()
+                .any(|p| p.iri.as_str() == "http://www.w3.org/2002/07/owl#topObjectProperty")
+        {
+            signature.object_properties.push(ObjectProperty {
+                iri: IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty"),
+            });
+        }
+
         log::debug!(
-            "Final signature: {} classes, {} individuals",
+            "Final signature: {} classes, {} object properties, {} data properties, {} individuals",
             signature.classes.len(),
+            signature.object_properties.len(),
+            signature.data_properties.len(),
             signature.individuals.len()
         );
-        for class in &signature.classes {
-            log::debug!("  Class: {}", class.iri);
-        }
 
         Ok(signature)
     }
 
     /// Load an ontology from a file using horned-owl for robust parsing
     pub fn from_file_with_horned_owl<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
-        use horned_owl::io::ParserConfiguration;
+        use horned_owl::io::{ParserConfiguration, RDFParserConfiguration};
+        use horned_owl::model::{Build, RcAnnotatedComponent, RcStr};
         use std::fs::File;
         use std::io::{BufReader, Read};
 
         let file = File::open(path.as_ref()).map_err(|e| Error::io(e.to_string()))?;
         let mut reader = BufReader::new(file);
-        let config = ParserConfiguration::default();
+        // horned-owl 4.0: the config now carries the interning `Build`, and
+        // `read` is generic over the annotation-component type, so both must
+        // be specified explicitly (mirroring the previous concrete return
+        // type `ConcreteRcRDFOntology`).
+        let config = RDFParserConfiguration::from(ParserConfiguration::new(Build::new_rc()));
 
         // Use horned-owl's RDF parser for all file types (most compatible)
-        let result = horned_owl::io::rdf::reader::read(&mut reader, config)
-            .map_err(|e| Error::ontology_parsing(format!("Horned-owl parsing error: {e}")))?;
+        let result = horned_owl::io::rdf::reader::read::<RcStr, RcAnnotatedComponent, _, _>(
+            &mut reader,
+            config,
+        )
+        .map_err(|e| Error::ontology_parsing(format!("Horned-owl parsing error: {e}")))?;
 
         // Convert the horned-owl ontology to oxidowl ontology using enhanced adapter
         let mut adapter = crate::adapter::HornedOwlAdapter::new();
         let mut ontology =
-            adapter.convert_basic_ontology::<std::rc::Rc<str>, std::rc::Rc<str>, _>(&result.0)?;
+            adapter.convert_basic_ontology::<RcStr, RcAnnotatedComponent, _>(&result.0)?;
 
         // Try to extract ontology IRI from the file by re-reading it
         // This is a workaround since horned-owl's API is complex
@@ -1072,6 +2190,34 @@ pub enum OntologyFormat {
     NTriples,
     /// Manchester Syntax
     Manchester,
+    /// LaTeX (write-only)
+    Latex,
+    /// DL Syntax
+    DL,
+    /// KRSS
+    Krss,
+    /// KRSS2
+    Krss2,
+    /// OBO Format
+    Obo,
+    /// N-Quads
+    NQuads,
+    /// Notation3
+    N3,
+    /// `TriG`
+    TriG,
+    /// `TriX`
+    TriX,
+    /// JSON-LD
+    JsonLd,
+    /// RDF/JSON
+    RdfJson,
+    /// `RDFa`
+    Rdfa,
+    /// Binary RDF
+    BinaryRdf,
+    /// HDT
+    Hdt,
 }
 
 impl OntologyFormat {
@@ -1086,6 +2232,20 @@ impl OntologyFormat {
             OntologyFormat::Turtle => "ttl",
             OntologyFormat::NTriples => "nt",
             OntologyFormat::Manchester => "omn",
+            OntologyFormat::Latex => "tex",
+            OntologyFormat::DL => "dl",
+            OntologyFormat::Krss => "krss",
+            OntologyFormat::Krss2 => "krss2",
+            OntologyFormat::Obo => "obo",
+            OntologyFormat::NQuads => "nq",
+            OntologyFormat::N3 => "n3",
+            OntologyFormat::TriG => "trig",
+            OntologyFormat::TriX => "xml",
+            OntologyFormat::JsonLd => "jsonld",
+            OntologyFormat::RdfJson => "rj",
+            OntologyFormat::Rdfa => "html",
+            OntologyFormat::BinaryRdf => "brdf",
+            OntologyFormat::Hdt => "hdt",
         }
     }
 
@@ -1100,6 +2260,20 @@ impl OntologyFormat {
             OntologyFormat::Turtle => "text/turtle",
             OntologyFormat::NTriples => "application/n-triples",
             OntologyFormat::Manchester => "text/owl-manchester",
+            OntologyFormat::Latex => "application/x-latex",
+            OntologyFormat::DL => "text/owl-dl",
+            OntologyFormat::Krss => "text/krss",
+            OntologyFormat::Krss2 => "text/krss2",
+            OntologyFormat::Obo => "text/obo",
+            OntologyFormat::NQuads => "application/n-quads",
+            OntologyFormat::N3 => "text/n3",
+            OntologyFormat::TriG => "application/trig",
+            OntologyFormat::TriX => "application/trix",
+            OntologyFormat::JsonLd => "application/ld+json",
+            OntologyFormat::RdfJson => "application/rdf+json",
+            OntologyFormat::Rdfa => "text/html",
+            OntologyFormat::BinaryRdf => "application/x-binary-rdf",
+            OntologyFormat::Hdt => "application/x-hdt",
         }
     }
 
@@ -1114,6 +2288,20 @@ impl OntologyFormat {
             OntologyFormat::Turtle => "ttl",
             OntologyFormat::NTriples => "nt",
             OntologyFormat::Manchester => "omn",
+            OntologyFormat::Latex => "latex",
+            OntologyFormat::DL => "dl",
+            OntologyFormat::Krss => "krss",
+            OntologyFormat::Krss2 => "krss2",
+            OntologyFormat::Obo => "obo",
+            OntologyFormat::NQuads => "nquads",
+            OntologyFormat::N3 => "n3",
+            OntologyFormat::TriG => "trig",
+            OntologyFormat::TriX => "trix",
+            OntologyFormat::JsonLd => "jsonld",
+            OntologyFormat::RdfJson => "rdfjson",
+            OntologyFormat::Rdfa => "rdfa",
+            OntologyFormat::BinaryRdf => "binary",
+            OntologyFormat::Hdt => "hdt",
         }
     }
 
@@ -1127,6 +2315,20 @@ impl OntologyFormat {
             "ttl" => Some(OntologyFormat::Turtle),
             "nt" => Some(OntologyFormat::NTriples),
             "omn" => Some(OntologyFormat::Manchester),
+            "tex" | "latex" => Some(OntologyFormat::Latex),
+            "dl" => Some(OntologyFormat::DL),
+            "krss" => Some(OntologyFormat::Krss),
+            "krss2" => Some(OntologyFormat::Krss2),
+            "obo" => Some(OntologyFormat::Obo),
+            "nq" | "nquads" => Some(OntologyFormat::NQuads),
+            "n3" => Some(OntologyFormat::N3),
+            "trig" => Some(OntologyFormat::TriG),
+            "trix" => Some(OntologyFormat::TriX),
+            "jsonld" | "json-ld" => Some(OntologyFormat::JsonLd),
+            "rj" | "rjson" | "rdfjson" => Some(OntologyFormat::RdfJson),
+            "rdfa" | "html" | "xhtml" => Some(OntologyFormat::Rdfa),
+            "brdf" | "binaryrdf" => Some(OntologyFormat::BinaryRdf),
+            "hdt" => Some(OntologyFormat::Hdt),
             _ => None,
         }
     }

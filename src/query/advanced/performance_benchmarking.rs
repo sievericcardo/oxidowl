@@ -719,7 +719,7 @@ impl PerformanceBenchmarkingSystem {
 
         // Run query optimization with timeout
         let result = tokio::time::timeout(
-            Duration::from_secs(1 * 60), // 1 minute timeout for queries
+            Duration::from_mins(1), // 1 minute timeout for queries
             async { optimizer.optimize_advanced(query) },
         )
         .await;
@@ -744,7 +744,7 @@ impl PerformanceBenchmarkingSystem {
                 error_message: Some(format!("Query error: {e:?}")),
             }),
             Err(_) => Ok(SingleQueryMeasurement {
-                execution_time: Duration::from_secs(1 * 60),
+                execution_time: Duration::from_mins(1),
                 success: false,
                 result_size: 0,
                 optimization_effectiveness: 0.0,
@@ -788,8 +788,7 @@ impl PerformanceBenchmarkingSystem {
             .system_info
             .benchmark_timestamp
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0); // Safe: fallback to 0 if system time is before UNIX_EPOCH (unlikely)
+            .map_or(0, |d| d.as_secs()); // Safe: fallback to 0 if system time is before UNIX_EPOCH (unlikely)
 
         let filename = format!(
             "{}/industrial_benchmark_report_{}.json",
@@ -1254,20 +1253,23 @@ impl BenchmarkSuiteManager {
     }
 
     fn load_snomed_ct_benchmark(&self) -> Result<Ontology, BenchmarkError> {
-        // Placeholder: Load SNOMED CT subset or mock data
-        println!("Loading SNOMED CT benchmark data...");
+        // Load SNOMED CT clinical terminology (or synthetic mock data for testing).
+        // Production use would load actual SNOMED CT OWL distribution files.
+        println!("Loading SNOMED CT benchmark (mock data)...");
         self.create_mock_large_ontology(300_000, "SNOMED CT")
     }
 
     fn load_galen_benchmark(&self) -> Result<Ontology, BenchmarkError> {
-        // Placeholder: Load GALEN or mock data
-        println!("Loading GALEN benchmark data...");
+        // Load GALEN medical terminology (or synthetic mock data for testing).
+        // Production use would load the GALEN ontology OWL file.
+        println!("Loading GALEN benchmark (mock data)...");
         self.create_mock_large_ontology(10_000, "GALEN")
     }
 
     fn load_gene_ontology_benchmark(&self) -> Result<Ontology, BenchmarkError> {
-        // Placeholder: Load Gene Ontology or mock data
-        println!("Loading Gene Ontology benchmark data...");
+        // Load Gene Ontology (or synthetic mock data for testing).
+        // Production use would load the GO OWL distribution file.
+        println!("Loading Gene Ontology benchmark (mock data)...");
         self.create_mock_large_ontology(50_000, "Gene Ontology")
     }
 
@@ -1286,7 +1288,7 @@ impl BenchmarkSuiteManager {
     ) -> Result<Ontology, BenchmarkError> {
         // Create a mock ontology with the specified number of concepts
         let mut ontology = Ontology::new();
-        ontology.iri = Some(IRI::new(&format!(
+        ontology.id.ontology_iri = Some(IRI::new(&format!(
             "http://example.org/{}",
             name.replace(' ', "_")
         )));

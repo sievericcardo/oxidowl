@@ -132,11 +132,18 @@ impl CompletionGraphCache {
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
     }
+
+    /// Clear all cached completion graph summaries.
+    pub fn clear(&self) {
+        self.cache.clear();
+        self.hits.store(0, Ordering::Relaxed);
+        self.misses.store(0, Ordering::Relaxed);
+    }
 }
 
 impl Default for CompletionGraphCache {
     fn default() -> Self {
-        Self::new(10_000, Duration::from_secs(1 * 3600))
+        Self::new(10_000, Duration::from_hours(1))
     }
 }
 

@@ -24,7 +24,7 @@ fn test_empty_collection_access_returns_error() {
     // In the old implementation, popping from empty queue would panic with unwrap()
     // Now it should return None, which we can handle
     assert!(tableau.pending_queue.is_empty());
-    let result = tableau.pending_queue.pop_front();
+    let result = Arc::make_mut(&mut tableau.pending_queue).pop_front();
     assert!(
         result.is_none(),
         "Popping from empty queue should return None"
@@ -94,7 +94,7 @@ fn test_option_unwrap_replacements() {
 fn test_collection_operations_without_panic() {
     // Test collection operations that previously used unwrap()
 
-    let test_vec = vec![1, 2, 3];
+    let test_vec = [1, 2, 3];
 
     // Safe iteration
     let first = test_vec.first();
@@ -148,10 +148,10 @@ fn test_nested_option_handling() {
     let nested: Option<Option<String>> = Some(Some("value".to_string()));
 
     // Safe unwrapping
-    if let Some(inner) = nested {
-        if let Some(value) = inner {
-            assert_eq!(value, "value");
-        }
+    if let Some(inner) = nested
+        && let Some(value) = inner
+    {
+        assert_eq!(value, "value");
     }
 
     // Test None case

@@ -23,6 +23,7 @@ pub struct ShaclValidationReport {
 
 impl ShaclValidationReport {
     /// Create an empty, conforming report.
+    #[must_use]
     pub fn conforming() -> Self {
         ShaclValidationReport {
             conforms: true,
@@ -32,6 +33,7 @@ impl ShaclValidationReport {
     }
 
     /// Create a non-conforming report from a list of results.
+    #[must_use]
     pub fn non_conforming(results: Vec<ShaclValidationResult>) -> Self {
         let conforms = results.is_empty();
         ShaclValidationReport {
@@ -42,6 +44,7 @@ impl ShaclValidationReport {
     }
 
     /// Produce a Turtle serialization of the validation report.
+    #[must_use]
     pub fn to_turtle(&self) -> String {
         let mut out = String::new();
 
@@ -110,6 +113,7 @@ pub struct ShaclValidationResult {
 impl ShaclValidationResult {
     /// Produce a Turtle blank-node block for embedding in a report, e.g.:
     /// `[ a sh:ValidationResult ; sh:focusNode <…> ; … ]`
+    #[must_use]
     pub fn to_turtle_inline(&self) -> String {
         let mut out = String::from("[\n      a sh:ValidationResult ;\n");
 

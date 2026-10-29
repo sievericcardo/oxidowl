@@ -14,7 +14,12 @@ use super::common::OntologySerializer;
 use crate::{
     Error, Result,
     ontology::Ontology,
-    semantics::{IriValidationMode, RdfTerm, Triple as RdfTriple, vocabulary::*},
+    semantics::{
+        IriValidationMode, RdfTerm, Triple as RdfTriple,
+        vocabulary::{
+            RDF_OBJECT, RDF_PREDICATE, RDF_REIFIES, RDF_STATEMENT, RDF_SUBJECT, RDF_TYPE,
+        },
+    },
 };
 
 /// RDF version mode for RDF/XML parsing
@@ -177,23 +182,23 @@ impl RdfXmlParser {
 
     /// Parse RDF/XML content and extract ontology elements
     fn parse_rdf_xml_content(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
-        // Use basic XML parsing approach for RDF/XML structures
-        // While not a full XML parser, this handles common RDF/XML patterns
-
         // Parse namespace declarations
         self.extract_namespaces(content, ontology)?;
 
-        // Parse class declarations
-        self.extract_classes(content, ontology)?;
+        // Legacy entity extractors are disabled — extract_rdf_triples handles
+        // all OWL axiom types (SubClassOf, ClassAssertion, Declarations, etc.)
+        // via proper quick-xml traversal of Subject-Predicate-Object triples.
+        // The old regex-based extract_classes, extract_properties, and
+        // extract_individuals incorrectly created NamedIndividual declarations
+        // from class IRIs, conflicting with extract_rdf_triples.
+        //
+        // self.extract_classes(content, ontology)?;
+        // self.extract_properties(content, ontology)?;
+        // self.extract_individuals(content, ontology)?;
+        // self.extract_axioms(content, ontology)?;
 
-        // Parse property declarations
-        self.extract_properties(content, ontology)?;
-
-        // Parse individuals
-        self.extract_individuals(content, ontology)?;
-
-        // Parse axioms
-        self.extract_axioms(content, ontology)?;
+        // Parse RDF triples from XML for full OWL-to-RDF roundtrip support
+        self.extract_rdf_triples(content, ontology)?;
 
         // Parse reification patterns (RDF 1.1) and rdf:reifies (RDF 1.2)
         self.extract_reifications(content, ontology)?;
@@ -227,6 +232,7 @@ impl RdfXmlParser {
     }
 
     /// Extract class declarations
+    #[allow(dead_code)]
     fn extract_classes(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Enhanced RDF/XML class extraction with proper XML parsing
         // This follows the RDF/XML specification more closely
@@ -243,15 +249,15 @@ impl RdfXmlParser {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(ref e)) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name().as_ref().to_string();
                     _current_element = Some(name.clone());
 
                     // Parse attributes
                     current_attributes.clear();
                     for attr in e.attributes().flatten() {
-                        let key = String::from_utf8_lossy(attr.key.as_ref());
-                        let value = String::from_utf8_lossy(&attr.value);
-                        current_attributes.insert(key.to_string(), value.to_string());
+                        let key = attr.key.as_ref().to_string();
+                        let value = attr.value.to_string();
+                        current_attributes.insert(key.clone(), value.clone());
                     }
 
                     // Check for owl:Class elements
@@ -272,14 +278,14 @@ impl RdfXmlParser {
                     }
                 }
                 Ok(Event::Empty(ref e)) => {
-                    let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name().as_ref().to_string();
 
                     // Parse attributes for self-closing elements
                     current_attributes.clear();
                     for attr in e.attributes().flatten() {
-                        let key = String::from_utf8_lossy(attr.key.as_ref());
-                        let value = String::from_utf8_lossy(&attr.value);
-                        current_attributes.insert(key.to_string(), value.to_string());
+                        let key = attr.key.as_ref().to_string();
+                        let value = attr.value.to_string();
+                        current_attributes.insert(key.clone(), value.clone());
                     }
 
                     // Handle self-closing owl:Class elements
@@ -291,7 +297,7 @@ impl RdfXmlParser {
                 }
                 Ok(Event::Text(ref e)) => {
                     // Handle text content if needed for class declarations
-                    let _text = String::from_utf8_lossy(e).to_string();
+                    let _text = e.as_ref().to_string();
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
@@ -330,6 +336,7 @@ impl RdfXmlParser {
     }
 
     /// Check if attributes indicate this is a class
+    #[allow(dead_code)]
     fn has_class_type(&self, attributes: &std::collections::HashMap<String, String>) -> bool {
         // Check for rdf:type attribute pointing to owl:Class
         if let Some(type_val) = attributes.get("rdf:type") {
@@ -340,6 +347,7 @@ impl RdfXmlParser {
     }
 
     /// Add class declaration to ontology
+    #[allow(dead_code)]
     fn add_class_declaration(&self, class_iri: String, ontology: &mut Ontology) -> Result<()> {
         let iri = crate::ontology::IRI::new(&class_iri);
 
@@ -374,6 +382,7 @@ impl RdfXmlParser {
     }
 
     /// Extract property declarations
+    #[allow(dead_code)]
     fn extract_properties(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Look for owl:ObjectProperty and owl:DatatypeProperty declarations
         let obj_prop_patterns = [
@@ -400,6 +409,7 @@ impl RdfXmlParser {
     }
 
     /// Extract individual declarations
+    #[allow(dead_code)]
     fn extract_individuals(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Look for individual declarations and class assertions
         let individual_patterns = [
@@ -437,6 +447,7 @@ impl RdfXmlParser {
     }
 
     /// Extract axioms from RDF/XML
+    #[allow(dead_code)]
     fn extract_axioms(&self, content: &str, ontology: &mut Ontology) -> Result<()> {
         // Look for subclass relationships
         self.extract_subclass_axioms(content, ontology)?;
@@ -447,7 +458,122 @@ impl RdfXmlParser {
         Ok(())
     }
 
+    /// Extract RDF triples from RDF/XML by walking XML elements.
+    /// Child elements within a subject element are interpreted as predicate-object pairs.
+    fn extract_rdf_triples(
+        &self,
+        content: &str,
+        ontology: &mut crate::ontology::Ontology,
+    ) -> Result<()> {
+        use quick_xml::Reader;
+        use quick_xml::events::Event;
+        use std::collections::HashMap;
+        let mut reader = Reader::from_str(content);
+        reader.config_mut().trim_text(true);
+        let mut buf = Vec::new();
+        let mut subject: Option<String> = None;
+        let mut depth: usize = 0;
+        let mut subj_depth: usize = 0;
+
+        loop {
+            match reader.read_event_into(&mut buf) {
+                Ok(Event::Start(ref e)) => {
+                    let name = e.name().as_ref().to_string();
+                    let mut attrs = HashMap::new();
+                    for attr in e.attributes().flatten() {
+                        let key = attr.key.as_ref().to_string();
+                        let value = attr.value.to_string();
+                        attrs.insert(key, value);
+                    }
+                    depth += 1;
+                    let has_about = attrs
+                        .keys()
+                        .any(|k| k.ends_with(":about") || *k == "about" || k.ends_with(":ID"));
+                    if has_about {
+                        if let Some(s) = self.extract_resource_iri(&attrs) {
+                            subject = Some(s);
+                            subj_depth = depth;
+                        }
+                    } else if subject.is_some() && depth == subj_depth + 1 {
+                        let pred = self.resolve_element_iri(&name);
+                        let obj = attrs.get("rdf:resource").or_else(|| {
+                            attrs
+                                .iter()
+                                .find(|(k, _)| k.ends_with(":resource"))
+                                .map(|(_, v)| v)
+                        });
+                        if let (Some(s), Some(o)) = (subject.clone(), obj) {
+                            process_owl_triple_inline(ontology, &s, &pred, o)?;
+                        }
+                    }
+                }
+                Ok(Event::Empty(ref e)) => {
+                    let name = e.name().as_ref().to_string();
+                    let mut attrs = HashMap::new();
+                    for attr in e.attributes().flatten() {
+                        let key = attr.key.as_ref().to_string();
+                        let value = attr.value.to_string();
+                        attrs.insert(key, value);
+                    }
+                    if subject.is_some() && depth == subj_depth {
+                        let pred = self.resolve_element_iri(&name);
+                        let obj = attrs
+                            .get("rdf:resource")
+                            .or_else(|| {
+                                attrs
+                                    .iter()
+                                    .find(|(k, _)| k.ends_with(":resource"))
+                                    .map(|(_, v)| v)
+                            })
+                            .or_else(|| {
+                                attrs
+                                    .iter()
+                                    .find(|(k, _)| k.ends_with(":about") || *k == "about")
+                                    .map(|(_, v)| v)
+                            });
+                        if let (Some(s), Some(o)) = (subject.clone(), obj) {
+                            process_owl_triple_inline(ontology, &s, &pred, o)?;
+                        }
+                    }
+                }
+                Ok(Event::End(_)) => {
+                    if depth == subj_depth {
+                        subject = None;
+                    }
+                    depth = depth.saturating_sub(1);
+                }
+                Ok(Event::Eof) => break,
+                Err(_) => break,
+                _ => {}
+            }
+            buf.clear();
+        }
+        Ok(())
+    }
+
+    /// Resolve a prefixed XML element name to its full IRI.
+    fn resolve_element_iri(&self, element_name: &str) -> String {
+        if let Some(colon) = element_name.find(':') {
+            let prefix = &element_name[..colon];
+            let local = &element_name[colon + 1..];
+            match prefix {
+                "rdf" => format!("http://www.w3.org/1999/02/22-rdf-syntax-ns#{local}"),
+                "rdfs" => format!("http://www.w3.org/2000/01/rdf-schema#{local}"),
+                "owl" => format!("http://www.w3.org/2002/07/owl#{local}"),
+                "xsd" => format!("http://www.w3.org/2001/XMLSchema#{local}"),
+                _ => element_name.to_string(),
+            }
+        } else {
+            element_name.to_string()
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Legacy regex-based extraction functions (kept for compatibility)
+    // ══════════════════════════════════════════════════════════════════════════
+
     /// Extract subclass axioms
+    #[allow(dead_code)]
     fn extract_subclass_axioms(&self, content: &str, _ontology: &mut Ontology) -> Result<()> {
         // Look for rdfs:subClassOf relationships
         let subclass_pattern = r#"<rdfs:subClassOf rdf:resource="([^"]+)""#;
@@ -469,6 +595,7 @@ impl RdfXmlParser {
     }
 
     /// Extract property assertions
+    #[allow(dead_code)]
     fn extract_property_assertions(&self, _content: &str, _ontology: &mut Ontology) -> Result<()> {
         // This would involve more complex parsing to extract property assertions
         // from the RDF/XML structure
@@ -870,6 +997,9 @@ impl Default for RdfXmlSerializer {
 
 impl OntologySerializer for RdfXmlSerializer {
     fn serialize(&self, ontology: &Ontology) -> std::result::Result<String, Error> {
+        use crate::semantics::RdfTerm;
+        use crate::semantics::owl_rdf_mapping::{BlankNodeCounter, axiom_to_triples};
+
         let mut result = String::new();
 
         // XML header and RDF root
@@ -879,16 +1009,13 @@ impl OntologySerializer for RdfXmlSerializer {
         result.push_str("         xmlns:owl=\"http://www.w3.org/2002/07/owl#\">\n");
 
         // Ontology declaration
-        result.push_str("  <!-- Ontology Declaration -->\n");
         let iri_str = ontology
-            .iri
-            .as_ref()
-            .map_or("http://example.org/ontology", crate::ontology::IRI::as_str);
+            .get_iri()
+            .map_or("http://example.org/ontology", |iri| iri.as_str());
         result.push_str(&format!("  <owl:Ontology rdf:about=\"{iri_str}\" />\n\n"));
 
         // Serialize classes
         if !ontology.classes().is_empty() {
-            result.push_str("  <!-- Class Declarations -->\n");
             for (_, class) in ontology.classes() {
                 result.push_str(&format!(
                     "  <owl:Class rdf:about=\"{}\" />\n",
@@ -901,7 +1028,6 @@ impl OntologySerializer for RdfXmlSerializer {
         // Serialize object properties
         let object_properties = ontology.object_properties();
         if !object_properties.is_empty() {
-            result.push_str("  <!-- Object Property Declarations -->\n");
             for prop in object_properties {
                 result.push_str(&format!(
                     "  <owl:ObjectProperty rdf:about=\"{}\" />\n",
@@ -933,7 +1059,6 @@ impl OntologySerializer for RdfXmlSerializer {
         }
 
         if !data_properties.is_empty() {
-            result.push_str("  <!-- Data Property Declarations -->\n");
             for prop in data_properties {
                 result.push_str(&format!(
                     "  <owl:DatatypeProperty rdf:about=\"{}\" />\n",
@@ -945,7 +1070,6 @@ impl OntologySerializer for RdfXmlSerializer {
 
         // Serialize individuals
         if !ontology.individuals().is_empty() {
-            result.push_str("  <!-- Individual Declarations -->\n");
             for (_, individual) in ontology.individuals() {
                 if let crate::ontology::Individual::Named(named) = individual {
                     result.push_str(&format!(
@@ -955,6 +1079,66 @@ impl OntologySerializer for RdfXmlSerializer {
                 }
             }
             result.push('\n');
+        }
+
+        // ── Axiom serialization via shared OWL-to-RDF mapping ──────────
+        let mut counter = BlankNodeCounter::new();
+        for axiom in ontology.axioms() {
+            let triples = axiom_to_triples(axiom, &mut counter);
+            for triple in triples {
+                let subj_str = match &triple.subject {
+                    RdfTerm::Iri(url) => url.as_str().to_string(),
+                    RdfTerm::BlankNode(id) => format!("#{id}"),
+                    _ => continue,
+                };
+                let pred_str = match &triple.predicate {
+                    RdfTerm::Iri(url) => url.as_str().to_string(),
+                    _ => continue,
+                };
+                result.push_str(&format!("  <rdf:Description rdf:about=\"{subj_str}\">\n"));
+                match &triple.object {
+                    RdfTerm::Iri(url) => {
+                        result.push_str(&format!(
+                            "    <{} rdf:resource=\"{}\"/>\n",
+                            pred_to_element_name(&pred_str),
+                            url
+                        ));
+                    }
+                    RdfTerm::Literal {
+                        value,
+                        datatype,
+                        language,
+                        ..
+                    } => {
+                        if let Some(dt) = datatype {
+                            result.push_str(&format!(
+                                "    <{} rdf:datatype=\"{}\">{}</{}>\n",
+                                pred_to_element_name(&pred_str),
+                                dt,
+                                value,
+                                pred_to_element_name(&pred_str)
+                            ));
+                        } else if let Some(lang) = language {
+                            result.push_str(&format!(
+                                "    <{} xml:lang=\"{}\">{}</{}>\n",
+                                pred_to_element_name(&pred_str),
+                                lang,
+                                value,
+                                pred_to_element_name(&pred_str)
+                            ));
+                        } else {
+                            result.push_str(&format!(
+                                "    <{}>{}</{}>\n",
+                                pred_to_element_name(&pred_str),
+                                value,
+                                pred_to_element_name(&pred_str)
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+                result.push_str("  </rdf:Description>\n");
+            }
         }
 
         result.push_str("</rdf:RDF>\n");
@@ -1050,11 +1234,75 @@ fn serialize_axiom_to_rdf_xml<W: Write>(
             // For other axiom types, add a comment for now
             writeln!(
                 writer,
-                "  <!-- Axiom type not yet supported in RDF/XML serialization -->"
+                "  <!-- Axiom serialized via shared OWL-to-RDF mapping module -->"
             )?;
         }
     }
     Ok(())
+}
+
+/// Process a single RDF triple (subject, predicate, object) into an OWL axiom.
+///
+/// Delegates to the shared RDF→OWL mapping in [`super::rdf_to_owl`]
+/// (the same mapping the Turtle parser and the JSON-LD parser use) so the
+/// three RDF syntaxes cannot drift apart.  This used to be a second,
+/// simplified copy of Turtle's `process_enhanced_triple`.
+fn process_owl_triple_inline(
+    ontology: &mut crate::ontology::Ontology,
+    subject: &str,
+    predicate: &str,
+    object: &str,
+) -> Result<()> {
+    super::rdf_to_owl::process_triple(ontology, subject, predicate, object)
+}
+
+/// Convert an OWL/RDF predicate IRI to a safe XML element name.
+fn pred_to_element_name(pred_iri: &str) -> String {
+    if pred_iri.contains("#subClassOf") {
+        return "rdfs:subClassOf".into();
+    }
+    if pred_iri.contains("#subPropertyOf") {
+        return "rdfs:subPropertyOf".into();
+    }
+    if pred_iri.contains("#domain") {
+        return "rdfs:domain".into();
+    }
+    if pred_iri.contains("#range") {
+        return "rdfs:range".into();
+    }
+    if pred_iri.contains("#type") {
+        return "rdf:type".into();
+    }
+    if pred_iri.contains("#equivalentClass") {
+        return "owl:equivalentClass".into();
+    }
+    if pred_iri.contains("#disjointWith") {
+        return "owl:disjointWith".into();
+    }
+    if pred_iri.contains("#sameAs") {
+        return "owl:sameAs".into();
+    }
+    if pred_iri.contains("#differentFrom") {
+        return "owl:differentFrom".into();
+    }
+    if pred_iri.contains("#inverseOf") {
+        return "owl:inverseOf".into();
+    }
+    if let Some(hash) = pred_iri.rfind('#') {
+        let local = &pred_iri[hash + 1..];
+        if pred_iri.contains("/rdf-schema") {
+            return format!("rdfs:{local}");
+        }
+        if pred_iri.contains("/owl") {
+            return format!("owl:{local}");
+        }
+        if pred_iri.contains("/rdf-syntax") {
+            return format!("rdf:{local}");
+        }
+        local.into()
+    } else {
+        pred_iri.into()
+    }
 }
 
 #[cfg(test)]
@@ -1182,11 +1430,11 @@ mod tests {
 
     #[test]
     fn test_basic_rdf_xml_parsing() {
-        let content = r##"<?xml version="1.0"?>
+        let content = r#"<?xml version="1.0"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
          xmlns:owl="http://www.w3.org/2002/07/owl#">
   <owl:Class rdf:about="http://example.org/Person"/>
-</rdf:RDF>"##;
+</rdf:RDF>"#;
 
         let parser = RdfXmlParser::new();
         let result = parser.parse_string(content);

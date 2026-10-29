@@ -469,8 +469,8 @@ impl ExplanationService {
             // Find all superclasses of current class
             for axiom in ontology.axioms() {
                 if let Axiom::SubClassOf(subclass_axiom) = axiom {
-                    let subclass_key = format!("{:?}", &subclass_axiom.subclass);
-                    let superclass_key = format!("{:?}", &subclass_axiom.superclass);
+                    let subclass_key = format!("{:?}", subclass_axiom.subclass);
+                    let superclass_key = format!("{:?}", subclass_axiom.superclass);
 
                     if subclass_key == current && !visited.contains(&superclass_key) {
                         visited.insert(superclass_key.clone());

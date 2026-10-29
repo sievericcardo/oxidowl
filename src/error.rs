@@ -400,6 +400,14 @@ fn format_rdf_star_syntax_error(
 /// Result type alias
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Message prefix emitted by the in-process memory guard
+/// ([`crate::performance::MemoryGuard`]) when RSS exceeds
+/// `reasoning.max_memory_mb`.
+///
+/// Single-sourced here so [`Error::is_memory_limit`] can match on exactly the
+/// same string the guard formats (see `crate::performance`).
+pub const MEMORY_LIMIT_MESSAGE_PREFIX: &str = "Memory limit exceeded";
+
 /// Type alias for backwards compatibility
 pub type OxidowlError = Error;
 
@@ -437,6 +445,20 @@ impl Error {
         Self::Reasoning {
             message: message.into(),
         }
+    }
+
+    /// Is this the in-process memory-guard abort (`MemoryGuard` over
+    /// `reasoning.max_memory_mb`)?
+    ///
+    /// Used to let memory aborts bypass "recoverable" fallbacks (e.g. the EL
+    /// fast path falls back to general classification on any other error —
+    /// retrying under memory pressure would only make things worse).
+    #[must_use]
+    pub fn is_memory_limit(&self) -> bool {
+        matches!(
+            self,
+            Self::Reasoning { message } if message.starts_with(MEMORY_LIMIT_MESSAGE_PREFIX)
+        )
     }
 
     /// Configuration error constructor

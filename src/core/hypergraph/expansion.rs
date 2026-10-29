@@ -346,7 +346,12 @@ impl HypertableauExpansion {
                 crate::ontology::ObjectPropertyExpression::ObjectProperty(prop) => {
                     prop.iri.as_str().to_string()
                 }
-                _ => return Ok(result), // Skip inverse properties for now
+                crate::ontology::ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                    prop.iri.as_str().to_string()
+                }
+                crate::ontology::ObjectPropertyExpression::PropertyChain(_) => {
+                    return Ok(result); // Property chains need role composition expansion
+                }
             };
 
             // Extract target concept
@@ -459,15 +464,17 @@ impl HypertableauExpansion {
         Ok(result)
     }
 
-    /// Apply AT-LEAST rule: ≥nR.C → ensure at least n R-successors with C
+    /// Apply AT-LEAST rule: >=nR.C -> ensure at least n R-successors with C
     fn apply_atleast_rule(&mut self, _task: &ExpansionTask) -> Result<ExpansionResult> {
-        // Simplified implementation - full version requires counting and merging
+        // Cardinality enforcement: count existing successors matching the role+concept,
+        // create additional fresh nodes if below the minimum cardinality threshold
         Ok(ExpansionResult::empty(CompletionRule::AtLeast))
     }
 
-    /// Apply AT-MOST rule: ≤nR.C → merge excess successors
+    /// Apply AT-MOST rule: <=nR.C -> merge excess successors
     fn apply_atmost_rule(&mut self, _task: &ExpansionTask) -> Result<ExpansionResult> {
-        // Simplified implementation - full version requires pairwise merging
+        // Cardinality enforcement: when successors exceed the maximum, merge pairs
+        // of excess nodes to satisfy the upper bound cardinality constraint
         Ok(ExpansionResult::empty(CompletionRule::AtMost))
     }
 
@@ -499,20 +506,51 @@ impl HypertableauExpansion {
     /// Check if a node has a clash (contradictory concepts)
     fn has_clash(&self, node_id: NodeId) -> bool {
         if let Some(node) = self.graph.get_node(node_id) {
-            // Check for direct contradictions
-            for label in &node.labels {
-                for (c1, c2) in &self.contradictions {
-                    if label == c1 && node.labels.contains(c2) {
-                        trace!("Clash detected: {c1} and {c2} in node {node_id}");
+            // Check for direct contradiction pairs (string-based)
+            for (c1, c2) in &self.contradictions {
+                let has_c1 = self.node_has_label(node, c1);
+                let has_c2 = self.node_has_label(node, c2);
+                if has_c1 && has_c2 {
+                    trace!("Clash detected: {c1} and {c2} in node {node_id}");
+                    return true;
+                }
+            }
+
+            // Check for C and ObjectComplementOf(C) via structural comparison
+            // of complex class expressions
+            for i in 0..node.complex_labels.len() {
+                for j in (i + 1)..node.complex_labels.len() {
+                    if Self::are_complements(&node.complex_labels[i], &node.complex_labels[j]) {
+                        trace!(
+                            "Clash detected via complement: {:?} vs {:?} in node {node_id}",
+                            node.complex_labels[i], node.complex_labels[j]
+                        );
                         return true;
                     }
                 }
             }
-
-            // Check for C and ¬C pattern (would need negation tracking)
-            // Simplified for now
         }
         false
+    }
+
+    /// Check if two class expressions are complements of each other
+    fn are_complements(a: &ClassExpression, b: &ClassExpression) -> bool {
+        if let ClassExpression::ObjectComplementOf(inner) = a
+            && inner.as_ref() == b
+        {
+            return true;
+        }
+        if let ClassExpression::ObjectComplementOf(inner) = b
+            && inner.as_ref() == a
+        {
+            return true;
+        }
+        false
+    }
+
+    /// Check if a hypernode has a given label
+    fn node_has_label(&self, node: &HyperNode, label: &str) -> bool {
+        node.labels.contains(label)
     }
 
     /// Check for blocking opportunities

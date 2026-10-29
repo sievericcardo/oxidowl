@@ -339,7 +339,7 @@ impl SWRLBuiltIn for EqualBuiltIn {
         Ok(SWRLValue::Boolean(args[0] == args[1]))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#equal"
     }
 
@@ -359,7 +359,7 @@ impl SWRLBuiltIn for NotEqualBuiltIn {
         Ok(SWRLValue::Boolean(args[0] != args[1]))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#notEqual"
     }
 
@@ -388,7 +388,7 @@ impl SWRLBuiltIn for LessThanBuiltIn {
         Ok(SWRLValue::Boolean(result))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#lessThan"
     }
 
@@ -423,7 +423,7 @@ impl SWRLBuiltIn for LessThanOrEqualBuiltIn {
         Ok(SWRLValue::Boolean(result))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#lessThanOrEqual"
     }
 
@@ -452,7 +452,7 @@ impl SWRLBuiltIn for GreaterThanBuiltIn {
         Ok(SWRLValue::Boolean(result))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#greaterThan"
     }
 
@@ -487,7 +487,7 @@ impl SWRLBuiltIn for GreaterThanOrEqualBuiltIn {
         Ok(SWRLValue::Boolean(result))
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#greaterThanOrEqual"
     }
 
@@ -516,7 +516,7 @@ impl SWRLBuiltIn for AddBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#add"
     }
 
@@ -545,7 +545,7 @@ impl SWRLBuiltIn for SubtractBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#subtract"
     }
 
@@ -574,7 +574,7 @@ impl SWRLBuiltIn for MultiplyBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#multiply"
     }
 
@@ -623,7 +623,7 @@ impl SWRLBuiltIn for DivideBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#divide"
     }
 
@@ -672,7 +672,7 @@ impl SWRLBuiltIn for ModBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#mod"
     }
 
@@ -703,7 +703,7 @@ impl SWRLBuiltIn for PowBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#pow"
     }
 
@@ -730,7 +730,7 @@ impl SWRLBuiltIn for AbsBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#abs"
     }
 
@@ -749,14 +749,14 @@ impl SWRLBuiltIn for StringLengthBuiltIn {
         }
 
         let result = match &args[0] {
-            SWRLValue::String(s) => SWRLValue::Integer(s.len() as i64),
+            SWRLValue::String(s) => SWRLValue::Integer(i64::try_from(s.len()).unwrap_or(i64::MAX)),
             _ => return Err(Error::reasoning("StringLength requires string argument")),
         };
 
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#stringLength"
     }
 
@@ -782,7 +782,7 @@ impl SWRLBuiltIn for StringConcatBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#stringConcat"
     }
 
@@ -810,7 +810,7 @@ impl SWRLBuiltIn for ContainsBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#contains"
     }
 
@@ -838,7 +838,7 @@ impl SWRLBuiltIn for StartsWithBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#startsWith"
     }
 
@@ -866,7 +866,7 @@ impl SWRLBuiltIn for EndsWithBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#endsWith"
     }
 
@@ -905,7 +905,7 @@ impl SWRLBuiltIn for SubstringBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#substring"
     }
 
@@ -931,7 +931,7 @@ impl SWRLBuiltIn for UpperCaseBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#upperCase"
     }
 
@@ -957,7 +957,7 @@ impl SWRLBuiltIn for LowerCaseBuiltIn {
         Ok(result)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "http://www.w3.org/2003/11/swrlb#lowerCase"
     }
 

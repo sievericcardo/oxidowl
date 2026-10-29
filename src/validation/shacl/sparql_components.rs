@@ -29,10 +29,10 @@ pub fn evaluate_sparql_component(
     source_shape: Option<&RdfTerm>,
     param_messages: &[ShaclMessage],
 ) -> Result<Vec<ShaclValidationResult>> {
-    let prefix_block: String = prefixes
-        .iter()
-        .map(|(p, ns)| format!("PREFIX {p}: <{ns}>\n"))
-        .collect();
+    let mut prefix_block = String::new();
+    for (p, ns) in prefixes {
+        prefix_block.push_str(&format!("PREFIX {p}: <{ns}>\n"));
+    }
 
     // Bind parameter values
     let param_bindings = build_param_bindings(&constraint.parameters);

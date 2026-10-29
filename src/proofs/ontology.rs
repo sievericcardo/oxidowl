@@ -5,6 +5,8 @@
 //! - [`Class`]: `owl:Thing` / `owl:Nothing` distinctness, constructor fidelity.
 //! - [`ClassExpression`]: basic constructor properties.
 
+#![cfg(kani)]
+
 use crate::ontology::{
     IRI,
     concepts::{Class, ClassExpression},

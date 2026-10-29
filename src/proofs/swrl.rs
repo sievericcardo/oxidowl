@@ -21,6 +21,8 @@
 //!   SameIndividualAtom, DifferentIndividualsAtom).
 //! - `SWRLRule::is_safe()` safety boundary with explicit unwind bound.
 
+#![cfg(kani)]
+
 use crate::ontology::{
     IRI, Individual, ObjectProperty, ObjectPropertyExpression,
     axioms::{SWRLAtom, SWRLIArgument, SWRLRule, SWRLVariable},

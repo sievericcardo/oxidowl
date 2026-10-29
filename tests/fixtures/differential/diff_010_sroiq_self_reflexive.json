@@ -1,0 +1,14 @@
+{
+  "id": "diff_010_sroiq_self_reflexive",
+  "source": "Functional",
+  "ontology": "Prefix(:=<http://example.org/diff010#>)\nOntology(<http://example.org/diff010>\n  EquivalentClasses(:Narcissist ObjectHasSelf(:likes))\n  ClassAssertion(:Narcissist :a)\n  ReflexiveObjectProperty(:ref)\n  ObjectPropertyAssertion(:ref :x :x)\n)",
+  "base": "http://example.org/diff010#",
+  "axioms": { "min": 4 },
+  "expected": {
+    "consistent": true,
+    "instances": { "Narcissist": ["a"] },
+    "satisfiable": { "Narcissist": true },
+    "entailed": ["ObjectPropertyAssertion(:likes :a :a)", "ObjectPropertyAssertion(:ref :x :x)"]
+  },
+  "rationale": "SROIQ: a ∈ Narcissist ≡ ∃likes.Self entails likes(a,a). ReflexiveObjectProperty(ref) with ref(x,x) asserted is consistent and trivially entails ref(x,x)."
+}

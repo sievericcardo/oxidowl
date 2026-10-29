@@ -147,6 +147,13 @@ impl UnsatCache {
         self.hits.store(0, Ordering::Relaxed);
         self.misses.store(0, Ordering::Relaxed);
     }
+
+    /// Clear all cached entries.
+    pub fn clear(&self) {
+        self.cache.clear();
+        self.entries.store(0, Ordering::Relaxed);
+        self.reset_stats();
+    }
 }
 
 impl Default for UnsatCache {

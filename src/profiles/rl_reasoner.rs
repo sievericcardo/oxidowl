@@ -53,7 +53,7 @@ impl RLReasoner {
     /// Create a new RL reasoner
     #[must_use]
     pub fn new(config: ReasonerConfig) -> Self {
-        #[allow(clippy::arc_with_non_send_sync)]
+        #[allow(clippy::arc_with_non_send_sync)] // Arc shared ownership, single-threaded use here
         let explanation_service = if config
             .reasoning
             .is_enabled(crate::config::ReasoningFeature::Explanations)
@@ -221,7 +221,7 @@ impl RLReasoner {
                                     .tbox
                                     .intersection_defs
                                     .push(((*nc).clone(), operands.clone())),
-                                _ => {}
+                                RLClassExpression::Class(_) => {}
                             }
                         }
                     }
@@ -416,13 +416,15 @@ impl RLReasoner {
             .collect()
     }
 
-    /// Number of materialized facts in the ABox
+    /// Number of materialized facts in the `ABox`
+    #[must_use]
     pub fn materialized_facts_count(&self) -> usize {
         self.materialized_facts.fact_count()
     }
 
     /// Iterate class assertion pairs as (Individual, Vec<ClassExpression>) for
     /// syncing back into the main ontology.
+    #[must_use]
     pub fn class_assertion_pairs(
         &self,
     ) -> Vec<(Individual, Vec<crate::ontology::ClassExpression>)> {
@@ -514,7 +516,10 @@ impl RLAxiom {
     /// Try to convert a general axiom to RL axiom
     #[must_use]
     pub fn from_general_axiom(axiom: &Axiom) -> Option<Self> {
-        use crate::ontology::axioms::*;
+        use crate::ontology::axioms::{
+            Axiom, ClassAssertionAxiom, ObjectPropertyAssertionAxiom, SubClassOfAxiom,
+            SubObjectPropertyOfAxiom,
+        };
         match axiom {
             Axiom::SubClassOf(SubClassOfAxiom {
                 subclass,
@@ -522,10 +527,10 @@ impl RLAxiom {
                 ..
             }) => {
                 let rl_sub = RLClassExpression::from_class_expression(subclass)?;
-                let rl_sup = RLClassExpression::from_class_expression(superclass)?;
+                let normalized_sup = RLClassExpression::from_class_expression(superclass)?;
                 Some(RLAxiom::SubClassOf {
                     subclass: rl_sub,
-                    superclass: rl_sup,
+                    superclass: normalized_sup,
                 })
             }
             Axiom::SubObjectPropertyOf(SubObjectPropertyOfAxiom {
@@ -616,7 +621,10 @@ impl RLAxiom {
     /// Convert to general axiom
     #[must_use]
     pub fn to_general_axiom(&self) -> Axiom {
-        use crate::ontology::axioms::*;
+        use crate::ontology::axioms::{
+            Axiom, ClassAssertionAxiom, DeclarationAxiom, Entity, ObjectPropertyAssertionAxiom,
+            SubClassOfAxiom, SubObjectPropertyOfAxiom,
+        };
         match self {
             RLAxiom::SubClassOf {
                 subclass,
@@ -680,7 +688,7 @@ pub enum RLClassExpression {
         property: ObjectPropertyExpression,
         filler: Box<RLClassExpression>,
     },
-    /// HasValue restriction: ∃p.{v}
+    /// `HasValue` restriction: ∃p.{v}
     HasValue {
         property: ObjectPropertyExpression,
         value: Individual,
@@ -775,7 +783,7 @@ pub struct MaterializedKnowledgeBase {
         HashMap<(Individual, ObjectPropertyExpression), HashSet<Individual>>,
     /// Data property assertions: (subject, property) -> values
     data_property_assertions: HashMap<(Individual, DataPropertyExpression), HashSet<String>>,
-    /// SameAs links: individual -> equivalent individuals
+    /// `SameAs` links: individual -> equivalent individuals
     same_as: HashMap<Individual, HashSet<Individual>>,
 }
 
@@ -841,8 +849,7 @@ impl MaterializedKnowledgeBase {
         if let Some(rl_class) = RLClassExpression::from_class_expression(class) {
             self.class_assertions
                 .get(individual)
-                .map(|classes| classes.contains(&rl_class))
-                .unwrap_or(false)
+                .is_some_and(|classes| classes.contains(&rl_class))
         } else {
             false
         }
@@ -962,6 +969,7 @@ impl MaterializedKnowledgeBase {
     }
 
     /// Collect same-as pairs as owned Vec for use while mutating kb
+    #[must_use]
     pub fn same_as_iter_pairs(&self) -> Vec<(Individual, Vec<Individual>)> {
         self.same_as
             .iter()
@@ -991,15 +999,15 @@ pub struct TBoxHierarchy {
     domains: HashMap<ObjectPropertyExpression, HashSet<RLClassExpression>>,
     /// Ranges
     ranges: HashMap<ObjectPropertyExpression, HashSet<RLClassExpression>>,
-    /// HasValue definitions: C ≡ ∃p.{v}  →  (class, property, individual)
+    /// `HasValue` definitions: C ≡ ∃p.{v}  →  (class, property, individual)
     pub has_value_defs: Vec<(RLClassExpression, ObjectPropertyExpression, Individual)>,
-    /// SomeValuesFrom definitions: C ≡ ∃p.D  →  (class, property, filler)
+    /// `SomeValuesFrom` definitions: C ≡ ∃p.D  →  (class, property, filler)
     pub some_values_from_defs: Vec<(
         RLClassExpression,
         ObjectPropertyExpression,
         RLClassExpression,
     )>,
-    /// AllValuesFrom definitions: C ⊑ ∀p.D  →  (class, property, filler)
+    /// `AllValuesFrom` definitions: C ⊑ ∀p.D  →  (class, property, filler)
     pub all_values_from_defs: Vec<(
         RLClassExpression,
         ObjectPropertyExpression,
@@ -1007,7 +1015,7 @@ pub struct TBoxHierarchy {
     )>,
     /// Intersection definitions: C ≡ D1 ⊓ ... ⊓ Dn  →  (class, members)
     pub intersection_defs: Vec<(RLClassExpression, Vec<RLClassExpression>)>,
-    /// InverseOf pairs: (P, Q) means InverseOf(P, Q)
+    /// `InverseOf` pairs: (P, Q) means InverseOf(P, Q)
     pub inverse_properties: Vec<(ObjectPropertyExpression, ObjectPropertyExpression)>,
     /// Reflexive properties
     pub reflexive_properties: HashSet<ObjectPropertyExpression>,
@@ -1015,7 +1023,7 @@ pub struct TBoxHierarchy {
     pub functional_properties: HashSet<ObjectPropertyExpression>,
     /// Property chains: (chain, superproperty)
     pub property_chains: Vec<(Vec<ObjectPropertyExpression>, ObjectPropertyExpression)>,
-    /// OneOf definitions: C ≡ {a, b, c}
+    /// `OneOf` definitions: C ≡ {a, b, c}
     pub one_of_defs: Vec<(RLClassExpression, Vec<Individual>)>,
 }
 

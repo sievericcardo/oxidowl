@@ -1,0 +1,14 @@
+{
+  "id": "diff_018_rdfxml_rdf_entailment",
+  "source": "RDFXML",
+  "ontology": "<?xml version=\"1.0\"?>\n<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n         xmlns:owl=\"http://www.w3.org/2002/07/owl#\"\n         xmlns:rdfs=\"http://www.w3.org/2000/01/rdf-schema#\">\n  <owl:Ontology rdf:about=\"http://example.org/diff018\"/>\n  <owl:Class rdf:about=\"http://example.org/diff018#A\">\n    <rdfs:subClassOf rdf:resource=\"http://example.org/diff018#B\"/>\n  </owl:Class>\n  <owl:Class rdf:about=\"http://example.org/diff018#B\">\n    <rdfs:subClassOf rdf:resource=\"http://example.org/diff018#C\"/>\n  </owl:Class>\n  <owl:NamedIndividual rdf:about=\"http://example.org/diff018#a\">\n    <rdf:type rdf:resource=\"http://example.org/diff018#A\"/>\n  </owl:NamedIndividual>\n</rdf:RDF>\n",
+  "base": "http://example.org/diff018#",
+  "axioms": { "min": 3 },
+  "expected": {
+    "consistent": true,
+    "subsumptions": [["A", "C"]],
+    "instances": { "A": ["a"], "C": ["a"] },
+    "entailed": ["SubClassOf(:A :C)", "ClassAssertion(:B :a)", "ClassAssertion(:C :a)"]
+  },
+  "rationale": "Same RDF-based semantics as the Turtle fixture but encoded in RDF/XML: rdfs:subClassOf and rdf:type produce the same SubClassOf/ClassAssertion axioms, and the same entailments hold. Cross-checks the RDF/XML parser path against the Turtle path."
+}

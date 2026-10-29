@@ -57,10 +57,10 @@ impl MultiLevelCacheManager {
     pub fn new() -> Self {
         Self {
             unsat: UnsatCache::new(),
-            expander: SatExpanderCache::new(50_000, Duration::from_secs(1 * 3600)),
-            completion_graph: CompletionGraphCache::new(10_000, Duration::from_secs(1 * 3600)),
+            expander: SatExpanderCache::new(50_000, Duration::from_hours(1)),
+            completion_graph: CompletionGraphCache::new(10_000, Duration::from_hours(1)),
             saturation: SaturationCache::new(),
-            consequences: ConsequencesCache::new(Duration::from_secs(1 * 3600)),
+            consequences: ConsequencesCache::new(Duration::from_hours(1)),
         }
     }
 
@@ -91,10 +91,11 @@ impl MultiLevelCacheManager {
 
     /// Full reset of every cache layer (used after axiom removal).
     pub fn reset_all(&self) {
+        self.unsat.clear();
+        self.expander.clear();
+        self.completion_graph.clear();
+        self.saturation.clear();
         self.consequences.invalidate_all();
-        // Currently no direct clear API on DashMap-based caches; a fresh instance
-        // would be needed for full reset. For production use, wrap in Arc<RwLock<>>
-        // and replace the inner value. This is left as a TODO for the integration step.
     }
 }
 

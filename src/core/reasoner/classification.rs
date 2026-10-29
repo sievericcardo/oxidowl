@@ -11,12 +11,17 @@ use crate::{
         lock_helpers::read_lock,
         reasoner::{
             datatype_validation::DatatypeValidator,
-            parallel_classification::ParallelClassificationScheduler,
-            results::{ClassificationResult, PropertyClassificationResult, RealisationResult},
+            results::{
+                ClassificationCounters, ClassificationResult, PropertyClassificationResult,
+                RealisationResult,
+            },
             statistics::ReasoningStatistics,
             tasks::ReasoningTaskService,
         },
-        saturation::{SaturationConfig, SaturationEngine, SaturationStatus},
+        saturation::{
+            DependencyClassifier, SaturationConfig, SaturationEngine, SaturationStatus, absorb,
+            absorption::collect_named_classes,
+        },
     },
     ontology::{
         ClassExpression, DataPropertyExpression, IRI, Individual, ObjectPropertyExpression,
@@ -35,19 +40,40 @@ pub struct ClassificationService {
     task_service: ReasoningTaskService,
     datatype_validator: DatatypeValidator,
     saturation_engine: SaturationEngine,
+    performance_config: PerformanceConfig,
+    /// Cached classification result, invalidated on ontology change.
+    classification_cache: Option<ClassificationResult>,
+    /// Enable absorption + dependency-graph (Elgot-style) classification.
+    absorption_enabled: bool,
+    /// RSS cap from `reasoning.max_memory_mb` (`None`/`Some(0)` = unlimited).
+    /// Enforced by a [`crate::performance::MemoryGuard`] owned by the
+    /// `classify` loops (see `set_max_memory_mb`).
+    max_memory_mb: Option<u64>,
+    /// Maximum number of full-tableau checks in the phase-3 fallback.
+    max_real_tableau_checks: usize,
+    /// Total time budget for full-tableau checks in the phase-3 fallback.
+    max_real_tableau_time: std::time::Duration,
 }
 
 impl ClassificationService {
     /// Create a new classification service
+    #[must_use]
     pub fn new(task_service: ReasoningTaskService) -> Self {
         Self {
             task_service,
             datatype_validator: DatatypeValidator::new(),
             saturation_engine: SaturationEngine::new(SaturationConfig::default()),
+            performance_config: PerformanceConfig::from_env(),
+            classification_cache: None,
+            absorption_enabled: true,
+            max_memory_mb: None,
+            max_real_tableau_checks: 512,
+            max_real_tableau_time: std::time::Duration::from_millis(250),
         }
     }
 
     /// Create a new classification service with custom saturation config
+    #[must_use]
     pub fn with_saturation_config(
         task_service: ReasoningTaskService,
         saturation_config: SaturationConfig,
@@ -56,12 +82,82 @@ impl ClassificationService {
             task_service,
             datatype_validator: DatatypeValidator::new(),
             saturation_engine: SaturationEngine::new(saturation_config),
+            performance_config: PerformanceConfig::from_env(),
+            classification_cache: None,
+            absorption_enabled: true,
+            max_memory_mb: None,
+            max_real_tableau_checks: 512,
+            max_real_tableau_time: std::time::Duration::from_millis(250),
         }
+    }
+
+    /// Set the performance configuration
+    pub fn set_performance_config(&mut self, config: PerformanceConfig) {
+        self.performance_config = config;
+    }
+
+    /// Enforce `reasoning.max_memory_mb` in the classification loops
+    /// (per-class phase-3 loop + A8 phase boundaries) and forward the cap to
+    /// the saturation engine.  `None`/`Some(0)` = unlimited.
+    pub fn set_max_memory_mb(&mut self, max_memory_mb: Option<u64>) {
+        self.max_memory_mb = max_memory_mb;
+        self.saturation_engine.set_max_memory_mb(max_memory_mb);
+    }
+
+    /// Enable or disable the absorption + dependency-graph classification path.
+    pub fn set_absorption_enabled(&mut self, enabled: bool) {
+        self.absorption_enabled = enabled;
+    }
+
+    /// Invalidate the cached classification result (ontology changed).
+    pub fn invalidate_classification_cache(&mut self) {
+        self.classification_cache = None;
+    }
+
+    /// Store a classification result produced outside this service (e.g. the
+    /// EL-reasoner fast path) so that query fast-paths can reuse it.
+    pub fn store_classification(&mut self, mut result: ClassificationResult) {
+        // Rebuild the inverse / equivalence indexes if they are empty.
+        if result.subsumees.is_empty() {
+            result.rebuild_subsumees();
+        }
+        if result.equivalents.is_empty() {
+            for (sub, sups) in &result.hierarchy {
+                for sup in sups {
+                    if result.hierarchy.get(sup).is_some_and(|s| s.contains(sub)) {
+                        result
+                            .equivalents
+                            .entry(sub.clone())
+                            .or_default()
+                            .insert(sup.clone());
+                        result
+                            .equivalents
+                            .entry(sup.clone())
+                            .or_default()
+                            .insert(sub.clone());
+                    }
+                }
+            }
+        }
+        self.classification_cache = Some(result);
+    }
+
+    /// Borrow the cached classification result, if any.
+    #[must_use]
+    pub fn cached_classification(&self) -> Option<&ClassificationResult> {
+        self.classification_cache.as_ref()
+    }
+
+    /// Register the ontology's `DatatypeDefinition` axioms with the datatype validator so
+    /// literals of user-defined datatypes are checked against their defining ranges.
+    pub fn register_datatype_definitions(&mut self, ontology: &Ontology) {
+        self.datatype_validator
+            .register_ontology_datatypes(ontology);
     }
 
     /// Perform classification (build class hierarchy)
     pub fn classify(
-        &self,
+        &mut self,
         ontology: &OntologyRef,
         statistics: &mut ReasoningStatistics,
         cache: &mut CacheManager,
@@ -71,14 +167,27 @@ impl ClassificationService {
         info!("Starting classification with saturation-based optimization");
 
         // Check if we have a cached classification result
+        if let Some(cached_result) = &self.classification_cache {
+            debug!("Classification result found in service cache");
+            statistics.add_reasoning_time(start_time.elapsed());
+            return Ok(cached_result.clone());
+        }
         if let Some(cached_result) = cache.get_classification_result(ontology) {
             debug!("Classification result found in cache");
+            statistics.add_reasoning_time(start_time.elapsed());
             return Ok(cached_result);
         }
 
+        // RSS guard for the loops below.  Owned by `classify` (the loops live
+        // here): samples at most once per ~300 ms, and `None`/`Some(0)`
+        // (`reasoning.max_memory_mb` unset or 0) never samples at all.
+        let mut memory_guard =
+            crate::performance::MemoryGuard::from_max_memory_mb(self.max_memory_mb);
+
         let ontology_guard = read_lock(ontology, "classification: reading ontology for classify")?;
 
-        // Get all named classes from the ontology
+        // Get all named classes from the ontology.  The signature is reused at
+        // the tail for the object/data property lists (no second O(A·C) scan).
         let signature = ontology_guard.signature()?;
         let mut classes: Vec<ClassExpression> = signature
             .classes
@@ -100,141 +209,313 @@ impl ClassificationService {
 
         info!("Classifying {} classes", classes.len());
 
+        let named_count = classes.iter().filter(|c| c.is_named_class()).count();
+
         // === Extract told subsumers from axioms ===
         let phase1_start = Instant::now();
         let mut hierarchy = self.extract_told_subsumers(&classes, &ontology_guard)?;
         info!("(told subsumers) completed in {:?}", phase1_start.elapsed());
 
-        // === PHASE 2: Saturation-based subsumption ===
-        let phase2_start = Instant::now();
-        let saturation_result = self.saturation_engine.saturate_ontology(&ontology_guard)?;
-        info!(
-            "Phase 2 (saturation) completed in {:?} - {} concepts complete, {} require tableau",
-            phase2_start.elapsed(),
-            saturation_result.statistics.concepts_complete,
-            saturation_result.statistics.concepts_requiring_tableau
-        );
+        let mut counters = ClassificationCounters {
+            told_subsumers: hierarchy.values().map(HashSet::len).sum(),
+            ..Default::default()
+        };
 
-        // Add subsumers discovered through saturation.
-        // Use `entry(concept.clone())` + `extend(iter().cloned())` to avoid
-        // cloning the full subsumers HashSet into a temporary before extending.
-        for (concept, subsumers) in &saturation_result.subsumptions {
-            hierarchy
-                .entry(concept.clone())
-                .or_insert_with(HashSet::new)
-                .extend(subsumers.iter().cloned());
+        // === PHASE 2: Absorption + dependency-graph propagation (A8) ===
+        // When absorption is enabled the dependency-graph propagation subsumes
+        // the saturation fast path (told closure, equivalents, role-domain /
+        // role-range propagation) so we skip the (heavier) saturation engine
+        // entirely.  The saturation engine remains the fallback when the
+        // absorption path is disabled.
+        memory_guard.check()?; // before the A8 absorb + dependency classify
+        let phase2_start = Instant::now();
+        let mut may_need_tableau: HashSet<ClassExpression> = HashSet::new();
+        let mut absorption_opt: Option<crate::core::saturation::AbsorptionResult> = None;
+        let mut statuses: HashMap<ClassExpression, SaturationStatus> = HashMap::new();
+
+        if self.absorption_enabled {
+            let absorption = absorb(&ontology_guard);
+            counters.absorbed_gcis = absorption.absorbed_count;
+            counters.remaining_gcis = absorption.remaining_count;
+            counters.role_successor_clauses = absorption.role_successor_count();
+            counters.role_domain_clauses = absorption.role_domains.values().map(Vec::len).sum();
+            counters.role_range_clauses = absorption.role_ranges.values().map(Vec::len).sum();
+
+            let classifier = DependencyClassifier;
+            let dep = classifier.classify(&classes, &absorption, &hierarchy);
+            counters.dependency_sccs = dep.scc_count;
+            counters.propagation_rounds = dep.rounds;
+            counters.dependency_edges = dep
+                .derivations
+                .values()
+                .map(|d| d.subsumers.len() + d.existentials.len())
+                .sum();
+            may_need_tableau.clone_from(&dep.may_need_tableau);
+
+            // Build the hierarchy directly from the derivations (they already
+            // include the told subsumers plus the transitive closure), avoiding
+            // a redundant told+merge pass.  The derivations are *moved* into
+            // the hierarchy (not cloned), so the O(N·D) subsumer sets are
+            // handed off once.
+            let mut new_hierarchy: HashMap<ClassExpression, HashSet<ClassExpression>> =
+                HashMap::with_capacity(classes.len());
+            for c in &classes {
+                new_hierarchy.entry(c.clone()).or_default();
+            }
+            for (concept, deriv) in dep.derivations {
+                new_hierarchy.insert(concept, deriv.subsumers);
+            }
+            hierarchy = new_hierarchy;
+            absorption_opt = Some(absorption);
+        } else {
+            // Pre-A8 fallback: index-based saturation.
+            let saturation_result = self.saturation_engine.saturate_ontology(&ontology_guard)?;
+            counters.saturation_concepts = saturation_result.statistics.concepts_processed;
+            counters.saturation_complete = saturation_result.statistics.concepts_complete;
+            counters.saturation_tableau_required =
+                saturation_result.statistics.concepts_requiring_tableau;
+            for (concept, subsumers) in &saturation_result.subsumptions {
+                hierarchy
+                    .entry(concept.clone())
+                    .or_insert_with(HashSet::new)
+                    .extend(subsumers.iter().cloned());
+            }
+            for class in &classes {
+                if let Some(node) = saturation_result.get_node(class) {
+                    statuses.insert(class.clone(), node.status);
+                }
+            }
         }
 
-        // === PHASE 3: Tableau expansion for complex cases ===
-        let phase3_start = Instant::now();
-        let mut tableau_checks = 0;
-        let mut tableau_pairs = Vec::new();
+        info!(
+            "Phase 2 (classification) completed in {:?} - {} classes avoided the tableau",
+            phase2_start.elapsed(),
+            named_count.saturating_sub(may_need_tableau.len())
+        );
 
-        // Identify pairs that need tableau expansion
-        for subclass in &classes {
-            if let Some(node) = saturation_result.get_node(subclass)
-                && (node.status == SaturationStatus::RequiresFullTableau
-                    || node.status == SaturationStatus::NonDeterministic)
+        // === PHASE 3: Tableau expansion for genuinely non-deterministic classes ===
+        memory_guard.check()?; // after A8 / saturation, before the pairwise loop
+        let phase3_start = Instant::now();
+        let mut tableau_checks = 0usize;
+        let mut real_tableau_checks = 0usize;
+        let mut classes_needing_tableau: HashSet<ClassExpression> = HashSet::new();
+        let mut real_tableau_time = std::time::Duration::ZERO;
+
+        // A class needs the tableau fallback when the absorption path marks it
+        // (non-deterministic construct in its closure, or a non-absorbed GCI
+        // touching it) or when saturation flagged it.
+        let needs_tableau = |class: &ClassExpression, may: &HashSet<ClassExpression>| -> bool {
+            if let Some(&status) = statuses.get(class)
+                && (status == SaturationStatus::RequiresFullTableau
+                    || status == SaturationStatus::NonDeterministic)
             {
-                for superclass in &classes {
-                    if subclass != superclass {
-                        // Check if not already determined by saturation
-                        if !saturation_result.subsumes(superclass, subclass) {
-                            tableau_pairs.push((subclass.clone(), superclass.clone()));
+                return true;
+            }
+            may.contains(class)
+        };
+
+        // Process pairs directly without intermediate Vec to avoid O(N²) memory.
+        // Named heads of non-absorbed GCIs are always plausible candidates for
+        // a non-deterministic class (e.g. `≥2R.C ⊑ D` can add `D`).
+        let owl_thing_candidate = ClassExpression::Class(crate::ontology::Class::new(
+            crate::ontology::IRI::owl_thing(),
+        ));
+
+        for subclass in &classes {
+            // Per-class memory check (interval-gated; aborts a runaway phase 3).
+            memory_guard.check()?;
+            if !needs_tableau(subclass, &may_need_tableau) {
+                continue;
+            }
+            classes_needing_tableau.insert(subclass.clone());
+
+            // Candidate superclasses for the real-tableau probes.  A named
+            // class `T` can *newly* subsume `subclass` (i.e. beyond what
+            // absorption + the dependency-graph propagation already derived)
+            // only if some remaining GCI `C ⊑ E` can fire on `subclass` and
+            // mention `T` inside `E` — every other route is already handled
+            // deterministically (told subsumers, role-successor / domain /
+            // range / conjunction absorption, and the union-decomposition
+            // rule).  So we collect `T` from:
+            //   (a) named atoms of `E` (and their named subsumers) for each
+            //       remaining GCI that is *not consumed* (`E` already in the
+            //       deterministic hierarchy) and whose subclass side overlaps
+            //       the class's derivation (conservative plausibility check),
+            //   (b) named atoms of non-union complex subsumers of the class
+            //       and their named subsumers (union subsumers are fully
+            //       decided by the union-decomposition rule below),
+            //   (c) `owl:Thing`.
+            // Restricting the (expensive) full-tableau probes to these
+            // genuinely plausible positive candidates keeps the fallback cheap
+            // without losing completeness for the absorbed fragment.
+            let mut candidates: HashSet<ClassExpression> = HashSet::new();
+            candidates.insert(owl_thing_candidate.clone());
+
+            // Visible named classes of `subclass` (its subsumer atoms plus
+            // itself): used by the plausibility overlap test below.
+            let mut visible: HashSet<ClassExpression> = HashSet::new();
+            visible.insert(subclass.clone());
+            if let Some(sups) = hierarchy.get(subclass) {
+                for sup in sups {
+                    collect_named_classes(sup, &mut visible);
+                }
+            }
+
+            if let Some(absorption) = &absorption_opt {
+                for gci in &absorption.remaining_gcis {
+                    // `E` already derived deterministically ⇒ the GCI is
+                    // consumed for this class and can add nothing new.
+                    if hierarchy
+                        .get(subclass)
+                        .is_some_and(|sups| sups.contains(&gci.superclass))
+                    {
+                        continue;
+                    }
+                    // Plausible firing: some named atom of the GCI's subclass
+                    // side is visible from this class's derivation.  When the
+                    // subclass side has no named atoms (e.g. datatype-only)
+                    // we conservatively assume it can fire.
+                    let mut c_atoms: HashSet<ClassExpression> = HashSet::new();
+                    collect_named_classes(&gci.subclass, &mut c_atoms);
+                    let plausible =
+                        c_atoms.is_empty() || c_atoms.iter().any(|a| visible.contains(a));
+                    if !plausible {
+                        continue;
+                    }
+                    let mut e_atoms: HashSet<ClassExpression> = HashSet::new();
+                    collect_named_classes(&gci.superclass, &mut e_atoms);
+                    for atom in e_atoms {
+                        candidates.insert(atom.clone());
+                        if let Some(atom_sups) = hierarchy.get(&atom) {
+                            candidates
+                                .extend(atom_sups.iter().filter(|c| c.is_named_class()).cloned());
                         }
                     }
                 }
             }
-        }
 
-        info!(
-            "Phase 3: {} pairs require tableau expansion",
-            tableau_pairs.len()
-        );
-
-        // Store length before consuming tableau_pairs
-        let total_tableau_pairs = tableau_pairs.len();
-
-        // Get performance configuration for parallel execution
-        let perf_config = PerformanceConfig::from_env();
-        // Lower threshold from 100 to 16: parallelism pays off earlier since rayon's
-        // work-stealing scheduler has very low per-task overhead relative to a full
-        // tableau expansion.
-        let use_parallel = perf_config.is_enabled(crate::config::PerformanceFeature::LockFree)
-            && total_tableau_pairs > 16;
-
-        if use_parallel {
-            info!("Using parallel classification for {total_tableau_pairs} subsumption checks");
-
-            // Create parallel scheduler
-            let scheduler = ParallelClassificationScheduler::new(perf_config);
-
-            // Build told subsumers map for dependency tracking
-            let mut told_subsumers = std::collections::HashMap::new();
-            for (subclass, superclasses) in &hierarchy {
-                told_subsumers.insert(subclass.clone(), superclasses.clone());
-            }
-
-            // Schedule all tasks with priority ordering
-            let tasks = scheduler.schedule_classification_tasks(&classes, &told_subsumers);
-
-            // Filter to only the pairs that need tableau expansion
-            let filtered_tasks: Vec<_> = tasks
-                .into_iter()
-                .filter(|task| {
-                    tableau_pairs
-                        .iter()
-                        .any(|(s, p)| s == &task.subclass && p == &task.superclass)
-                })
-                .collect();
-
-            // Execute parallel subsumption checks
-            let results = scheduler.execute_parallel(filtered_tasks, |sub, sup| {
-                self.check_subsumption_from_axioms(sub, sup, &ontology_guard)
-            })?;
-
-            // Collect results into hierarchy
-            for result in results {
-                if result.holds {
-                    let entry = hierarchy
-                        .entry(result.subclass)
-                        .or_insert_with(HashSet::new);
-                    entry.insert(result.superclass);
+            if let Some(sups) = hierarchy.get(subclass) {
+                for sup in sups {
+                    if matches!(sup, ClassExpression::ObjectUnionOf(_)) {
+                        continue; // union-decomposition decides these
+                    }
+                    let mut atoms: HashSet<ClassExpression> = HashSet::new();
+                    collect_named_classes(sup, &mut atoms);
+                    for atom in atoms {
+                        candidates.insert(atom.clone());
+                        if let Some(atom_sups) = hierarchy.get(&atom) {
+                            candidates
+                                .extend(atom_sups.iter().filter(|c| c.is_named_class()).cloned());
+                        }
+                    }
                 }
             }
 
-            tableau_checks = total_tableau_pairs;
-        } else {
-            info!("Using sequential classification for {total_tableau_pairs} subsumption checks");
+            // Union subsumers of this class, used by the union-decomposition
+            // rule to discharge disjunction without the tableau.
+            let union_subsumers: Vec<Vec<ClassExpression>> = hierarchy
+                .get(subclass)
+                .map(|sups| {
+                    sups.iter()
+                        .filter_map(|s| {
+                            if let ClassExpression::ObjectUnionOf(arms) = s {
+                                Some(arms.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
 
-            // Perform tableau expansion for remaining pairs (sequential fallback)
-            for (subclass, superclass) in tableau_pairs {
-                if self.check_subsumption_from_axioms(&subclass, &superclass, &ontology_guard)? {
-                    let entry = hierarchy.entry(subclass).or_insert_with(HashSet::new);
-                    entry.insert(superclass);
+            for superclass in &classes {
+                if subclass == superclass {
+                    continue;
+                }
+                if hierarchy
+                    .get(subclass)
+                    .is_some_and(|sups| sups.contains(superclass))
+                {
+                    continue;
+                }
+                // Cheap deterministic probe first (syntactic DFS over axioms).
+                // Run for every pair (preserving pre-A8 behaviour); it is cheap
+                // because only genuinely non-deterministic classes reach here.
+                if self.check_subsumption_from_axioms(subclass, superclass, &ontology_guard)? {
+                    hierarchy
+                        .entry(subclass.clone())
+                        .or_insert_with(HashSet::new)
+                        .insert(superclass.clone());
+                } else if !union_subsumers.is_empty()
+                    && union_subsumers.iter().any(|arms| {
+                        arms.iter().all(|a| {
+                            *a == *superclass
+                                || hierarchy
+                                    .get(a)
+                                    .is_some_and(|sups| sups.contains(superclass))
+                        })
+                    })
+                {
+                    // Union decomposition (sound, no tableau): if `S ⊑ (A₁ ⊔ … ⊔ Aₙ)`
+                    // and every arm `Aᵢ ⊑ T`, then `S ⊑ T`.  This discharges the
+                    // common disjunction pattern without a full tableau.
+                    hierarchy
+                        .entry(subclass.clone())
+                        .or_insert_with(HashSet::new)
+                        .insert(superclass.clone());
+                } else if real_tableau_checks < self.max_real_tableau_checks
+                    && real_tableau_time < self.max_real_tableau_time
+                    && candidates.contains(superclass)
+                {
+                    // Full tableau probe for the genuinely non-deterministic
+                    // remainder (cardinalities, nominals, nested disjunctions).
+                    // Bounded by both a count cap and a total-time budget so a
+                    // slow tableau degrades gracefully instead of dominating
+                    // the classification.
+                    let probe_start = Instant::now();
+                    let probe = self.task_service.check_subsumption_expressions(
+                        subclass, superclass, ontology, statistics, cache,
+                    )?;
+                    real_tableau_time += probe_start.elapsed();
+                    if probe {
+                        hierarchy
+                            .entry(subclass.clone())
+                            .or_insert_with(HashSet::new)
+                            .insert(superclass.clone());
+                    }
+                    real_tableau_checks += 1;
                 }
                 tableau_checks += 1;
-
-                if tableau_checks % 100 == 0 {
-                    debug!("Tableau checks progress: {tableau_checks}/{total_tableau_pairs}");
+                if tableau_checks.is_multiple_of(1000) {
+                    debug!("Tableau checks progress: {tableau_checks}");
+                    // Per-iteration memory check for long pairwise runs.
+                    memory_guard.check()?;
                 }
             }
         }
 
+        counters.tableau_checks = tableau_checks;
+        counters.real_tableau_checks = real_tableau_checks;
+        counters.classes_needing_tableau = classes_needing_tableau.len();
+        counters.classes_avoiding_tableau =
+            named_count.saturating_sub(classes_needing_tableau.len());
+
         info!(
-            "Phase 3 (tableau expansion) completed in {:?} with {} checks",
+            "Phase 3 (tableau expansion) completed in {:?} with {} checks ({} real tableaus)",
             phase3_start.elapsed(),
-            tableau_checks
+            tableau_checks,
+            real_tableau_checks
         );
 
         // Extract ontology IRI before dropping the read lock
         let ontology_iri = ontology_guard
-            .iri
+            .id
+            .ontology_iri
             .as_ref()
             .map(std::string::ToString::to_string);
 
         // Collect object and data property full IRIs from the ontology signature
-        let signature = ontology_guard.signature()?;
+        // (reused from the top of `classify` — no second O(A·C) signature scan).
         let object_properties: Vec<String> = {
             let mut props: Vec<String> = signature
                 .object_properties
@@ -262,17 +543,48 @@ impl ClassificationService {
         let mut result = ClassificationResult::new_with_iri(hierarchy, ontology_iri);
         result.object_properties = object_properties;
         result.data_properties = data_properties;
+        result.counters = counters;
 
-        // Cache the result
+        // Equivalence map: classes mutually subsuming each other.
+        for (sub, sups) in &result.hierarchy {
+            for sup in sups {
+                if result.hierarchy.get(sup).is_some_and(|s| s.contains(sub)) {
+                    result
+                        .equivalents
+                        .entry(sub.clone())
+                        .or_default()
+                        .insert(sup.clone());
+                    result
+                        .equivalents
+                        .entry(sup.clone())
+                        .or_default()
+                        .insert(sub.clone());
+                }
+            }
+        }
+
+        // Unsatisfiable classes: derived subsumer set contains owl:Nothing.
+        let owl_nothing = ClassExpression::Class(crate::ontology::Class::new(
+            crate::ontology::IRI::owl_nothing(),
+        ));
+        for (sub, sups) in &result.hierarchy {
+            if sups.contains(&owl_nothing) {
+                result.unsat.insert(sub.clone());
+            }
+        }
+
+        result.rebuild_subsumees();
+
+        // Cache the result on the service and in the cache manager
+        self.classification_cache = Some(result.clone());
         cache.store_classification_result(ontology, result.clone());
 
         let reasoning_time = start_time.elapsed();
         statistics.add_reasoning_time(reasoning_time);
 
         info!(
-            "Classification completed in {:?} ({}x speedup expected from saturation)",
-            reasoning_time,
-            (classes.len() * classes.len()).checked_div(tableau_checks).unwrap_or(1)
+            "Classification completed in {:?} ({} classes avoided the tableau)",
+            reasoning_time, result.counters.classes_avoiding_tableau
         );
         Ok(result)
     }
@@ -285,11 +597,14 @@ impl ClassificationService {
     ) -> Result<HashMap<ClassExpression, HashSet<ClassExpression>>> {
         let mut hierarchy = HashMap::new();
 
+        // O(1) membership instead of a per-axiom linear scan of `classes`.
+        let class_set: HashSet<&ClassExpression> = classes.iter().collect();
+
         for axiom in ontology.axioms() {
             match axiom {
                 crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom)
                     // Direct told subsumption
-                    if classes.contains(&subclass_axiom.subclass) => {
+                    if class_set.contains(&subclass_axiom.subclass) => {
                         let entry = hierarchy
                             .entry(subclass_axiom.subclass.clone())
                             .or_insert_with(HashSet::new);
@@ -298,7 +613,7 @@ impl ClassificationService {
                 crate::ontology::axioms::Axiom::EquivalentClasses(equiv_axiom) => {
                     // Equivalent classes are mutual subsumers
                     for class1 in &equiv_axiom.classes {
-                        if classes.contains(class1) {
+                        if class_set.contains(class1) {
                             let entry =
                                 hierarchy.entry(class1.clone()).or_insert_with(HashSet::new);
                             for class2 in &equiv_axiom.classes {
@@ -312,7 +627,7 @@ impl ClassificationService {
                 crate::ontology::axioms::Axiom::DisjointUnion(disjoint_union) => {
                     // Disjoint union members are subclasses of the union
                     for disjoint_class in &disjoint_union.disjoint_classes {
-                        if classes.contains(disjoint_class) {
+                        if class_set.contains(disjoint_class) {
                             let entry = hierarchy
                                 .entry(disjoint_class.clone())
                                 .or_insert_with(HashSet::new);
@@ -457,15 +772,10 @@ impl ClassificationService {
             read_lock(ontology, "classification: reading ontology for realisation")?;
 
         // Get all named individuals and classes
-        let individuals: Vec<Individual> = ontology_guard
-            .signature()
-            .expect("Failed to extract ontology signature")
-            .individuals
-            .clone();
+        let individuals: Vec<Individual> = ontology_guard.signature()?.individuals.clone();
 
         let classes: Vec<ClassExpression> = ontology_guard
-            .signature()
-            .expect("Failed to extract ontology signature")
+            .signature()?
             .classes
             .iter()
             .map(|c| ClassExpression::Class(c.clone()))
@@ -539,6 +849,33 @@ impl ClassificationService {
             })
             .collect();
 
+        // ── Defined-class candidates ────────────────────────────────────────────
+        // Named operands of `EquivalentClasses` groups that contain a *complex*
+        // operand (`A ≡ {a}`, `C ≡ D[int ≥ 18]`, …).  Membership in such a class
+        // never appears as a `ClassAssertion`, yet it is a genuine type — the
+        // individual that occurs inside the definition (e.g. the nominal `a` of
+        // `A ≡ {a}`) must be realised with it.  Same bounded candidate policy as
+        // `Reasoner::get_types` (core.rs): only *defined* classes are scanned so
+        // the cost stays O(#defined × #individuals), not O(#classes × #individuals).
+        let mut defined_candidates: Vec<ClassExpression> = Vec::new();
+        let mut seen_candidates: HashSet<IRI> = HashSet::new();
+        for axiom in ontology_guard.axioms() {
+            if let crate::ontology::axioms::Axiom::EquivalentClasses(equivalent) = axiom
+                && equivalent
+                    .classes
+                    .iter()
+                    .any(|operand| !matches!(operand, ClassExpression::Class(_)))
+            {
+                for operand in &equivalent.classes {
+                    if let ClassExpression::Class(cls) = operand
+                        && seen_candidates.insert(cls.iri.clone())
+                    {
+                        defined_candidates.push(ClassExpression::Class(cls.clone()));
+                    }
+                }
+            }
+        }
+
         // Classes with complex (non-named) expressions — always need structural or tableau check
         let complex_classes: Vec<&ClassExpression> = classes
             .iter()
@@ -572,6 +909,32 @@ impl ClassificationService {
                             // Complex asserted type — add directly
                             instance_classes.insert(other.clone());
                         }
+                    }
+                }
+            }
+
+            // ── Step 1b: memberships from *defined* classes ─────────────────────
+            // `A ≡ {a}` (or any complex definition) makes the named class a type
+            // of the individuals inside the definition without a ClassAssertion.
+            // Feed hits into the Step 2 BFS so the asserted hierarchy still
+            // closes upward from them.  (Without this, individuals that occur
+            // only inside nominals — surfaced by the `signature()` fix for
+            // CR-008 MAJOR #2 — would be realised with zero types and the OWL
+            // API trait surface would miss them.)
+            for candidate in &defined_candidates {
+                if instance_classes.contains(candidate) {
+                    continue;
+                }
+                if let Ok(true) = self.check_instance_with_datatype_reasoning(
+                    individual,
+                    candidate,
+                    &ontology_guard,
+                ) {
+                    instance_classes.insert(candidate.clone());
+                    if let ClassExpression::Class(cls) = candidate
+                        && visited_iri.insert(cls.iri.clone())
+                    {
+                        bfs.push_back(cls.iri.clone());
                     }
                 }
             }
@@ -684,6 +1047,10 @@ impl ClassificationService {
     }
 
     /// Get all superclasses of a class expression
+    ///
+    /// # Panics
+    ///
+    /// Panics if the ontology signature cannot be extracted.
     pub fn get_superclasses(
         &self,
         concept: &ClassExpression,
@@ -692,6 +1059,15 @@ impl ClassificationService {
         _direct: bool,
         cache: &mut CacheManager,
     ) -> Result<Vec<ClassExpression>> {
+        // Fast path: named class already classified → answer from the cache.
+        if let Some(classif) = &self.classification_cache
+            && let Some(sups) = classif.hierarchy.get(concept)
+        {
+            let out: Vec<ClassExpression> =
+                sups.iter().filter(|s| *s != concept).cloned().collect();
+            return Ok(out);
+        }
+
         let ontology_guard = read_lock(
             ontology,
             "classification: reading ontology for get_superclasses",
@@ -727,6 +1103,14 @@ impl ClassificationService {
         ontology: &OntologyRef,
         _direct: bool,
     ) -> Result<Vec<ClassExpression>> {
+        // Fast path: named class already classified → O(1) via subsumees index.
+        if let ClassExpression::Class(_) = concept
+            && let Some(classif) = &self.classification_cache
+            && let Some(subs) = classif.subsumees.get(concept)
+        {
+            return Ok(subs.iter().cloned().collect());
+        }
+
         let ontology_guard = read_lock(
             ontology,
             "classification: reading ontology for get_subclasses",
@@ -786,12 +1170,17 @@ impl ClassificationService {
             }
         }
 
-        // General case: Check all classes from the signature for bidirectional subsumption
-        for class in &ontology_guard
-            .signature()
-            .expect("Failed to extract ontology signature")
-            .classes
+        // Fast path: named class already classified → answer from `equivalents`.
+        if let ClassExpression::Class(_) = concept
+            && let Some(classif) = &self.classification_cache
+            && let Some(eqs) = classif.equivalents.get(concept)
         {
+            equivalent_classes.extend(eqs.iter().cloned());
+            return Ok(equivalent_classes);
+        }
+
+        // General case: Check all classes from the signature for bidirectional subsumption
+        for class in &ontology_guard.signature()?.classes {
             let class_expr = ClassExpression::Class(class.clone());
             if concept != &class_expr {
                 let subsumes_1_2 = self.task_service.check_subsumption_expressions(
@@ -831,17 +1220,62 @@ impl ClassificationService {
                 ontology,
                 "classification: reading ontology for get_instances individuals",
             )?;
-            // Get all individuals from the signature
-            ontology_guard
-                .signature()
-                .expect("Failed to extract ontology signature")
-                .individuals
-                .clone()
+            // Get all individuals from the signature.  Nominal-only individuals
+            // (`a` in `A ≡ ObjectOneOf({a})`, or in `ObjectHasValue(r.{a})`) are
+            // included by `Ontology::signature()` itself since the CR-008
+            // MAJOR #2 root fix, so the temporary `CollectIndividuals` walker
+            // that used to be merged in here has been removed: `signature()` is
+            // now a superset of what that walk collected (it also covers SWRL
+            // atoms, which the walker does not traverse).
+
+            ontology_guard.signature()?.individuals.clone()
         }; // Drop the read lock here
 
         let mut instances = Vec::new();
+        let mut determined: HashSet<Individual> = HashSet::new();
+
+        // Fast path: named class — reuse the classification result to answer
+        // instances whose asserted types are subclasses of `concept` without
+        // running a tableau per individual.
+        if let ClassExpression::Class(_) = concept
+            && let Some(classif) = &self.classification_cache
+        {
+            let subclasses: HashSet<ClassExpression> =
+                classif.subsumees.get(concept).cloned().unwrap_or_default();
+            let asserted_types: HashMap<Individual, Vec<ClassExpression>> = {
+                let ontology_guard = read_lock(
+                    ontology,
+                    "classification: reading ontology for get_instances asserted types",
+                )?;
+                let mut types: HashMap<Individual, Vec<ClassExpression>> = HashMap::new();
+                for axiom in ontology_guard.axioms() {
+                    if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom {
+                        types
+                            .entry(assertion.individual.clone())
+                            .or_default()
+                            .push(assertion.class.clone());
+                    }
+                }
+                types
+            };
+            for individual in &individuals {
+                let is_instance = asserted_types.get(individual).is_some_and(|types| {
+                    types
+                        .iter()
+                        .any(|t| *t == *concept || subclasses.contains(t))
+                });
+                if is_instance {
+                    instances.push(individual.clone());
+                    determined.insert(individual.clone());
+                }
+            }
+        }
 
         for individual in &individuals {
+            if determined.contains(individual) {
+                continue;
+            }
+
             // First, try datatype reasoning for certain class expressions
             let mut is_instance = false;
 
@@ -992,14 +1426,14 @@ impl ClassificationService {
         subclass: &ClassExpression,
         superclass: &ClassExpression,
         ontology: &Ontology,
-        visited: &mut HashSet<(ClassExpression, ClassExpression)>,
+        _visited: &mut HashSet<(ClassExpression, ClassExpression)>,
     ) -> Result<bool> {
-        // Prevent infinite recursion
-        let key = (subclass.clone(), superclass.clone());
-        if visited.contains(&key) {
-            return Ok(false);
-        }
-        visited.insert(key);
+        // Recursion is already guarded by the caller's `visited` set; the
+        // top-level pair is inserted by `check_subsumption_from_axioms_with_visited`
+        // *before* this is reached, so we must not bail on it here (that would
+        // make the direct `A ⊑ owl:Thing` / transitive cases always report
+        // false and force an expensive tableau probe).  Cycle protection for
+        // the DFS below is handled by `local_visited`.
 
         // Use a simple depth-first search to find transitive relationships
         let mut local_visited = HashSet::new();
@@ -1196,6 +1630,10 @@ impl ClassificationService {
     }
 
     /// Get types of a given individual
+    ///
+    /// # Panics
+    ///
+    /// Panics if an individual's IRI cannot be converted to a URL.
     pub fn get_types(
         &self,
         individual: &str,
@@ -1390,124 +1828,19 @@ impl ClassificationService {
         }
     }
 
-    /// Check if a literal value satisfies a data range (with facet restrictions)
+    /// Check if a literal value satisfies a data range (with facet restrictions).
+    ///
+    /// Delegates to the shared value-space engine in [`datatype_validation`] so that
+    /// classification and the tableau agree on facet evaluation (length/pattern/
+    /// totalDigits/fractionDigits/langRange in addition to the numeric ordering facets),
+    /// user-defined datatypes (`DatatypeDefinition`) and `owl:real`/`owl:rational`.
     fn literal_satisfies_data_range(
         &self,
         literal: &crate::ontology::Literal,
         data_range: &crate::ontology::DataRange,
     ) -> Result<bool> {
-        match data_range {
-            crate::ontology::DataRange::Datatype(datatype_iri) => {
-                // Validate that literal's datatype matches the specified datatype
-                let literal_datatype_url = literal.datatype.as_ref();
-
-                // First check: validate the literal conforms to its declared type
-                if !self.datatype_validator.validate_literal(literal)? {
-                    return Ok(false);
-                }
-
-                // Second check: verify datatype compatibility if literal has a datatype
-                if let Some(lit_dt_url) = literal_datatype_url {
-                    let lit_dt_iri = IRI::from(lit_dt_url.clone());
-                    Ok(DatatypeValidator::datatypes_compatible(
-                        &lit_dt_iri,
-                        datatype_iri,
-                    ))
-                } else {
-                    // No datatype means xsd:string, check if compatible with string
-                    let xsd_string = IRI::new("http://www.w3.org/2001/XMLSchema#string");
-                    Ok(DatatypeValidator::datatypes_compatible(
-                        &xsd_string,
-                        datatype_iri,
-                    ))
-                }
-            }
-            crate::ontology::DataRange::DatatypeRestriction {
-                datatype: _,
-                restrictions,
-            } => {
-                // Check facet restrictions
-                for restriction in restrictions {
-                    if !self.check_facet_restriction(literal, restriction)? {
-                        return Ok(false);
-                    }
-                }
-                Ok(true)
-            }
-            crate::ontology::DataRange::DataIntersectionOf(ranges) => {
-                // Must satisfy all ranges
-                for range in ranges {
-                    if !self.literal_satisfies_data_range(literal, range)? {
-                        return Ok(false);
-                    }
-                }
-                Ok(true)
-            }
-            crate::ontology::DataRange::DataUnionOf(ranges) => {
-                // Must satisfy at least one range
-                for range in ranges {
-                    if self.literal_satisfies_data_range(literal, range)? {
-                        return Ok(true);
-                    }
-                }
-                Ok(false)
-            }
-            crate::ontology::DataRange::DataComplementOf(range) => {
-                // Must NOT satisfy the range
-                Ok(!self.literal_satisfies_data_range(literal, range)?)
-            }
-            crate::ontology::DataRange::DataOneOf(literals) => {
-                // Must be one of the specified literals
-                // literals here are crate::ontology::Literal
-                Ok(literals
-                    .iter()
-                    .any(|owl_lit| owl_lit.value == literal.value))
-            }
-        }
-    }
-
-    /// Check if a literal satisfies a single facet restriction
-    fn check_facet_restriction(
-        &self,
-        literal: &crate::ontology::Literal,
-        restriction: &crate::ontology::FacetRestriction,
-    ) -> Result<bool> {
-        let facet_iri = restriction.facet.to_string();
-
-        match facet_iri.as_str() {
-            "http://www.w3.org/2001/XMLSchema#minInclusive" => {
-                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a >= b)
-            }
-            "http://www.w3.org/2001/XMLSchema#maxInclusive" => {
-                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a <= b)
-            }
-            "http://www.w3.org/2001/XMLSchema#minExclusive" => {
-                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a > b)
-            }
-            "http://www.w3.org/2001/XMLSchema#maxExclusive" => {
-                self.compare_numeric_values(&literal.value, &restriction.value.value, |a, b| a < b)
-            }
-            _ => {
-                // For unknown facet types, conservatively return true
-                Ok(true)
-            }
-        }
-    }
-
-    /// Compare two numeric values with a comparison function
-    fn compare_numeric_values<F>(&self, value1: &str, value2: &str, comparator: F) -> Result<bool>
-    where
-        F: Fn(f64, f64) -> bool,
-    {
-        // Try to parse both values as f64
-        match (value1.parse::<f64>(), value2.parse::<f64>()) {
-            (Ok(v1), Ok(v2)) => Ok(comparator(v1, v2)),
-            _ => {
-                // If parsing fails, we can't perform the comparison
-                // Conservatively return false for safety
-                Ok(false)
-            }
-        }
+        self.datatype_validator
+            .literal_satisfies_data_range(literal, data_range)
     }
 
     /// Enhanced instance checking that also checks datatype restrictions
@@ -1585,6 +1918,7 @@ impl ClassificationService {
                                     | ClassExpression::ObjectUnionOf(_)
                                     | ClassExpression::ObjectSomeValuesFrom { .. }
                                     | ClassExpression::ObjectHasValue { .. }
+                                    | ClassExpression::ObjectOneOf(_)
                                     | ClassExpression::DataSomeValuesFrom { .. }
                                     | ClassExpression::DataHasValue { .. }
                                         if self.check_complex_expression(
@@ -1623,6 +1957,20 @@ impl ClassificationService {
                                 .entry(superclass.iri.clone())
                                 .or_default()
                                 .push(sub_cls.clone());
+                        }
+                        // DisjointUnion(A, [B, C]): each member is a subclass of A, so the
+                        // instance BFS must reach B/C when walking down from A.
+                        if let crate::ontology::axioms::Axiom::DisjointUnion(disjoint_union) = axiom
+                            && let ClassExpression::Class(union_cls) = &disjoint_union.class
+                        {
+                            for member in &disjoint_union.disjoint_classes {
+                                if let ClassExpression::Class(member_cls) = member {
+                                    subclass_index
+                                        .entry(union_cls.iri.clone())
+                                        .or_default()
+                                        .push(member_cls.clone());
+                                }
+                            }
                         }
                     }
 
@@ -1737,6 +2085,20 @@ impl ClassificationService {
                 }
                 Ok(false)
             }
+            ClassExpression::ObjectOneOf(individuals) => {
+                // {a, b, …}: nominal enumeration.  The queried individual is a
+                // member iff it *is* one of the listed individuals — compare by
+                // IRI.  An anonymous query individual can never be equal to a
+                // named nominal (nor to another anonymous individual we cannot
+                // identify), so it conservatively returns false and the tableau
+                // remains authoritative for those cases.
+                match individual.iri() {
+                    Some(query_iri) => {
+                        Ok(individuals.iter().any(|ind| ind.iri() == Some(query_iri)))
+                    }
+                    None => Ok(false),
+                }
+            }
             ClassExpression::DataSomeValuesFrom { property, filler } => {
                 // Check if individual has a data property value that satisfies the restriction
                 self.check_datatype_restriction_satisfaction(individual, property, filler, ontology)
@@ -1752,7 +2114,8 @@ impl ClassificationService {
                         && let crate::ontology::Individual::Named(subj) = &assertion.individual
                         && subj.iri.as_str() == individual_iri
                         && self.data_properties_match(property, &assertion.property)
-                        && assertion.value.value == value.value
+                        && crate::core::reasoner::datatype_validation::DatatypeValidator::
+                            literal_values_equal(&assertion.value, value)
                     {
                         return Ok(true);
                     }
@@ -1797,7 +2160,8 @@ impl ClassificationService {
     }
 
     /// Check if one class (by IRI) is a subclass of another class (by IRI)
-    /// This includes transitive subclass relationships
+    /// This includes transitive subclass relationships and `DisjointUnion`-derived
+    /// subsumptions (`DisjointUnion(A, [B, C])` makes each member a subclass of A).
     fn is_subclass_of_iri(
         &self,
         subclass_iri: &IRI,
@@ -1817,6 +2181,26 @@ impl ClassificationService {
         visited.insert(subclass_iri.clone());
 
         while let Some(current) = worklist.pop_front() {
+            // DisjointUnion(A, [B, C]): every member is a subclass of the union class.
+            for axiom in ontology.axioms() {
+                if let crate::ontology::axioms::Axiom::DisjointUnion(disjoint_union) = axiom {
+                    let member_match = disjoint_union.disjoint_classes.iter().any(
+                        |member| matches!(member, ClassExpression::Class(m) if m.iri == current),
+                    );
+                    if member_match {
+                        let union_iri = &disjoint_union.class;
+                        if let ClassExpression::Class(uc) = union_iri {
+                            if uc.iri == *superclass_iri {
+                                return Ok(true);
+                            }
+                            if !visited.contains(&uc.iri) {
+                                visited.insert(uc.iri.clone());
+                                worklist.push_back(uc.iri.clone());
+                            }
+                        }
+                    }
+                }
+            }
             for axiom in ontology.axioms() {
                 if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
                     && let ClassExpression::Class(sub) = &subclass_axiom.subclass

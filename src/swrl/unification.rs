@@ -84,10 +84,10 @@ impl UnificationEngine {
                 },
             ) => {
                 // Class atoms must have same predicate
-                if p1 != p2 {
-                    false
-                } else {
+                if p1 == p2 {
                     self.unify_i_arguments(a1, a2, &mut bindings)
+                } else {
+                    false
                 }
             }
             (
@@ -103,11 +103,11 @@ impl UnificationEngine {
                 },
             ) => {
                 // Object property atoms must have same predicate
-                if p1 != p2 {
-                    false
-                } else {
+                if p1 == p2 {
                     self.unify_i_arguments(a1_1, a2_1, &mut bindings)
                         && self.unify_i_arguments(a1_2, a2_2, &mut bindings)
+                } else {
+                    false
                 }
             }
             (
@@ -123,11 +123,11 @@ impl UnificationEngine {
                 },
             ) => {
                 // Data property atoms must have same predicate
-                if p1 != p2 {
-                    false
-                } else {
+                if p1 == p2 {
                     self.unify_i_arguments(a1_1, a2_1, &mut bindings)
                         && self.unify_d_arguments(a1_2, a2_2, &mut bindings)
+                } else {
+                    false
                 }
             }
             (
@@ -141,10 +141,10 @@ impl UnificationEngine {
                 },
             ) => {
                 // Data range atoms must have same predicate
-                if dr1 != dr2 {
-                    false
-                } else {
+                if dr1 == dr2 {
                     self.unify_d_arguments(a1, a2, &mut bindings)
+                } else {
+                    false
                 }
             }
             (
@@ -366,7 +366,7 @@ impl UnificationEngine {
                 let v_iri = &v.iri;
                 bindings.get(v_iri).cloned().unwrap_or_else(|| arg.clone())
             }
-            _ => arg.clone(),
+            SWRLIArgument::Individual(_) => arg.clone(),
         }
     }
 
@@ -388,7 +388,7 @@ impl UnificationEngine {
                     arg.clone()
                 }
             }
-            _ => arg.clone(),
+            SWRLDArgument::Literal(_) => arg.clone(),
         }
     }
 
@@ -444,13 +444,13 @@ mod tests {
 
     fn make_variable(name: &str) -> SWRLVariable {
         SWRLVariable {
-            iri: IRI::new(&format!("http://example.org/var/{}", name)),
+            iri: IRI::new(&format!("http://example.org/var/{name}")),
         }
     }
 
     fn make_individual(name: &str) -> Individual {
         Individual::Named(crate::ontology::NamedIndividual {
-            iri: IRI::new(&format!("http://example.org/{}", name)),
+            iri: IRI::new(&format!("http://example.org/{name}")),
         })
     }
 

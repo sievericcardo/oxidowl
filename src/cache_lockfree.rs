@@ -88,9 +88,8 @@ impl LockFreeCacheMetrics {
         } else {
             // Hit rate calculation: precision loss only occurs beyond 2^52 cache accesses (~4.5 quadrillion)
             // which is impractical for in-memory caching. F64 provides sufficient precision for statistics.
-            #[allow(clippy::cast_precision_loss)]
-            let rate = hits as f64 / total as f64;
-            rate
+
+            hits as f64 / total as f64
         }
     }
 }
@@ -125,7 +124,7 @@ impl Default for LockFreeCacheConfig {
     fn default() -> Self {
         Self {
             max_size: 10000,
-            ttl: Duration::from_secs(1 * 3600),
+            ttl: Duration::from_hours(1),
             features: CacheFeature::Concept
                 | CacheFeature::Subsumption
                 | CacheFeature::Satisfiability
@@ -509,7 +508,7 @@ mod tests {
                 let cache = cache.clone();
                 thread::spawn(move || {
                     let concept = ClassExpression::Class(Class {
-                        iri: format!("test{}", i).into(),
+                        iri: format!("test{i}").into(),
                     });
                     cache.put(concept.clone(), true);
                     cache.get(&concept)

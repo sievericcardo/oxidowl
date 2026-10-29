@@ -4,6 +4,8 @@
 //! - [`DependencySet`] algebraic laws (empty identity, union commutativity,
 //!   union associativity, monotonicity of `add_dependency`).
 
+#![cfg(kani)]
+
 use crate::core::dependency::DependencySet;
 
 // ── DependencySet ────────────────────────────────────────────────────────────

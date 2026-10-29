@@ -5,9 +5,66 @@
 use crate::{
     Result,
     config::{ReasonerConfig, TableauAlgorithm},
-    core::tableau::{Tableau, TableauBuilder, TableauState},
-    ontology::{ClassExpression, Individual, Ontology},
+    core::tableau::{ConceptLabel, Tableau, TableauBuilder, TableauState},
+    ontology::{ClassExpression, Individual, Literal, Ontology},
 };
+use std::collections::HashMap;
+
+/// A read-only snapshot of a completed tableau, used by the semantic entailment
+/// checks (workstream A7) to answer property-axiom and assertion entailments
+/// from the materialised closure: edges, nominal merging (`SameIndividual` /
+/// functional / `HasKey`), and data values.
+///
+/// This is the reasoner-API surface accessor for the completed tableau. It is
+/// derived entirely from the *public* node/edge accessors of the tableau module
+/// (the merge map is reconstructed from the `Nominal` node labels, which the
+/// executor keeps consistent after every merge), so it never reaches into the
+/// tableau's private state.
+#[derive(Debug, Clone)]
+pub struct TableauSnapshot {
+    /// Whether the completed tableau run ended in a satisfiable (consistent)
+    /// state. An unsatisfiable tableau means the ontology is inconsistent and
+    /// every axiom is vacuously entailed.
+    pub satisfiable: bool,
+    /// Object-property edges `(from, to, role_name)` where `role_name` is the
+    /// canonical Display form (`IRI` or `inv(IRI)`).
+    pub edges: Vec<(usize, usize, String)>,
+    /// Individual Display name → canonical node id after `SameIndividual` /
+    /// functional / `HasKey` merging. Reconstructed from the `Nominal` labels of
+    /// every node, which the executor keeps consistent across merges.
+    pub individual_nodes: HashMap<String, usize>,
+    /// Data-property edges `(from_node, role_name, literal value)` — an edge
+    /// from an individual node to a data-successor node carrying a `DataValue`
+    /// label.
+    pub data_edges: Vec<(usize, String, Literal)>,
+}
+
+impl TableauSnapshot {
+    /// Whether the completed tableau contains an edge `from --role--> to`.
+    #[must_use]
+    pub fn has_edge(&self, from: usize, to: usize, role: &str) -> bool {
+        self.edges
+            .iter()
+            .any(|(f, t, r)| *f == from && *t == to && r == role)
+    }
+
+    /// Whether the completed tableau has a data edge `from --role--> v` with a
+    /// value equal (in the datatype value space) to `value`.
+    #[must_use]
+    pub fn has_data_edge_value(&self, from: usize, role: &str, value: &Literal) -> bool {
+        use crate::core::reasoner::datatype_validation::DatatypeValidator;
+        self.data_edges.iter().any(|(f, r, v)| {
+            *f == from && r == role && DatatypeValidator::literal_values_equal(v, value)
+        })
+    }
+
+    /// The canonical node id of an individual in the completed tableau, if it
+    /// appears in the ontology's `ABox` (nominal merging applied).
+    #[must_use]
+    pub fn node_of(&self, individual: &Individual) -> Option<usize> {
+        self.individual_nodes.get(&individual.to_string()).copied()
+    }
+}
 
 /// Wrapper for tableau algorithm implementation
 pub struct TableauAlgorithmInstance {
@@ -42,6 +99,74 @@ impl TableauAlgorithmInstance {
     #[must_use]
     pub fn get_max_depth(&self) -> usize {
         self.tableau.get_max_depth()
+    }
+
+    /// Whether the completed tableau run ended in a satisfiable state.
+    #[must_use]
+    pub fn is_satisfiable(&self) -> bool {
+        self.tableau.is_satisfiable()
+    }
+
+    /// Take a read-only snapshot of the completed tableau (workstream A7).
+    ///
+    /// The individual→node map is reconstructed from the `Nominal` labels so no
+    /// access to the tableau's private `individual_map` is required; the
+    /// executor guarantees that after any `merge_nodes` the surviving node
+    /// carries the nominal labels of both merged nodes.
+    #[must_use]
+    pub fn snapshot(&self) -> TableauSnapshot {
+        let mut individual_nodes: HashMap<String, usize> = HashMap::new();
+        for (i, node) in self.tableau.nodes().iter().enumerate() {
+            for concept in &node.concepts {
+                if let ConceptLabel::Nominal(name) = concept {
+                    individual_nodes.insert(name.clone(), i);
+                }
+            }
+        }
+
+        let edges = self
+            .tableau
+            .edges()
+            .iter()
+            .map(|e| (e.from, e.to, e.role.to_string()))
+            .collect();
+
+        let mut data_edges: Vec<(usize, String, Literal)> = Vec::new();
+        for edge in self.tableau.edges() {
+            if let Some(target) = self.tableau.nodes().get(edge.to) {
+                for concept in &target.concepts {
+                    if let ConceptLabel::DataValue(lit) = concept {
+                        data_edges.push((edge.from, edge.role.to_string(), lit.clone()));
+                    }
+                }
+            }
+        }
+
+        TableauSnapshot {
+            satisfiable: self.tableau.is_satisfiable(),
+            edges,
+            individual_nodes,
+            data_edges,
+        }
+    }
+
+    /// Whether the node carries a concept label equal to the given class
+    /// expression. The tableau materialises class labels as
+    /// `ConceptLabel::Complex(expr)` (from `ClassAssertion`, Domain/Range
+    /// propagation, concept unfolding) or `ConceptLabel::Atomic(name)` for
+    /// atomic classes.
+    #[must_use]
+    pub fn node_labeled_as(&self, node: usize, class: &ClassExpression) -> bool {
+        match self.tableau.nodes().get(node) {
+            None => false,
+            Some(n) => n.concepts.iter().any(|c| match c {
+                ConceptLabel::Complex(expr) => expr.as_ref() == class,
+                ConceptLabel::Atomic(name) => {
+                    matches!(class, ClassExpression::Class(cls) if cls.iri.as_str() == name.as_str())
+                }
+                _ => false,
+            }),
+        }
     }
 }
 
