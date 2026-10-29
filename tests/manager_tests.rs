@@ -2,8 +2,6 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::test_base::TestBase;
-use helpers::*;
 use oxidowl::OntologyManager;
 use oxidowl::manager::changes::OntologyChange;
 use oxidowl::manager::*;
@@ -309,7 +307,7 @@ fn manager_custom_config() {
         silent_missing_imports: true,
         max_import_depth: 3,
     };
-    let mut manager = OntologyManager::new_with_config(config);
+    let manager = OntologyManager::new_with_config(config);
     assert!(!manager.config().enable_change_history);
 }
 

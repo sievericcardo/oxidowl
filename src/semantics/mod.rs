@@ -1532,11 +1532,11 @@ mod tests {
     fn test_dir_lang_string_display() {
         // Test display format for dirLangString: "value"@lang--dir
         let term = RdfTerm::dir_lang_string("Hello", "en", "ltr").expect("Valid dirLangString");
-        let display = format!("{}", term);
+        let display = format!("{term}");
         assert_eq!(display, "\"Hello\"@en--ltr");
 
         let term_rtl = RdfTerm::dir_lang_string("مرحبا", "ar", "rtl").expect("Valid dirLangString");
-        let display_rtl = format!("{}", term_rtl);
+        let display_rtl = format!("{term_rtl}");
         assert_eq!(display_rtl, "\"مرحبا\"@ar--rtl");
     }
 
@@ -1618,7 +1618,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(
-                    datatype.as_ref().map(|u| u.as_str()),
+                    datatype.as_ref().map(url::Url::as_str),
                     Some("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString")
                 );
                 assert_eq!(language.as_deref(), Some("en"));
@@ -1632,12 +1632,12 @@ mod tests {
     fn test_regular_language_literal_vs_dir_lang_string() {
         // Regular language tag without direction
         let regular = RdfTerm::language_literal("Hello", "en");
-        let regular_display = format!("{}", regular);
+        let regular_display = format!("{regular}");
         assert_eq!(regular_display, "\"Hello\"@en");
 
         // dirLangString with direction
         let dir_lang = RdfTerm::dir_lang_string("Hello", "en", "ltr").expect("Valid dirLangString");
-        let dir_lang_display = format!("{}", dir_lang);
+        let dir_lang_display = format!("{dir_lang}");
         assert_eq!(dir_lang_display, "\"Hello\"@en--ltr");
 
         // These should be different

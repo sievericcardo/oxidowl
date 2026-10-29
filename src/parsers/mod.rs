@@ -1317,11 +1317,11 @@ mod tests {
     #[test]
     fn test_detect_rdf_version_ignores_comments() {
         // Ensure << >> in comments doesn't trigger RDF-star detection
-        let content = r#"
+        let content = r"
             # This is a comment with << fake quoted triple >>
             @prefix ex: <http://example.org/> .
             ex:Alice ex:knows ex:Bob .
-        "#;
+        ";
         let version = detect_rdf_version_from_content(content);
         // Should be Auto since there's no actual RDF-star syntax
         assert_eq!(version, RdfCompatibilityMode::Auto);

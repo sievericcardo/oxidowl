@@ -3,13 +3,13 @@
 //! These tests verify that:
 //! 1. `ObjectExactCardinality` (`=n R.C`) is dispatched as `≥n R.C ⊓ ≤n R.C`.
 //! 2. Exact cardinality inconsistency (`=1 R.⊤` + `≥2 R.⊤`) makes the class unsatisfiable.
-//! 3. AtMost merging is non-deterministic and complete: when one merge choice clashes the
+//! 3. `AtMost` merging is non-deterministic and complete: when one merge choice clashes the
 //!    executor backtracks and tries the next candidate merge.
 //! 4. Data cardinalities (`DataMinCardinality`/`DataMaxCardinality`/`DataExactCardinality`)
 //!    create/limit data successors and count them.
 //! 5. `≥n R.{a}` with n > 1 is unsatisfiable (single nominal → cardinality clash).
 //! 6. `=0 R.C` behaves like `∀R.¬C`.
-//! 7. Inequality tracking keeps AtLeast-created successors distinct so AtMost cannot merge
+//! 7. Inequality tracking keeps AtLeast-created successors distinct so `AtMost` cannot merge
 //!    witnesses that a `≥n` constraint requires to be distinct.
 
 mod helpers;
@@ -86,14 +86,14 @@ fn successors(tableau: &Tableau, node_id: usize, role: &str) -> Vec<usize> {
 #[test]
 fn cardinality_reasoning_exact_two_satisfiable() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let exact = df.exact_cardinality(2, df.obj_prop(&format!("{EX}R")), c_cls.clone());
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let exact = df.exact_cardinality(2, df.obj_prop(format!("{EX}R")), c_cls.clone());
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), exact.clone()]),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
         // C is non-empty
-        df.class_assertion(c_cls.clone(), df.named(&format!("{EX}c"))),
+        df.class_assertion(c_cls.clone(), df.named(format!("{EX}c"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -116,8 +116,7 @@ fn cardinality_reasoning_exact_two_satisfiable() -> Result<()> {
     assert_eq!(
         succs.len(),
         2,
-        "=2 R.C must produce exactly two R-successors; got {:?}",
-        succs
+        "=2 R.C must produce exactly two R-successors; got {succs:?}"
     );
     let c_label = ConceptLabel::Complex(Box::new(c_cls));
     for s in succs {
@@ -135,13 +134,13 @@ fn cardinality_reasoning_exact_two_satisfiable() -> Result<()> {
 #[test]
 fn cardinality_reasoning_exact_two_not_merged_by_atmost() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let exact = df.exact_cardinality(2, df.obj_prop(&format!("{EX}R")), df.owl_thing());
-    let atmost = df.max_cardinality(2, df.obj_prop(&format!("{EX}R")), df.owl_thing());
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let exact = df.exact_cardinality(2, df.obj_prop(format!("{EX}R")), df.owl_thing());
+    let atmost = df.max_cardinality(2, df.obj_prop(format!("{EX}R")), df.owl_thing());
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), exact.clone()]),
         df.sub_class_of(a_cls.clone(), atmost),
-        df.class_assertion(a_cls, df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -159,8 +158,7 @@ fn cardinality_reasoning_exact_two_not_merged_by_atmost() -> Result<()> {
     assert_eq!(
         succs.len(),
         2,
-        "the two =2 R.⊤ witnesses must survive as two distinct successors; got {:?}",
-        succs
+        "the two =2 R.⊤ witnesses must survive as two distinct successors; got {succs:?}"
     );
     Ok(())
 }
@@ -171,9 +169,9 @@ fn cardinality_reasoning_exact_two_not_merged_by_atmost() -> Result<()> {
 #[test]
 fn cardinality_reasoning_exact_one_and_atleast_two_unsatisfiable() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let exact_one = df.exact_cardinality(1, df.obj_prop(&format!("{EX}R")), df.owl_thing());
-    let atleast_two = df.min_cardinality(2, df.obj_prop(&format!("{EX}R")), df.owl_thing());
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let exact_one = df.exact_cardinality(1, df.obj_prop(format!("{EX}R")), df.owl_thing());
+    let atleast_two = df.min_cardinality(2, df.obj_prop(format!("{EX}R")), df.owl_thing());
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), exact_one),
         df.sub_class_of(a_cls.clone(), atleast_two),
@@ -204,11 +202,11 @@ fn cardinality_reasoning_exact_one_and_atleast_two_unsatisfiable() -> Result<()>
 #[test]
 fn cardinality_reasoning_atmost_merge_backtracks_to_satisfiable_choice() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let c_cls = df.class_ce(format!("{EX}C"));
     let not_c = df.complement_of(c_cls.clone());
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let r = df.obj_prop(&format!("{EX}R"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let r = df.obj_prop(format!("{EX}R"));
 
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.min_cardinality(1, r.clone(), c_cls)),
@@ -216,7 +214,7 @@ fn cardinality_reasoning_atmost_merge_backtracks_to_satisfiable_choice() -> Resu
         df.sub_class_of(a_cls.clone(), df.min_cardinality(1, r.clone(), b_cls)),
         df.sub_class_of(a_cls.clone(), df.max_cardinality(2, r, df.owl_thing())),
         // An ABox witness so the tableau-level check below has a node to expand A on.
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -244,19 +242,19 @@ fn cardinality_reasoning_atmost_merge_backtracks_to_satisfiable_choice() -> Resu
 
 /// Soundness of inequality tracking: `A ⊑ ≥3 R.⊤` and `A ⊑ ≤2 R.⊤` are contradictory —
 /// the three `≥3` witnesses are pairwise `≠`, so no merge is possible and A is
-/// unsatisfiable (AtMost must NOT merge two witnesses a ≥ rule requires distinct).
+/// unsatisfiable (`AtMost` must NOT merge two witnesses a ≥ rule requires distinct).
 #[test]
 fn cardinality_reasoning_atmost_cannot_merge_inequal_witnesses() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
+    let a_cls = df.class_ce(format!("{EX}A"));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(
             a_cls.clone(),
-            df.min_cardinality(3, df.obj_prop(&format!("{EX}R")), df.owl_thing()),
+            df.min_cardinality(3, df.obj_prop(format!("{EX}R")), df.owl_thing()),
         ),
         df.sub_class_of(
             a_cls.clone(),
-            df.max_cardinality(2, df.obj_prop(&format!("{EX}R")), df.owl_thing()),
+            df.max_cardinality(2, df.obj_prop(format!("{EX}R")), df.owl_thing()),
         ),
     ]);
     df.auto_declare(&mut ont);
@@ -279,12 +277,12 @@ fn cardinality_reasoning_atmost_cannot_merge_inequal_witnesses() -> Result<()> {
 #[test]
 fn cardinality_reasoning_atmost_nested_merges_backtrack() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let c_cls = df.class_ce(format!("{EX}C"));
     let not_c = df.complement_of(c_cls.clone());
-    let e_cls = df.class_ce(&format!("{EX}E"));
-    let f_cls = df.class_ce(&format!("{EX}F"));
-    let r = df.obj_prop(&format!("{EX}R"));
+    let e_cls = df.class_ce(format!("{EX}E"));
+    let f_cls = df.class_ce(format!("{EX}F"));
+    let r = df.obj_prop(format!("{EX}R"));
 
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.min_cardinality(1, r.clone(), c_cls)),
@@ -292,7 +290,7 @@ fn cardinality_reasoning_atmost_nested_merges_backtrack() -> Result<()> {
         df.sub_class_of(a_cls.clone(), df.min_cardinality(1, r.clone(), e_cls)),
         df.sub_class_of(a_cls.clone(), df.min_cardinality(1, r.clone(), f_cls)),
         df.sub_class_of(a_cls.clone(), df.max_cardinality(2, r, df.owl_thing())),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -327,8 +325,8 @@ fn cardinality_reasoning_atmost_nested_merges_backtrack() -> Result<()> {
 #[test]
 fn cardinality_reasoning_data_min_two_and_max_one_unsatisfiable() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let int_range = df.data_range_integer();
 
     let data_min: ClassExpression = ClassExpression::DataMinCardinality {
@@ -366,8 +364,8 @@ fn cardinality_reasoning_data_min_two_and_max_one_unsatisfiable() -> Result<()> 
 #[test]
 fn cardinality_reasoning_data_exact_two_satisfiable() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let int_range: DataRange = df.data_range_integer();
     let data_exact = ClassExpression::DataExactCardinality {
         property: p,
@@ -398,11 +396,11 @@ fn cardinality_reasoning_data_exact_two_satisfiable() -> Result<()> {
 #[test]
 fn cardinality_reasoning_atleast_two_nominal_unsatisfiable() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let a_ind = df.named(&format!("{EX}a"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let a_ind = df.named(format!("{EX}a"));
     let two_nominal = df.min_cardinality(
         2,
-        df.obj_prop(&format!("{EX}R")),
+        df.obj_prop(format!("{EX}R")),
         df.one_of(vec![a_ind.clone()]),
     );
     let mut ont = df.build_ontology(vec![
@@ -428,9 +426,9 @@ fn cardinality_reasoning_atleast_two_nominal_unsatisfiable() -> Result<()> {
 #[test]
 fn cardinality_reasoning_exact_zero_with_min_one_unsatisfiable() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let r = df.obj_prop(&format!("{EX}R"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let r = df.obj_prop(format!("{EX}R"));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(
             a_cls.clone(),
@@ -453,10 +451,10 @@ fn cardinality_reasoning_exact_zero_with_min_one_unsatisfiable() -> Result<()> {
 #[test]
 fn cardinality_reasoning_exact_zero_only_restricts_its_filler() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let d_cls = df.class_ce(&format!("{EX}D"));
-    let r = df.obj_prop(&format!("{EX}R"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let d_cls = df.class_ce(format!("{EX}D"));
+    let r = df.obj_prop(format!("{EX}R"));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.exact_cardinality(0, r.clone(), c_cls)),
         df.sub_class_of(a_cls.clone(), df.some_values_from(r, d_cls)),

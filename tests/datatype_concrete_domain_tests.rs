@@ -113,8 +113,8 @@ fn nominal_node_id(tableau: &Tableau, name: &str) -> Option<usize> {
 #[test]
 fn datatype_contradictory_facets_unsatisfiable() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let empty_range = df.data_range_restriction(
         &xsd_iri("int"),
         vec![
@@ -131,7 +131,7 @@ fn datatype_contradictory_facets_unsatisfiable() -> Result<()> {
     let some = df.data_some_values_from(p, empty_range);
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), some]),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -144,12 +144,12 @@ fn datatype_contradictory_facets_unsatisfiable() -> Result<()> {
 }
 
 /// The same empty range without any instance of `A` keeps the ontology consistent
-/// (root-level TBox encoding must not mint a spurious clash).
+/// (root-level `TBox` encoding must not mint a spurious clash).
 #[test]
 fn datatype_empty_range_tbox_only_is_consistent() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let empty_range = df.data_range_restriction(
         &xsd_iri("int"),
         vec![
@@ -185,12 +185,12 @@ fn datatype_empty_range_tbox_only_is_consistent() -> Result<()> {
 #[test]
 fn datatype_disjointness_intersection_unsatisfiable() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let disjoint = df.data_range_intersection_of(vec![xsd_range("int"), xsd_range("string")]);
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), df.data_some_values_from(p, disjoint)]),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -210,8 +210,8 @@ fn datatype_disjointness_intersection_unsatisfiable() -> Result<()> {
 #[test]
 fn datatype_pattern_facet_instance_check() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let pattern_range = df.data_range_restriction(
         &xsd_iri("string"),
         vec![(xsd_iri("pattern"), df.literal("[0-9]{3}"))],
@@ -223,14 +223,14 @@ fn datatype_pattern_facet_instance_check() -> Result<()> {
         df.equivalent_classes(vec![a_cls.clone(), some.clone()]),
         df.data_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("123", &format!("{XSD}string")),
         ),
     ]);
     df.auto_declare(&mut ok_ont);
     let r = reasoner_for(ok_ont)?;
     assert!(
-        r.is_instance_of(&df.named(&format!("{EX}a")), &a_cls)?,
+        r.is_instance_of(&df.named(format!("{EX}a")), &a_cls)?,
         "\"123\" must satisfy pattern [0-9]{{3}}"
     );
 
@@ -239,14 +239,14 @@ fn datatype_pattern_facet_instance_check() -> Result<()> {
         df.equivalent_classes(vec![a_cls.clone(), some]),
         df.data_property_assertion(
             p,
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("abc", &format!("{XSD}string")),
         ),
     ]);
     df.auto_declare(&mut bad_ont);
     let r = reasoner_for(bad_ont)?;
     assert!(
-        !r.is_instance_of(&df.named(&format!("{EX}a")), &a_cls)?,
+        !r.is_instance_of(&df.named(format!("{EX}a")), &a_cls)?,
         "\"abc\" must NOT satisfy pattern [0-9]{{3}}"
     );
     Ok(())
@@ -256,8 +256,8 @@ fn datatype_pattern_facet_instance_check() -> Result<()> {
 #[test]
 fn datatype_length_facet_instance_check() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let len_range = df.data_range_restriction(
         &xsd_iri("string"),
         vec![(
@@ -271,25 +271,25 @@ fn datatype_length_facet_instance_check() -> Result<()> {
         df.equivalent_classes(vec![a_cls.clone(), some.clone()]),
         df.data_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("abc", &format!("{XSD}string")),
         ),
     ]);
     df.auto_declare(&mut ok_ont);
     let r = reasoner_for(ok_ont)?;
-    assert!(r.is_instance_of(&df.named(&format!("{EX}a")), &a_cls)?);
+    assert!(r.is_instance_of(&df.named(format!("{EX}a")), &a_cls)?);
 
     let mut bad_ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), some]),
         df.data_property_assertion(
             p,
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("abcd", &format!("{XSD}string")),
         ),
     ]);
     df.auto_declare(&mut bad_ont);
     let r = reasoner_for(bad_ont)?;
-    assert!(!r.is_instance_of(&df.named(&format!("{EX}a")), &a_cls)?);
+    assert!(!r.is_instance_of(&df.named(format!("{EX}a")), &a_cls)?);
     Ok(())
 }
 
@@ -297,8 +297,8 @@ fn datatype_length_facet_instance_check() -> Result<()> {
 #[test]
 fn datatype_ordering_facets_instance_check() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let range = df.data_range_restriction(
         &xsd_iri("int"),
         vec![
@@ -318,25 +318,25 @@ fn datatype_ordering_facets_instance_check() -> Result<()> {
         df.equivalent_classes(vec![a_cls.clone(), some.clone()]),
         df.data_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("7", &format!("{XSD}int")),
         ),
     ]);
     df.auto_declare(&mut ok_ont);
     let r = reasoner_for(ok_ont)?;
-    assert!(r.is_instance_of(&df.named(&format!("{EX}a")), &a_cls)?);
+    assert!(r.is_instance_of(&df.named(format!("{EX}a")), &a_cls)?);
 
     let mut bad_ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), some]),
         df.data_property_assertion(
             p,
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("42", &format!("{XSD}int")),
         ),
     ]);
     df.auto_declare(&mut bad_ont);
     let r = reasoner_for(bad_ont)?;
-    assert!(!r.is_instance_of(&df.named(&format!("{EX}a")), &a_cls)?);
+    assert!(!r.is_instance_of(&df.named(format!("{EX}a")), &a_cls)?);
     Ok(())
 }
 
@@ -348,22 +348,22 @@ fn datatype_ordering_facets_instance_check() -> Result<()> {
 #[test]
 fn datatype_subtyping_int_satisfies_integer_range() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let some = df.data_some_values_from(p.clone(), xsd_range("integer"));
 
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), some]),
         df.data_property_assertion(
             p,
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("5", &format!("{XSD}int")),
         ),
     ]);
     df.auto_declare(&mut ont);
     let r = reasoner_for(ont)?;
     assert!(
-        r.is_instance_of(&df.named(&format!("{EX}a")), &a_cls)?,
+        r.is_instance_of(&df.named(format!("{EX}a")), &a_cls)?,
         "\"5\"^^xsd:int must satisfy the xsd:integer data range"
     );
     Ok(())
@@ -377,22 +377,22 @@ fn datatype_subtyping_int_satisfies_integer_range() -> Result<()> {
 #[test]
 fn datatype_has_value_instance_membership() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let has_value = df.data_has_value(p.clone(), df.typed_literal("x", &format!("{XSD}string")));
 
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), has_value]),
         df.data_property_assertion(
             p,
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("x", &format!("{XSD}string")),
         ),
     ]);
     df.auto_declare(&mut ont);
     let r = reasoner_for(ont)?;
     assert!(
-        r.is_instance_of(&df.named(&format!("{EX}a")), &a_cls)?,
+        r.is_instance_of(&df.named(format!("{EX}a")), &a_cls)?,
         "a P \"x\" must make a an instance of A ≡ ∃P.{{\"x\"}}"
     );
     Ok(())
@@ -403,13 +403,13 @@ fn datatype_has_value_instance_membership() -> Result<()> {
 #[test]
 fn datatype_has_value_mints_concrete_successor_in_tableau() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let has_value = df.data_has_value(p.clone(), df.typed_literal("x", &format!("{XSD}string")));
 
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), has_value]),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -439,8 +439,8 @@ fn datatype_has_value_mints_concrete_successor_in_tableau() -> Result<()> {
 #[test]
 fn datatype_min_two_max_one_unsatisfiable_with_instance() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let int_range = xsd_range("int");
 
     let data_min = ClassExpression::DataMinCardinality {
@@ -456,7 +456,7 @@ fn datatype_min_two_max_one_unsatisfiable_with_instance() -> Result<()> {
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), data_min),
         df.sub_class_of(a_cls.clone(), data_max),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -472,8 +472,8 @@ fn datatype_min_two_max_one_unsatisfiable_with_instance() -> Result<()> {
 #[test]
 fn datatype_min_two_mints_distinct_concrete_values() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let data_min = ClassExpression::DataMinCardinality {
         property: p.clone(),
         cardinality: 2,
@@ -481,7 +481,7 @@ fn datatype_min_two_mints_distinct_concrete_values() -> Result<()> {
     };
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), data_min),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -501,8 +501,7 @@ fn datatype_min_two_mints_distinct_concrete_values() -> Result<()> {
     assert_eq!(
         lex.len(),
         2,
-        "the two minted integer literals must be genuinely distinct; got {:?}",
-        lex
+        "the two minted integer literals must be genuinely distinct; got {lex:?}"
     );
     Ok(())
 }
@@ -516,16 +515,16 @@ fn datatype_min_two_mints_distinct_concrete_values() -> Result<()> {
 #[test]
 fn datatype_all_values_from_clashes_on_disjoint_value() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let all = df.data_all_values_from(p.clone(), xsd_range("int"));
 
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), all]),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
         df.data_property_assertion(
             p,
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("x", &format!("{XSD}string")),
         ),
     ]);
@@ -554,13 +553,13 @@ fn adult_age_restriction(df: &DF) -> DataRange {
     )
 }
 
-/// `a P "15"^^AdultAge` with AdultAge := xsd:int [minInclusive 18] is ill-typed →
+/// `a P "15"^^AdultAge` with `AdultAge` := xsd:int [minInclusive 18] is ill-typed →
 /// inconsistent. `"20"^^AdultAge` is well-typed → consistent.
 #[test]
 fn datatype_definition_adult_age_ill_typed_inconsistent() -> Result<()> {
     let df = DF::new();
     let adult_age_iri = oxidowl::ontology::IRI::new(&format!("{EX}AdultAge"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let p = df.data_prop(format!("{EX}P"));
 
     let mut bad_ont = df.build_ontology(vec![
         Axiom::DatatypeDefinition(DatatypeDefinitionAxiom::new(
@@ -571,7 +570,7 @@ fn datatype_definition_adult_age_ill_typed_inconsistent() -> Result<()> {
         )),
         df.data_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("15", adult_age_iri.as_str()),
         ),
     ]);
@@ -591,7 +590,7 @@ fn datatype_definition_adult_age_ill_typed_inconsistent() -> Result<()> {
         )),
         df.data_property_assertion(
             p,
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("20", adult_age_iri.as_str()),
         ),
     ]);
@@ -604,14 +603,14 @@ fn datatype_definition_adult_age_ill_typed_inconsistent() -> Result<()> {
     Ok(())
 }
 
-/// The DatatypeDefinition must be surfaced to the tableau: a data value of datatype
-/// AdultAge is constrained by the defining range even through a TBox `∃P.AdultAge`.
+/// The `DatatypeDefinition` must be surfaced to the tableau: a data value of datatype
+/// `AdultAge` is constrained by the defining range even through a `TBox` `∃P.AdultAge`.
 #[test]
 fn datatype_definition_generation_respects_definition() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
+    let a_cls = df.class_ce(format!("{EX}A"));
     let adult_age_iri = oxidowl::ontology::IRI::new(&format!("{EX}AdultAge"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let p = df.data_prop(format!("{EX}P"));
 
     let mut ont = df.build_ontology(vec![
         Axiom::DatatypeDefinition(DatatypeDefinitionAxiom::new(
@@ -624,7 +623,7 @@ fn datatype_definition_generation_respects_definition() -> Result<()> {
             a_cls.clone(),
             df.data_some_values_from(p.clone(), DataRange::Datatype(adult_age_iri)),
         ]),
-        df.class_assertion(a_cls, df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -643,11 +642,7 @@ fn datatype_definition_generation_respects_definition() -> Result<()> {
     let values = data_value_successors(&tableau, a_id, &format!("{EX}P"));
     assert_eq!(values.len(), 1, "∃P.AdultAge must mint a data successor");
     // The minted value must satisfy the defining range (int ≥ 18).
-    let ok = values[0]
-        .value
-        .parse::<i64>()
-        .map(|v| v >= 18)
-        .unwrap_or(false);
+    let ok = values[0].value.parse::<i64>().is_ok_and(|v| v >= 18);
     assert!(
         ok,
         "minted AdultAge literal must satisfy minInclusive 18; got {:?}",
@@ -670,22 +665,19 @@ fn datatype_owl_real_rational_value_space() -> Result<()> {
     let real_range = DataRange::Datatype(oxidowl::ontology::IRI::new(&format!("{OWL}real")));
     let mut ont_real = df.build_ontology(vec![
         df.equivalent_classes(vec![
-            df.class_ce(&format!("{EX}A")),
-            df.data_some_values_from(df.data_prop(&format!("{EX}P")), real_range),
+            df.class_ce(format!("{EX}A")),
+            df.data_some_values_from(df.data_prop(format!("{EX}P")), real_range),
         ]),
         df.data_property_assertion(
-            df.data_prop(&format!("{EX}P")),
-            df.named(&format!("{EX}a")),
+            df.data_prop(format!("{EX}P")),
+            df.named(format!("{EX}a")),
             df.typed_literal("1.5", &format!("{XSD}decimal")),
         ),
     ]);
     df.auto_declare(&mut ont_real);
     let r = reasoner_for(ont_real)?;
     assert!(
-        r.is_instance_of(
-            &df.named(&format!("{EX}a")),
-            &df.class_ce(&format!("{EX}A"))
-        )?,
+        r.is_instance_of(&df.named(format!("{EX}a")), &df.class_ce(format!("{EX}A")))?,
         "\"1.5\"^^xsd:decimal must be in the owl:real value space"
     );
 
@@ -694,47 +686,41 @@ fn datatype_owl_real_rational_value_space() -> Result<()> {
         DataRange::Datatype(oxidowl::ontology::IRI::new(&format!("{OWL}rational")));
     let mut ont_rat = df.build_ontology(vec![
         df.equivalent_classes(vec![
-            df.class_ce(&format!("{EX}B")),
-            df.data_some_values_from(df.data_prop(&format!("{EX}P")), rational_range),
+            df.class_ce(format!("{EX}B")),
+            df.data_some_values_from(df.data_prop(format!("{EX}P")), rational_range),
         ]),
         df.data_property_assertion(
-            df.data_prop(&format!("{EX}P")),
-            df.named(&format!("{EX}b")),
+            df.data_prop(format!("{EX}P")),
+            df.named(format!("{EX}b")),
             df.typed_literal("1.5", &format!("{XSD}decimal")),
         ),
     ]);
     df.auto_declare(&mut ont_rat);
     let r = reasoner_for(ont_rat)?;
     assert!(
-        r.is_instance_of(
-            &df.named(&format!("{EX}b")),
-            &df.class_ce(&format!("{EX}B"))
-        )?,
+        r.is_instance_of(&df.named(format!("{EX}b")), &df.class_ce(format!("{EX}B")))?,
         "\"1.5\"^^xsd:decimal must be in the owl:rational value space"
     );
 
     // string is NOT in owl:real.
     let mut ont_str = df.build_ontology(vec![
         df.equivalent_classes(vec![
-            df.class_ce(&format!("{EX}C")),
+            df.class_ce(format!("{EX}C")),
             df.data_some_values_from(
-                df.data_prop(&format!("{EX}P")),
+                df.data_prop(format!("{EX}P")),
                 DataRange::Datatype(oxidowl::ontology::IRI::new(&format!("{OWL}real"))),
             ),
         ]),
         df.data_property_assertion(
-            df.data_prop(&format!("{EX}P")),
-            df.named(&format!("{EX}c")),
+            df.data_prop(format!("{EX}P")),
+            df.named(format!("{EX}c")),
             df.typed_literal("x", &format!("{XSD}string")),
         ),
     ]);
     df.auto_declare(&mut ont_str);
     let r = reasoner_for(ont_str)?;
     assert!(
-        !r.is_instance_of(
-            &df.named(&format!("{EX}c")),
-            &df.class_ce(&format!("{EX}C"))
-        )?,
+        !r.is_instance_of(&df.named(format!("{EX}c")), &df.class_ce(format!("{EX}C")))?,
         "\"x\"^^xsd:string must NOT be in the owl:real value space"
     );
     Ok(())
@@ -748,15 +734,15 @@ fn datatype_owl_real_rational_value_space() -> Result<()> {
 #[test]
 fn datatype_some_values_from_mints_concrete_literal() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
 
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![
             a_cls.clone(),
             df.data_some_values_from(p.clone(), xsd_range("int")),
         ]),
-        df.class_assertion(a_cls, df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -793,8 +779,8 @@ fn datatype_some_values_from_mints_concrete_literal() -> Result<()> {
 #[test]
 fn datatype_successors_carry_range_witness_marker() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
 
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(
@@ -805,7 +791,7 @@ fn datatype_successors_carry_range_witness_marker() -> Result<()> {
                 filler: xsd_range("int"),
             },
         ),
-        df.class_assertion(a_cls, df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -815,7 +801,7 @@ fn datatype_successors_carry_range_witness_marker() -> Result<()> {
     let a_id = nominal_node_id(&tableau, &format!("{EX}a")).expect("nominal node for a");
     let succs: Vec<usize> = tableau.nodes()[a_id]
         .role_successors
-        .get((&format!("{EX}P")).as_str())
+        .get(format!("{EX}P").as_str())
         .cloned()
         .unwrap_or_default()
         .into_iter()
@@ -846,8 +832,8 @@ fn datatype_successors_carry_range_witness_marker() -> Result<()> {
 #[test]
 fn datatype_one_of_instance_check() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let one_of = df.data_range_one_of(vec![
         df.typed_literal("x", &format!("{XSD}string")),
         df.typed_literal("y", &format!("{XSD}string")),
@@ -858,29 +844,29 @@ fn datatype_one_of_instance_check() -> Result<()> {
         df.equivalent_classes(vec![a_cls.clone(), some.clone()]),
         df.data_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("y", &format!("{XSD}string")),
         ),
     ]);
     df.auto_declare(&mut ok_ont);
     let r = reasoner_for(ok_ont)?;
-    assert!(r.is_instance_of(&df.named(&format!("{EX}a")), &a_cls)?);
+    assert!(r.is_instance_of(&df.named(format!("{EX}a")), &a_cls)?);
 
     let mut bad_ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), some]),
         df.data_property_assertion(
             p,
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
             df.typed_literal("z", &format!("{XSD}string")),
         ),
     ]);
     df.auto_declare(&mut bad_ont);
     let r = reasoner_for(bad_ont)?;
-    assert!(!r.is_instance_of(&df.named(&format!("{EX}a")), &a_cls)?);
+    assert!(!r.is_instance_of(&df.named(format!("{EX}a")), &a_cls)?);
     Ok(())
 }
 
-/// DatatypeDefinition clause generation: the DL clause generator must emit a clause for
+/// `DatatypeDefinition` clause generation: the DL clause generator must emit a clause for
 /// `DatatypeDefinition(AdultAge, xsd:int [minInclusive 18])` (previously ignored).
 #[test]
 fn datatype_definition_generates_dl_clause() -> Result<()> {

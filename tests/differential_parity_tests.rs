@@ -1,7 +1,7 @@
 //! # Differential Parity Test Harness (Workstream C2)
 //!
 //! Compares oxidowl's reasoning verdicts against a curated corpus of **golden
-//! outputs** that represent the ground truth HermiT / Konclude (OWL 2 Direct
+//! outputs** that represent the ground truth `HermiT` / Konclude (OWL 2 Direct
 //! Semantics) would answer.  Each fixture is a declarative JSON document:
 //!
 //! ```json
@@ -34,7 +34,7 @@
 //! Fixtures that exercise known production gaps (documented in the W3C
 //! conformance audit / PLAN.md workstreams A1–A7) are marked `#[ignore]` with
 //! a precise reason while the gap is open.  As of the C2 fix wave no fixture
-//! is ignored any more (diff_005 nominal membership and diff_012
+//! is ignored any more (`diff_005` nominal membership and `diff_012`
 //! datatype-derived `get_types` now pass in strict mode); the report-only and
 //! golden-generation *mode helpers* below remain `#[ignore]` because they are
 //! opt-in authoring tools, not conformance checks.
@@ -63,7 +63,7 @@ use oxidowl::{
 #[derive(Debug, Clone, Deserialize)]
 struct Fixture {
     id: String,
-    /// One of: "Functional", "Turtle", "RDFXML", "OWLXML", "NTriples", "Path".
+    /// One of: "Functional", "Turtle", "RDFXML", "OWLXML", "`NTriples`", "Path".
     source: String,
     /// Inline ontology string, or a file path when `source` == "Path".
     ontology: String,
@@ -252,8 +252,7 @@ fn parse_axiom_bodies(base: &str, body: &str) -> Vec<Axiom> {
 fn profile_conforms(ontology: &Ontology, profile: OWL2Profile) -> bool {
     OWL2ProfileValidator::new()
         .validate_profile(ontology, profile)
-        .map(|r| r.conforms)
-        .unwrap_or(false)
+        .is_ok_and(|r| r.conforms)
 }
 
 fn profile_from_key(key: &str) -> OWL2Profile {
@@ -303,7 +302,7 @@ fn compute_actual(fixture: &Fixture) -> Actual {
     }
 
     if let Some(map) = &expected.satisfiable {
-        for (class, _) in map {
+        for class in map.keys() {
             let ce = resolve_class(&base, class);
             let sat = reasoner
                 .is_class_satisfiable(&ce)
@@ -350,7 +349,7 @@ fn compute_actual(fixture: &Fixture) -> Actual {
     }
 
     if let Some(map) = &expected.instances {
-        for (class, _) in map {
+        for class in map.keys() {
             let ce = resolve_class(&base, class);
             let inds = reasoner
                 .get_instances(&ce, false)
@@ -363,7 +362,7 @@ fn compute_actual(fixture: &Fixture) -> Actual {
     }
 
     if let Some(map) = &expected.types {
-        for (ind, _) in map {
+        for ind in map.keys() {
             let indv = resolve_individual(&base, ind);
             let types = reasoner
                 .get_types(&indv, false)
@@ -442,7 +441,7 @@ fn compute_actual(fixture: &Fixture) -> Actual {
     }
 
     if let Some(map) = &expected.profiles {
-        for (key, _) in map {
+        for key in map.keys() {
             let profile = profile_from_key(key);
             actual
                 .profiles
@@ -572,11 +571,11 @@ fn compare(fixture: &Fixture, actual: &Actual) -> Vec<String> {
             let actual_types = actual.types.get(ind).cloned().unwrap_or_default();
             for class in expected_classes {
                 let target = resolve_class(&fixture.base(), class).to_string();
-                let ok = actual_types.iter().any(|t| *t == target);
+                let ok = actual_types.contains(&target);
                 lines.push(format!(
                     "  {} type({ind}) ∈ {class}: expected true actual {}",
                     mark(ok),
-                    actual_types.iter().any(|t| *t == target)
+                    actual_types.contains(&target)
                 ));
             }
         }
@@ -660,12 +659,11 @@ fn run_fixture_strict(id: &str) {
         println!("   rationale: {r}");
     }
 
-    if !passes {
-        panic!(
-            "FIXTURE {id} DIVERGES from golden (HermiT/Konclude semantics).\n{}\n",
-            lines.join("\n")
-        );
-    }
+    assert!(
+        passes,
+        "FIXTURE {id} DIVERGES from golden (HermiT/Konclude semantics).\n{}\n",
+        lines.join("\n")
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -729,7 +727,7 @@ fn actual_to_golden_json(fixture: &Fixture, actual: &Actual) -> Value {
     }
     if let Some(map) = &fixture.expected.instances {
         let mut m = serde_json::Map::new();
-        for (class, _) in map {
+        for class in map.keys() {
             m.insert(
                 class.clone(),
                 serde_json::to_value(actual.instances.get(class).unwrap_or(&vec![])).unwrap(),
@@ -744,7 +742,7 @@ fn actual_to_golden_json(fixture: &Fixture, actual: &Actual) -> Value {
             let mut present = Vec::new();
             for class in classes {
                 let target = resolve_class(&base, class).to_string();
-                if actual_types.iter().any(|t| *t == target) {
+                if actual_types.contains(&target) {
                     present.push(class.clone());
                 }
             }
@@ -936,7 +934,7 @@ fn report_only() {
     let mut ids: Vec<String> = Vec::new();
     for entry in std::fs::read_dir(fixtures_dir()).expect("fixtures dir") {
         let path = entry.expect("entry").path();
-        if path.extension().map_or(false, |e| e == "json") {
+        if path.extension().is_some_and(|e| e == "json") {
             ids.push(path.file_stem().unwrap().to_string_lossy().to_string());
         }
     }
@@ -971,7 +969,7 @@ fn generate_golden_json() {
     let mut ids: Vec<String> = Vec::new();
     for entry in std::fs::read_dir(fixtures_dir()).expect("fixtures dir") {
         let path = entry.expect("entry").path();
-        if path.extension().map_or(false, |e| e == "json") {
+        if path.extension().is_some_and(|e| e == "json") {
             ids.push(path.file_stem().unwrap().to_string_lossy().to_string());
         }
     }

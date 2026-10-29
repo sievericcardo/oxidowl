@@ -135,7 +135,7 @@ fn test_every_axiom_type_retrievable_via_index() {
 
     // Non-logical axiom types are indexed too.
     assert_eq!(index.get(AxiomType::Declaration).len(), 0); // none added here
-    assert!(index.get(AxiomType::DatatypeDefinition).len() == 1);
+    assert_eq!(index.get(AxiomType::DatatypeDefinition).len(), 1);
 
     // Typed query helpers work.
     assert_eq!(index.sub_object_property_axioms().len(), 1);
@@ -201,7 +201,7 @@ fn test_remove_axiom_updates_index() {
 }
 
 /// (b) `DatatypeDefinition` round-trips through Functional Syntax with native
-/// data ranges: DatatypeRestriction with facets, DataComplementOf, DataOneOf.
+/// data ranges: `DatatypeRestriction` with facets, `DataComplementOf`, `DataOneOf`.
 #[test]
 fn test_datatype_definition_functional_roundtrip_native_ranges() {
     let df = DF::new();
@@ -401,7 +401,7 @@ fn test_signature_mixed_ontology_all_families() {
 
 /// (d) No `horned_owl` types leak from `DatatypeDefinitionAxiom` /
 /// `DataRange` / `FacetRestriction`. These are compile-time assertions: if the
-/// field types ever revert to horned_owl types this file will not compile.
+/// field types ever revert to `horned_owl` types this file will not compile.
 #[test]
 fn test_no_horned_owl_types_leak() {
     fn check_data_range(_: &oxidowl::ontology::DataRange) {}

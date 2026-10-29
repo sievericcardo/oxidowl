@@ -2,11 +2,9 @@
 mod helpers;
 use helpers::df::DF;
 use helpers::test_base::TestBase;
-use helpers::*;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 use oxidowl::parsers::*;
-use std::collections::HashSet;
 
 #[test]
 fn test_special_characters_in_iri() {
@@ -299,7 +297,7 @@ fn test_iri_with_fragment() {
     let mentions_a = reparse
         .axioms()
         .iter()
-        .any(|ax| format!("{:?}", ax).contains("ont#A"));
+        .any(|ax| format!("{ax:?}").contains("ont#A"));
     assert!(
         mentions_a,
         "Reparsed ontology should mention the fragment IRI"

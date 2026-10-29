@@ -27,9 +27,9 @@ fn default_constraints() -> ExecutionConstraints {
 /// Helper: Create a test ontology
 fn create_test_onto(name: &str, size: usize) -> Ontology {
     let mut ontology = Ontology::new();
-    ontology.set_iri(IRI::new(&format!("http://test.org/{}", name)));
+    ontology.set_iri(IRI::new(&format!("http://test.org/{name}")));
     for i in 0..size {
-        let class_iri = IRI::new(&format!("http://test.org/{}#C{}", name, i));
+        let class_iri = IRI::new(&format!("http://test.org/{name}#C{i}"));
         ontology.add_class(Class::new(class_iri));
     }
     ontology
@@ -42,8 +42,7 @@ fn simple_query(var: &str, class: &str) -> ConjunctiveQuery {
         body_atoms: vec![QueryAtom::ClassAtom {
             variable: QueryVariable::new(var.to_string()),
             class_expression: ClassExpression::class(IRI::new(&format!(
-                "http://test.org/#{}",
-                class
+                "http://test.org/#{class}"
             ))),
         }],
         constraints: Default::default(),
@@ -141,7 +140,7 @@ async fn test_query_execution_basic() {
             // No execution strategies are registered yet, so execution is
             // expected to fail deterministically with a "strategy not found"
             // internal error rather than panic or return a wrong result.
-            println!("Query execution handled error: {:?}", e);
+            println!("Query execution handled error: {e:?}");
             assert!(matches!(
                 e,
                 AdvancedQueryError::InternalError(ref msg)
@@ -175,7 +174,7 @@ async fn test_concurrent_queries() {
     for thread_id in 0..4usize {
         let engine_clone = engine.clone();
         let handle = tokio::task::spawn(async move {
-            let query = simple_query("var", &format!("Class{}", thread_id));
+            let query = simple_query("var", &format!("Class{thread_id}"));
             let constraints = default_constraints();
             engine_clone.execute_query(&query, constraints).await
         });
@@ -225,7 +224,7 @@ async fn test_multiple_query_execution() {
     // result or the specific "strategy not found" error.
     let mut successful = 0;
     for i in 0..10 {
-        let query = simple_query("x", &format!("Type{}", i));
+        let query = simple_query("x", &format!("Type{i}"));
         let constraints = default_constraints();
         match engine.execute_query(&query, constraints).await {
             Ok(result) => {
@@ -243,7 +242,7 @@ async fn test_multiple_query_execution() {
         }
     }
 
-    println!("✓ Executed 10 queries: {} successful", successful);
+    println!("✓ Executed 10 queries: {successful} successful");
     assert!(successful <= 10, "Sanity check on success count");
 }
 
@@ -271,7 +270,7 @@ async fn test_performance_measurement() {
     let _ = engine.execute_query(&query, constraints).await;
     let duration = start.elapsed();
 
-    println!("✓ Query execution time: {:?}", duration);
+    println!("✓ Query execution time: {duration:?}");
     assert!(
         duration < Duration::from_secs(10),
         "Query should complete in reasonable time"

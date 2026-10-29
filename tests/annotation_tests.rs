@@ -2,8 +2,6 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::test_base::TestBase;
-use helpers::*;
 use oxidowl::factory::providers::AxiomCreationProvider;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;

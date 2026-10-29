@@ -23,6 +23,7 @@ pub struct TestBase {
 }
 
 impl TestBase {
+    #[must_use]
     pub fn new() -> Self {
         let resource_dir = Self::find_resource_dir();
         TestBase {
@@ -34,6 +35,7 @@ impl TestBase {
         }
     }
 
+    #[must_use]
     pub fn with_config(config: ManagerConfig) -> Self {
         TestBase {
             df: DF::new(),
@@ -128,7 +130,7 @@ impl TestBase {
             OntologyFormat::RdfXml => parse_rdf_xml(content).map_err(|e| format!("{e}")),
             OntologyFormat::Turtle => parse_turtle(content).map_err(|e| format!("{e}")),
             OntologyFormat::NTriples => parse_ntriples(content).map_err(|e| format!("{e}")),
-            _ => Err(format!("Parsing for {:?} not supported", format)),
+            _ => Err(format!("Parsing for {format:?} not supported")),
         }
     }
 
@@ -140,16 +142,17 @@ impl TestBase {
         self.load_from_string(content, format)
     }
 
+    #[must_use]
     pub fn detect_format(path: &Path) -> OntologyFormat {
         match path.extension().and_then(|e| e.to_str()) {
-            Some("ofn") | Some("fss") => OntologyFormat::Functional,
-            Some("owx") | Some("owlx") => OntologyFormat::OwlXml,
-            Some("rdf") | Some("xml") => OntologyFormat::RdfXml,
+            Some("ofn" | "fss") => OntologyFormat::Functional,
+            Some("owx" | "owlx") => OntologyFormat::OwlXml,
+            Some("rdf" | "xml") => OntologyFormat::RdfXml,
             Some("ttl") => OntologyFormat::Turtle,
             Some("nt") => OntologyFormat::NTriples,
-            Some("omn") | Some("mn") => OntologyFormat::Manchester,
+            Some("omn" | "mn") => OntologyFormat::Manchester,
             Some("obo") => OntologyFormat::Obo,
-            Some("jsonld") | Some("json") => OntologyFormat::JsonLd,
+            Some("jsonld" | "json") => OntologyFormat::JsonLd,
             _ => OntologyFormat::RdfXml,
         }
     }
@@ -249,6 +252,7 @@ impl TestBase {
         });
     }
 
+    #[must_use]
     pub fn core_roundtrip_formats() -> Vec<OntologyFormat> {
         vec![
             OntologyFormat::RdfXml,
@@ -258,6 +262,7 @@ impl TestBase {
         ]
     }
 
+    #[must_use]
     pub fn all_roundtrip_formats() -> Vec<OntologyFormat> {
         vec![
             OntologyFormat::RdfXml,

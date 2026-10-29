@@ -383,8 +383,7 @@ fn test_dl_validator_report_structure() {
     let violation_count = report.violations.len();
     assert!(
         violation_count >= 1,
-        "Should have at least 1 violation, got {}",
-        violation_count
+        "Should have at least 1 violation, got {violation_count}"
     );
 
     let first_violation = &report.violations[0];

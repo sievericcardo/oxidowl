@@ -2,10 +2,8 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::*;
 use oxidowl::OntologyManager;
 use oxidowl::PrefixManager;
-use oxidowl::manager::ManagerConfig;
 use oxidowl::ontology::*;
 
 fn onto_ref(o: Ontology) -> OntologyRef {
@@ -408,7 +406,7 @@ fn shipped_hypergraph_config_loads() {
 
     let shipped = manifest_dir.join("oxidowl_hypergraph_config.toml");
     let cfg = ReasonerConfig::load_from_file(&shipped)
-        .unwrap_or_else(|e| panic!("shipped config {:?} must load: {e}", shipped));
+        .unwrap_or_else(|e| panic!("shipped config {shipped:?} must load: {e}"));
     assert_eq!(
         cfg.reasoning.tableau_algorithm,
         TableauAlgorithm::Hypertableau
@@ -422,7 +420,7 @@ fn shipped_hypergraph_config_loads() {
 
     let example = manifest_dir.join("oxidowl_hypergraph_config.toml.example");
     ReasonerConfig::load_from_file(&example)
-        .unwrap_or_else(|e| panic!("example config {:?} must load: {e}", example));
+        .unwrap_or_else(|e| panic!("example config {example:?} must load: {e}"));
 }
 
 #[test]

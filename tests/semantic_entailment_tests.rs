@@ -31,22 +31,22 @@ const OWL: &str = "http://www.w3.org/2002/07/owl#";
 
 fn semantic_entailment_top_object_property() -> ObjectPropertyExpression {
     let df = DF::new();
-    df.obj_prop(&format!("{OWL}topObjectProperty"))
+    df.obj_prop(format!("{OWL}topObjectProperty"))
 }
 
 fn semantic_entailment_bottom_object_property() -> ObjectPropertyExpression {
     let df = DF::new();
-    df.obj_prop(&format!("{OWL}bottomObjectProperty"))
+    df.obj_prop(format!("{OWL}bottomObjectProperty"))
 }
 
 fn semantic_entailment_top_data_property() -> oxidowl::ontology::DataPropertyExpression {
     let df = DF::new();
-    df.data_prop(&format!("{OWL}topDataProperty"))
+    df.data_prop(format!("{OWL}topDataProperty"))
 }
 
 fn semantic_entailment_bottom_data_property() -> oxidowl::ontology::DataPropertyExpression {
     let df = DF::new();
-    df.data_prop(&format!("{OWL}bottomDataProperty"))
+    df.data_prop(format!("{OWL}bottomDataProperty"))
 }
 
 /// Build a tableau-backed OWL reasoner for the ontology.
@@ -78,9 +78,9 @@ fn semantic_entailment_assert_not_entailed(r: &dyn OWLReasoner, ax: Axiom, msg: 
 #[test]
 fn semantic_entailment_sub_object_property_of_transitive_closure() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let t = df.obj_prop(&format!("{EX}T"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let t = df.obj_prop(format!("{EX}T"));
     let onto = df.build_ontology(vec![
         df.sub_object_property_of(r.clone(), s.clone()),
         df.sub_object_property_of(s.clone(), t.clone()),
@@ -104,8 +104,8 @@ fn semantic_entailment_sub_object_property_of_transitive_closure() {
 #[test]
 fn semantic_entailment_equivalent_object_properties_entailed() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
     let onto = df.build_ontology(vec![
         df.sub_object_property_of(r.clone(), s.clone()),
         df.sub_object_property_of(s.clone(), r.clone()),
@@ -123,8 +123,8 @@ fn semantic_entailment_equivalent_object_properties_entailed() {
 #[test]
 fn semantic_entailment_sub_object_property_of_negative() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
     // No inclusion between R and S; adding R(w1,w2) must not close to S.
     let onto = df.build_ontology(vec![]);
     let reasoner = semantic_entailment_api_reasoner(onto);
@@ -142,7 +142,7 @@ fn semantic_entailment_sub_object_property_of_negative() {
 #[test]
 fn semantic_entailment_transitivity_entailed_and_not() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
 
     let onto = df.build_ontology(vec![df.transitive_object_property(r.clone())]);
     let reasoner = semantic_entailment_api_reasoner(onto);
@@ -164,7 +164,7 @@ fn semantic_entailment_transitivity_entailed_and_not() {
 #[test]
 fn semantic_entailment_symmetric_entailed_and_not() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
 
     let onto = df.build_ontology(vec![df.symmetric_object_property(r.clone())]);
     let reasoner = semantic_entailment_api_reasoner(onto);
@@ -185,7 +185,7 @@ fn semantic_entailment_symmetric_entailed_and_not() {
 #[test]
 fn semantic_entailment_reflexive_entailed_and_not() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
 
     let onto = df.build_ontology(vec![df.reflexive_object_property(r.clone())]);
     let reasoner = semantic_entailment_api_reasoner(onto);
@@ -206,7 +206,7 @@ fn semantic_entailment_reflexive_entailed_and_not() {
 #[test]
 fn semantic_entailment_asymmetric_entailed_and_not() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
 
     let onto = df.build_ontology(vec![df.asymmetric_object_property(r.clone())]);
     let reasoner = semantic_entailment_api_reasoner(onto);
@@ -228,7 +228,7 @@ fn semantic_entailment_asymmetric_entailed_and_not() {
 #[test]
 fn semantic_entailment_irreflexive_entailed_and_not() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
 
     let onto = df.build_ontology(vec![df.irreflexive_object_property(r.clone())]);
     let reasoner = semantic_entailment_api_reasoner(onto);
@@ -249,7 +249,7 @@ fn semantic_entailment_irreflexive_entailed_and_not() {
 #[test]
 fn semantic_entailment_functional_entailed_and_not() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
 
     let onto = df.build_ontology(vec![df.functional_object_property(r.clone())]);
     let reasoner = semantic_entailment_api_reasoner(onto);
@@ -271,7 +271,7 @@ fn semantic_entailment_functional_entailed_and_not() {
 #[test]
 fn semantic_entailment_inverse_functional_entailed_and_not() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
 
     let onto = df.build_ontology(vec![df.inverse_functional_object_property(r.clone())]);
     let reasoner = semantic_entailment_api_reasoner(onto);
@@ -292,8 +292,8 @@ fn semantic_entailment_inverse_functional_entailed_and_not() {
 #[test]
 fn semantic_entailment_disjoint_object_properties_entailed_and_not() {
     let df = DF::new();
-    let p = df.obj_prop(&format!("{EX}P"));
-    let q = df.obj_prop(&format!("{EX}Q"));
+    let p = df.obj_prop(format!("{EX}P"));
+    let q = df.obj_prop(format!("{EX}Q"));
 
     let onto = df.build_ontology(vec![
         df.disjoint_object_properties(vec![p.clone(), q.clone()]),
@@ -321,9 +321,9 @@ fn semantic_entailment_disjoint_object_properties_entailed_and_not() {
 #[test]
 fn semantic_entailment_object_property_domain_derived() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let c = df.class_ce(&format!("{EX}C"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let c = df.class_ce(format!("{EX}C"));
 
     // R ⊑ S ∧ Domain(S,C) ⊨ Domain(R,C): witness w:∃R.⊤ must get C.
     let onto = df.build_ontology(vec![
@@ -341,10 +341,10 @@ fn semantic_entailment_object_property_domain_derived() {
 #[test]
 fn semantic_entailment_object_property_domain_not_entailed() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let c = df.class_ce(&format!("{EX}C"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let c = df.class_ce(format!("{EX}C"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
 
     // R(a,b) alone does not force Domain(R,C).
     let onto = df.build_ontology(vec![df.object_property_assertion(r.clone(), a, b)]);
@@ -359,9 +359,9 @@ fn semantic_entailment_object_property_domain_not_entailed() {
 #[test]
 fn semantic_entailment_object_property_range_derived() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let c = df.class_ce(&format!("{EX}C"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let c = df.class_ce(format!("{EX}C"));
 
     // R ⊑ S ∧ Range(S,C) ⊨ Range(R,C): witness x:∃R.{w} must put w in C.
     let onto = df.build_ontology(vec![
@@ -379,10 +379,10 @@ fn semantic_entailment_object_property_range_derived() {
 #[test]
 fn semantic_entailment_object_property_range_not_entailed() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let c = df.class_ce(&format!("{EX}C"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let c = df.class_ce(format!("{EX}C"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
 
     let onto = df.build_ontology(vec![df.object_property_assertion(r.clone(), a, b)]);
     let reasoner = semantic_entailment_api_reasoner(onto);
@@ -400,10 +400,10 @@ fn semantic_entailment_object_property_range_not_entailed() {
 #[test]
 fn semantic_entailment_same_individual_via_inverse_functional() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
-    let x = df.named(&format!("{EX}x"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
+    let x = df.named(format!("{EX}x"));
 
     // InverseFunctional(R), R(a,x), R(b,x) ⊨ SameIndividual(a,b).
     let onto = df.build_ontology(vec![
@@ -422,11 +422,11 @@ fn semantic_entailment_same_individual_via_inverse_functional() {
 #[test]
 fn semantic_entailment_same_individual_via_haskey() {
     let df = DF::new();
-    let p = df.obj_prop(&format!("{EX}P"));
-    let c = df.class_ce(&format!("{EX}C"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
-    let v = df.named(&format!("{EX}v"));
+    let p = df.obj_prop(format!("{EX}P"));
+    let c = df.class_ce(format!("{EX}C"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
+    let v = df.named(format!("{EX}v"));
 
     // HasKey(C, [P]), C(a), C(b), P(a,v), P(b,v) ⊨ SameIndividual(a,b).
     let onto = df.build_ontology(vec![
@@ -447,8 +447,8 @@ fn semantic_entailment_same_individual_via_haskey() {
 #[test]
 fn semantic_entailment_same_individual_not_entailed() {
     let df = DF::new();
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
 
     let onto = df.build_ontology(vec![]);
     let reasoner = semantic_entailment_api_reasoner(onto);
@@ -462,10 +462,10 @@ fn semantic_entailment_same_individual_not_entailed() {
 #[test]
 fn semantic_entailment_different_individuals_via_disjoint_classes() {
     let df = DF::new();
-    let p = df.class_ce(&format!("{EX}P"));
-    let q = df.class_ce(&format!("{EX}Q"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
+    let p = df.class_ce(format!("{EX}P"));
+    let q = df.class_ce(format!("{EX}Q"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
 
     // a:P, b:Q, Disjoint(P,Q) ⊨ a ≠ b (a ≡ b would force an individual in P ⊓ Q).
     let onto = df.build_ontology(vec![
@@ -484,8 +484,8 @@ fn semantic_entailment_different_individuals_via_disjoint_classes() {
 #[test]
 fn semantic_entailment_different_individuals_not_entailed() {
     let df = DF::new();
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
 
     let onto = df.build_ontology(vec![]);
     let reasoner = semantic_entailment_api_reasoner(onto);
@@ -499,10 +499,10 @@ fn semantic_entailment_different_individuals_not_entailed() {
 #[test]
 fn semantic_entailment_object_property_assertion_via_transitivity() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
-    let c = df.named(&format!("{EX}c"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
+    let c = df.named(format!("{EX}c"));
 
     // Transitive(R), R(a,b), R(b,c) ⊨ R(a,c).
     let onto = df.build_ontology(vec![
@@ -521,10 +521,10 @@ fn semantic_entailment_object_property_assertion_via_transitivity() {
 #[test]
 fn semantic_entailment_negative_object_property_assertion_via_subproperty() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
 
     // R ⊑ S ∧ ¬S(a,b) ⊨ ¬R(a,b): any R(a,b) would force S(a,b), clashing.
     let onto = df.build_ontology(vec![
@@ -542,9 +542,9 @@ fn semantic_entailment_negative_object_property_assertion_via_subproperty() {
 #[test]
 fn semantic_entailment_negative_object_property_assertion_not_entailed() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
 
     let onto = df.build_ontology(vec![df.object_property_assertion(
         r.clone(),
@@ -566,9 +566,9 @@ fn semantic_entailment_negative_object_property_assertion_not_entailed() {
 #[test]
 fn semantic_entailment_sub_data_property_of_closure() {
     let df = DF::new();
-    let p = df.data_prop(&format!("{EX}P"));
-    let q = df.data_prop(&format!("{EX}Q"));
-    let w = df.data_prop(&format!("{EX}W"));
+    let p = df.data_prop(format!("{EX}P"));
+    let q = df.data_prop(format!("{EX}Q"));
+    let w = df.data_prop(format!("{EX}W"));
 
     // P ⊑ Q ∧ Q ⊑ W ⊨ P ⊑ W (transitive data-property hierarchy closure).
     let onto = df.build_ontology(vec![
@@ -586,9 +586,9 @@ fn semantic_entailment_sub_data_property_of_closure() {
 #[test]
 fn semantic_entailment_data_property_domain_derived() {
     let df = DF::new();
-    let p = df.data_prop(&format!("{EX}P"));
-    let q = df.data_prop(&format!("{EX}Q"));
-    let c = df.class_ce(&format!("{EX}C"));
+    let p = df.data_prop(format!("{EX}P"));
+    let q = df.data_prop(format!("{EX}Q"));
+    let c = df.class_ce(format!("{EX}C"));
 
     // P ⊑ Q ∧ Domain(Q,C) ⊨ Domain(P,C).
     let onto = df.build_ontology(vec![
@@ -606,8 +606,8 @@ fn semantic_entailment_data_property_domain_derived() {
 #[test]
 fn semantic_entailment_data_property_range_derived() {
     let df = DF::new();
-    let p = df.data_prop(&format!("{EX}P"));
-    let q = df.data_prop(&format!("{EX}Q"));
+    let p = df.data_prop(format!("{EX}P"));
+    let q = df.data_prop(format!("{EX}Q"));
     let rng = df.data_range_integer();
 
     // P ⊑ Q ∧ Range(Q, xsd:integer) ⊨ Range(P, xsd:integer).
@@ -626,8 +626,8 @@ fn semantic_entailment_data_property_range_derived() {
 #[test]
 fn semantic_entailment_functional_data_property_derived() {
     let df = DF::new();
-    let p = df.data_prop(&format!("{EX}P"));
-    let q = df.data_prop(&format!("{EX}Q"));
+    let p = df.data_prop(format!("{EX}P"));
+    let q = df.data_prop(format!("{EX}Q"));
 
     // P ⊑ Q ∧ Functional(Q) ⊨ Functional(P).
     let onto = df.build_ontology(vec![
@@ -645,10 +645,10 @@ fn semantic_entailment_functional_data_property_derived() {
 #[test]
 fn semantic_entailment_data_property_assertion_via_data_has_value() {
     let df = DF::new();
-    let p = df.data_prop(&format!("{EX}P"));
-    let a = df.named(&format!("{EX}a"));
+    let p = df.data_prop(format!("{EX}P"));
+    let a = df.named(format!("{EX}a"));
     let x = df.typed_literal("x", "http://www.w3.org/2001/XMLSchema#string");
-    let a_class = df.class_ce(&format!("{EX}A"));
+    let a_class = df.class_ce(format!("{EX}A"));
 
     // A ≡ DataHasValue(P, "x") ∧ A(a) ⊨ P(a, "x")  (the un-ignored C1 case).
     let onto = df.build_ontology(vec![
@@ -669,8 +669,8 @@ fn semantic_entailment_data_property_assertion_via_data_has_value() {
 #[test]
 fn semantic_entailment_data_property_assertion_not_entailed() {
     let df = DF::new();
-    let p = df.data_prop(&format!("{EX}P"));
-    let a = df.named(&format!("{EX}a"));
+    let p = df.data_prop(format!("{EX}P"));
+    let a = df.named(format!("{EX}a"));
     let x = df.typed_literal("x", "http://www.w3.org/2001/XMLSchema#string");
 
     let onto = df.build_ontology(vec![]);
@@ -685,10 +685,10 @@ fn semantic_entailment_data_property_assertion_not_entailed() {
 #[test]
 fn semantic_entailment_negative_data_property_assertion_via_all_values() {
     let df = DF::new();
-    let p = df.data_prop(&format!("{EX}P"));
-    let a = df.named(&format!("{EX}a"));
+    let p = df.data_prop(format!("{EX}P"));
+    let a = df.named(format!("{EX}a"));
     let bad = df.typed_literal("abc", "http://www.w3.org/2001/XMLSchema#string");
-    let a_class = df.class_ce(&format!("{EX}A"));
+    let a_class = df.class_ce(format!("{EX}A"));
 
     // A ≡ ∀P.xsd:integer ∧ A(a) ⊨ ¬P(a, "abc"^^xsd:string).
     let onto = df.build_ontology(vec![
@@ -713,7 +713,7 @@ fn semantic_entailment_negative_data_property_assertion_via_all_values() {
 #[test]
 fn semantic_entailment_top_bottom_object_property_inclusions() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
     let empty = df.build_ontology(vec![]);
     let reasoner = semantic_entailment_api_reasoner(empty);
 
@@ -769,7 +769,7 @@ fn semantic_entailment_top_object_property_characteristics() {
 #[test]
 fn semantic_entailment_top_bottom_disjointness() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
     let empty = df.build_ontology(vec![]);
     let reasoner = semantic_entailment_api_reasoner(empty);
 
@@ -807,7 +807,7 @@ fn semantic_entailment_bottom_object_property_functional() {
 #[test]
 fn semantic_entailment_top_bottom_data_properties() {
     let df = DF::new();
-    let p = df.data_prop(&format!("{EX}P"));
+    let p = df.data_prop(format!("{EX}P"));
     let empty = df.build_ontology(vec![]);
     let reasoner = semantic_entailment_api_reasoner(empty);
 
@@ -860,11 +860,11 @@ fn semantic_entailment_top_bottom_data_properties() {
 #[test]
 fn semantic_entailment_get_same_individuals_uses_tableau_haskey_merge() {
     let df = DF::new();
-    let p = df.obj_prop(&format!("{EX}P"));
-    let c = df.class_ce(&format!("{EX}C"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
-    let v = df.named(&format!("{EX}v"));
+    let p = df.obj_prop(format!("{EX}P"));
+    let c = df.class_ce(format!("{EX}C"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
+    let v = df.named(format!("{EX}v"));
 
     // HasKey(C, [P]) with shared key value forces a ≡ b in the tableau, but the
     // syntactic IndividualEquality structure has no HasKey rule — so the merge
@@ -894,11 +894,11 @@ fn semantic_entailment_get_same_individuals_uses_tableau_haskey_merge() {
 #[test]
 fn semantic_entailment_is_entailed_end_to_end() {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let c = df.class_ce(&format!("{EX}C"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let c = df.class_ce(format!("{EX}C"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
 
     let onto = df.build_ontology(vec![
         df.sub_object_property_of(r.clone(), s.clone()),

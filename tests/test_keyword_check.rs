@@ -7,19 +7,19 @@ fn test_object_some_values_from_is_keyword() {
     use oxidowl::parsers::Parser;
     use oxidowl::parsers::functional::FunctionalParser;
 
-    let content = r#"
+    let content = r"
 Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
 Ontology(<http://example.org/test>
     Declaration(Class(ObjectSomeValuesFrom))
-)"#;
+)";
 
     let parser = FunctionalParser::new();
     let result = parser.parse(content);
 
     match result {
         Err(e) => {
-            let err_msg = format!("{}", e);
-            println!("Error (expected): {}", err_msg);
+            let err_msg = format!("{e}");
+            println!("Error (expected): {err_msg}");
             assert!(
                 err_msg.contains("ObjectSomeValuesFrom"),
                 "Error should mention ObjectSomeValuesFrom"
@@ -38,12 +38,12 @@ fn test_prefixed_object_some_values_from_allowed() {
     use oxidowl::parsers::Parser;
     use oxidowl::parsers::functional::FunctionalParser;
 
-    let content = r#"
+    let content = r"
 Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
 Prefix(ex:=<http://example.org/>)
 Ontology(<http://example.org/test>
     Declaration(Class(ex:ObjectSomeValuesFrom))
-)"#;
+)";
 
     let parser = FunctionalParser::new();
     let result = parser.parse(content);
@@ -59,11 +59,11 @@ fn test_bracketed_object_some_values_from_allowed() {
     use oxidowl::parsers::Parser;
     use oxidowl::parsers::functional::FunctionalParser;
 
-    let content = r#"
+    let content = r"
 Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
 Ontology(<http://example.org/test>
     Declaration(Class(<http://example.org/ObjectSomeValuesFrom>))
-)"#;
+)";
 
     let parser = FunctionalParser::new();
     let result = parser.parse(content);

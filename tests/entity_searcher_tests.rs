@@ -2,7 +2,6 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::*;
 use oxidowl::inference::metrics::OntologyMetrics;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
@@ -163,7 +162,7 @@ fn searcher_declaration_axioms_by_obj_prop_type() {
     let searcher = EntitySearcher::new(&o, &index);
     let axioms = searcher.get_declaration_axioms_by_type(&EntityType::ObjectProperty);
     assert!(
-        axioms.len() >= 1,
+        !axioms.is_empty(),
         "Expected at least 1 object property declaration"
     );
 }
@@ -201,7 +200,7 @@ fn entity_collector_classes() {
 fn entity_collector_object_properties() {
     let o = test_ontology();
     let props = o.get_object_properties_in_signature();
-    assert!(props.len() >= 1, "Expected at least 1 object property");
+    assert!(!props.is_empty(), "Expected at least 1 object property");
 }
 
 #[test]

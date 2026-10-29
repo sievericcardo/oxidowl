@@ -456,9 +456,9 @@ fn test_annotation_use_case() {
     ];
 
     for (s, p, o, conf) in claims {
-        let subject = RdfTerm::iri(&format!("http://example.org/{}", s)).unwrap();
-        let predicate = RdfTerm::iri(&format!("http://example.org/{}", p)).unwrap();
-        let object = RdfTerm::iri(&format!("http://example.org/{}", o)).unwrap();
+        let subject = RdfTerm::iri(&format!("http://example.org/{s}")).unwrap();
+        let predicate = RdfTerm::iri(&format!("http://example.org/{p}")).unwrap();
+        let object = RdfTerm::iri(&format!("http://example.org/{o}")).unwrap();
 
         let base = Triple::new(subject, predicate, object);
         let quoted = RdfTerm::QuotedTriple(Box::new(base));
@@ -488,7 +488,7 @@ fn test_performance_large_graph_with_quoted_triples() {
 
     // Create 100 statements with metadata
     for i in 0..100 {
-        let subject = RdfTerm::iri(&format!("http://example.org/person{}", i)).unwrap();
+        let subject = RdfTerm::iri(&format!("http://example.org/person{i}")).unwrap();
         let object = RdfTerm::iri(&format!("http://example.org/person{}", i + 1)).unwrap();
 
         let base = Triple::new(subject, knows.clone(), object);

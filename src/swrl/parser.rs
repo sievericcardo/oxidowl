@@ -863,11 +863,11 @@ mod tests {
     fn test_complex_rule_parsing() {
         let mut parser = SWRLParser::new();
 
-        let rule_text = r#"Person(?p), hasAge(?p, ?age), swrlb:greaterThan(?age, 18) -> Adult(?p)"#;
+        let rule_text = r"Person(?p), hasAge(?p, ?age), swrlb:greaterThan(?age, 18) -> Adult(?p)";
         let result = parser.parse_rule(rule_text);
 
         if let Err(ref e) = result {
-            println!("Parse error: {:?}", e);
+            println!("Parse error: {e:?}");
         }
         assert!(result.is_ok());
         let rule = result.expect("Failed to parse complex SWRL rule with multiple body atoms");
@@ -879,10 +879,10 @@ mod tests {
     fn test_prefix_declaration() {
         let mut parser = SWRLParser::new();
 
-        let rules_text = r#"
+        let rules_text = r"
             @prefix ex: <http://example.org/>
             ex:Person(?p) -> ex:Adult(?p)
-        "#;
+        ";
 
         let result = parser.parse_rules(rules_text);
         assert!(result.is_ok());

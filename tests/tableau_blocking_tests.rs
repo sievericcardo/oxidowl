@@ -1,7 +1,7 @@
 //! Integration tests for tableau blocking (workstream A1).
 //!
 //! These tests verify that:
-//! 1. Cyclic existential TBoxes (e.g. `A ⊑ ∃R.A`) terminate and stay consistent.
+//! 1. Cyclic existential `TBoxes` (e.g. `A ⊑ ∃R.A`) terminate and stay consistent.
 //! 2. Blocking actually marks nodes and prevents re-expansion of blocked nodes.
 //! 3. Nominal nodes are never wrongly blocked.
 //! 4. The configured `BlockingStrategy` is respected by the executor.
@@ -114,7 +114,7 @@ fn default_blocking_strategy_is_anywhere() {
 // Cyclic existential chains
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// `A ⊑ ∃R.A` with an ABox individual `a : A`. Without blocking, a cyclic
+/// `A ⊑ ∃R.A` with an `ABox` individual `a : A`. Without blocking, a cyclic
 /// existential chain would expand unboundedly; with blocking it must terminate
 /// quickly and report the ontology as consistent.
 #[test]
@@ -141,7 +141,7 @@ fn cyclic_existential_chain_terminates_and_consistent() -> Result<()> {
     Ok(())
 }
 
-/// The same cyclic TBox must terminate for every supported blocking strategy.
+/// The same cyclic `TBox` must terminate for every supported blocking strategy.
 #[test]
 fn cyclic_chain_terminates_for_all_strategies() -> Result<()> {
     let a = cls("http://example.org/A");
@@ -359,8 +359,8 @@ fn nominal_nodes_never_blocked() -> Result<()> {
 // Termination guarantee
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Termination guard: a strongly cyclic TBox (`A ≡ ∃R.A` plus `A ⊑ ∃R.A`) with an
-/// ABox individual is the worst case for unbounded expansion. It must return a
+/// Termination guard: a strongly cyclic `TBox` (`A ≡ ∃R.A` plus `A ⊑ ∃R.A`) with an
+/// `ABox` individual is the worst case for unbounded expansion. It must return a
 /// completed state (never time out / hang), and do so quickly.
 #[test]
 fn strongly_cyclic_terminates_within_timeout() -> Result<()> {

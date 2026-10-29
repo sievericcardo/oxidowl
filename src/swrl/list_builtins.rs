@@ -568,7 +568,7 @@ mod tests {
             .expect("Failed to execute SWRL builtin with given arguments");
         assert_eq!(result, SWRLValue::Boolean(true));
 
-        let args = vec![SWRLValue::Integer(0), SWRLValue::String("".to_string())];
+        let args = vec![SWRLValue::Integer(0), SWRLValue::String(String::new())];
         let result = builtin
             .execute(&args)
             .expect("Failed to execute SWRL builtin with given arguments");

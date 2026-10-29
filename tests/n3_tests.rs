@@ -3,8 +3,8 @@
 //! Locks `src/parsers/rio/n3.rs` (oxttl N3 engine + shared RDF→OWL mapping):
 //!
 //! 1. **Ground-triple round-trip equality** — serialize → parse must return
-//!    the identical axiom set (declarations, SubClassOf, assertions,
-//!    annotations, EquivalentClasses) plus the ontology IRI and prefixes.
+//!    the identical axiom set (declarations, `SubClassOf`, assertions,
+//!    annotations, `EquivalentClasses`) plus the ontology IRI and prefixes.
 //! 2. **Turtle-syntax superset** — `a` shorthand (Part 1b), `;` / `,`
 //!    predicate-object lists, `@prefix`, blank-node property lists and
 //!    collections all parse to the expected axioms.

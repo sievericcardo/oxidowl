@@ -6,7 +6,7 @@
 //! html5ever/markup5ever to 0.39), so the small `TreeSink` implementation is
 //! inlined here to keep html5ever and markup5ever on the same 0.40 line.
 //!
-//! Two parts of the upstream crate are deliberately omitted because RDFa only
+//! Two parts of the upstream crate are deliberately omitted because `RDFa` only
 //! ever *parses* HTML (never serializes it back, and never cares about browser
 //! DOM fidelity):
 //!
@@ -96,15 +96,14 @@ impl Drop for Node {
         let mut nodes = mem::take(&mut *self.children.borrow_mut());
         while let Some(node) = nodes.pop() {
             let children = mem::take(&mut *node.children.borrow_mut());
-            nodes.extend(children.into_iter());
+            nodes.extend(children);
             if let NodeData::Element {
                 ref template_contents,
                 ..
             } = node.data
+                && let Some(template_contents) = template_contents.borrow_mut().take()
             {
-                if let Some(template_contents) = template_contents.borrow_mut().take() {
-                    nodes.push(template_contents);
-                }
+                nodes.push(template_contents);
             }
         }
     }
@@ -261,12 +260,11 @@ impl TreeSink for RcDom {
 
     fn append(&self, parent: &Handle, child: NodeOrText<Handle>) {
         // Append to an existing Text node if we have one.
-        if let NodeOrText::AppendText(text) = &child {
-            if let Some(h) = parent.children.borrow().last() {
-                if append_to_existing_text(h, text) {
-                    return;
-                }
-            }
+        if let NodeOrText::AppendText(text) = &child
+            && let Some(h) = parent.children.borrow().last()
+            && append_to_existing_text(h, text)
+        {
+            return;
         }
 
         append(
@@ -375,7 +373,7 @@ impl TreeSink for RcDom {
             assert!(Rc::ptr_eq(
                 node,
                 &previous_parent.unwrap().upgrade().expect("dangling weak")
-            ))
+            ));
         }
         new_children.extend(mem::take(&mut *children));
     }

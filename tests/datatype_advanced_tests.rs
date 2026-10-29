@@ -1,7 +1,6 @@
 #[path = "helpers/mod.rs"]
 mod helpers;
 
-use helpers::*;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::datatypes::DatatypeDefinitionAxiom;
 use oxidowl::ontology::*;
@@ -32,7 +31,7 @@ fn test_datatype_complement() {
     }
 }
 
-/// Create DataIntersectionOf([Integer, NonNegativeInteger]).
+/// Create `DataIntersectionOf`([Integer, `NonNegativeInteger`]).
 #[test]
 fn test_datatype_intersection() {
     let integer = DataRange::Datatype(xsd_iri("integer"));
@@ -49,7 +48,7 @@ fn test_datatype_intersection() {
     }
 }
 
-/// Create DataUnionOf([String, Integer]).
+/// Create `DataUnionOf`([String, Integer]).
 #[test]
 fn test_datatype_union() {
     let string_dt = DataRange::Datatype(xsd_iri("string"));
@@ -64,7 +63,7 @@ fn test_datatype_union() {
     }
 }
 
-/// Create DatatypeRestriction with facet restrictions.
+/// Create `DatatypeRestriction` with facet restrictions.
 #[test]
 fn test_datatype_restriction() {
     let integer = xsd_iri("integer");
@@ -96,7 +95,7 @@ fn test_datatype_restriction() {
     }
 }
 
-/// Create DataOneOf with literal values.
+/// Create `DataOneOf` with literal values.
 #[test]
 fn test_datatype_one_of() {
     let lit1 = Literal::with_datatype("1".to_string(), xsd_iri("integer"));
@@ -120,7 +119,7 @@ fn test_datatype_one_of() {
 // 2.10 OWL2Datatype IRI Tests
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// Verify all OWL2Datatype variants map to correct IRIs.
+/// Verify all `OWL2Datatype` variants map to correct IRIs.
 #[test]
 fn test_all_owl2_datatype_iris() {
     // Core XSD datatypes
@@ -566,7 +565,7 @@ fn test_plain_literal_type_folding() {
 // 2.10 DatatypeDefinitionAxiom Test
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// Construct a DatatypeDefinition axiom with a custom datatype.
+/// Construct a `DatatypeDefinition` axiom with a custom datatype.
 #[test]
 fn test_datatype_definition_in_ontology() {
     let id: AxiomId = 42;

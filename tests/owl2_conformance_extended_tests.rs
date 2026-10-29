@@ -15,11 +15,11 @@
 //!   `#[ignore]` with an explicit comment referencing the workstream.
 //! - **Profile breadth**: EL/QL/RL/DL/Full accept/reject cases not covered by
 //!   the base suite (data-property restrictions per profile, role-chain/oneOf/
-//!   HasKey positions, illegal class+datatype punning → Full only).
+//!   `HasKey` positions, illegal class+datatype punning → Full only).
 //! - **Syntax round-trip**: Functional Syntax parse → serialize →
 //!   re-parse → structural axiom-set comparison (annotations, datatype
-//!   definitions, SWRL rules, negative assertions, SameIndividual /
-//!   DifferentIndividuals).
+//!   definitions, SWRL rules, negative assertions, `SameIndividual` /
+//!   `DifferentIndividuals`).
 
 use std::sync::{Arc, RwLock};
 
@@ -198,8 +198,7 @@ impl ConformanceExtRunner {
             .expect("Profile validation failed");
         assert!(
             !report.is_valid(),
-            "Expected {:?} to be rejected but ontology conformed",
-            profile
+            "Expected {profile:?} to be rejected but ontology conformed"
         );
     }
 
@@ -230,14 +229,14 @@ impl ConformanceExtRunner {
 /// produce a subsumption hierarchy the reasoner can query.
 #[test]
 fn test_rdf_turtle_subclass_entailment() {
-    let ttl = r#"
+    let ttl = r"
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix : <http://example.org/ont#> .
 
 :A a owl:Class ; rdfs:subClassOf :B .
 :B a owl:Class ; rdfs:subClassOf :C .
-"#;
+";
     let ontology = ConformanceExtRunner::parse_ttl(ttl);
     ConformanceExtRunner::expect_consistent(&ontology);
 
@@ -253,7 +252,7 @@ fn test_rdf_turtle_subclass_entailment() {
 /// entail instance membership through the reasoner.
 #[test]
 fn test_rdf_turtle_class_assertion_entailment() {
-    let ttl = r#"
+    let ttl = r"
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -262,7 +261,7 @@ fn test_rdf_turtle_class_assertion_entailment() {
 :Student rdf:type owl:Class ; rdfs:subClassOf :Person .
 :Person rdf:type owl:Class .
 :alice rdf:type :Student , owl:NamedIndividual .
-"#;
+";
     let ontology = ConformanceExtRunner::parse_ttl(ttl);
     ConformanceExtRunner::expect_consistent(&ontology);
 
@@ -281,7 +280,7 @@ fn test_rdf_turtle_class_assertion_entailment() {
 /// IGNORED: the Turtle parser does not yet translate `owl:equivalentClass`
 /// blank-node restrictions (`[owl:onProperty …; owl:someValuesFrom …]`) into
 /// `DataSomeValuesFrom` class expressions — it either errors ("Cannot resolve
-/// token LeftBracket") or emits `EquivalentClasses(A, owl:Class)`.  This is an
+/// token `LeftBracket`") or emits `EquivalentClasses(A, owl:Class)`.  This is an
 /// RDF→OWL mapping gap in the Turtle parser (not a reasoner gap); the test can
 /// be enabled once that mapping lands (part of the C1/format surface work, not
 /// the reasoner datatype workstream A4).
@@ -318,7 +317,7 @@ fn test_rdf_turtle_datatype_instance_entailment() {
 /// the reasoner derives the expected classification and instance entailments.
 #[test]
 fn test_rdf_turtle_consistent_dl_ontology() {
-    let ttl = r#"
+    let ttl = r"
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -333,7 +332,7 @@ fn test_rdf_turtle_consistent_dl_ontology() {
             rdfs:domain :Student ;
             rdfs:range :Course .
 :john rdf:type :Student , owl:NamedIndividual .
-"#;
+";
     let ontology = ConformanceExtRunner::parse_ttl(ttl);
     ConformanceExtRunner::expect_consistent(&ontology);
 
@@ -389,22 +388,22 @@ fn test_rdf_xml_subclass_entailment() {
 /// and in Turtle must be consistent and agree on the same subsumption.
 #[test]
 fn test_rdf_functional_cross_syntax_agreement() {
-    let fs = r#"
+    let fs = r"
 Prefix(:=<http://example.org/ont#>)
 Ontology(<http://example.org/ont>
   SubClassOf(:A :B)
   SubClassOf(:B :C)
   ClassAssertion(:A :i)
 )
-"#;
-    let ttl = r#"
+";
+    let ttl = r"
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix : <http://example.org/ont#> .
 :A rdfs:subClassOf :B .
 :B rdfs:subClassOf :C .
 :i rdf:type :A .
-"#;
+";
 
     let fs_ont = ConformanceExtRunner::parse_fs(fs);
     let ttl_ont = ConformanceExtRunner::parse_ttl(ttl);
@@ -520,7 +519,7 @@ Ontology(<http://example.org/test>
     );
 }
 
-/// DataHasValue converse — `A ≡ DataHasValue(P "x")` and `A(a)` should entail
+/// `DataHasValue` converse — `A ≡ DataHasValue(P "x")` and `A(a)` should entail
 /// `P(a, "x")`.  The general entailment path (`check_entailment`) answers
 /// `DataPropertyAssertion` semantically since workstream A7: the completed
 /// tableau materialises the `P`-edge to a `DataValue("x")` successor of `a` via
@@ -600,16 +599,16 @@ Ontology(<http://example.org/test>
 
 // ── OWL 2 EL ─────────────────────────────────────────────────────────────────
 
-/// EL: ReflexiveObjectProperty is permitted (falls in the EL allow-set).
+/// EL: `ReflexiveObjectProperty` is permitted (falls in the EL allow-set).
 #[test]
 fn test_el_accepts_reflexive_property() {
     ConformanceExtRunner::expect_profile_valid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   ReflexiveObjectProperty(:knows)
 )
-"#,
+",
         OWL2Profile::EL,
     );
 }
@@ -618,41 +617,41 @@ Ontology(<http://example.org/test>
 #[test]
 fn test_el_accepts_data_property_restriction() {
     ConformanceExtRunner::expect_profile_valid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
 Ontology(<http://example.org/test>
   SubClassOf(:A DataSomeValuesFrom(:age xsd:int))
 )
-"#,
+",
         OWL2Profile::EL,
     );
 }
 
-/// EL: ObjectHasSelf on a simple (named) property is permitted.
+/// EL: `ObjectHasSelf` on a simple (named) property is permitted.
 #[test]
 fn test_el_accepts_object_has_self_simple() {
     ConformanceExtRunner::expect_profile_valid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   SubClassOf(:Narcissist ObjectHasSelf(:likes))
 )
-"#,
+",
         OWL2Profile::EL,
     );
 }
 
-/// EL (B3): IrreflexiveObjectProperty is rejected by the EL validator.
+/// EL (B3): `IrreflexiveObjectProperty` is rejected by the EL validator.
 #[test]
 fn test_el_rejects_irreflexive_property() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   IrreflexiveObjectProperty(:r)
 )
-"#,
+",
         OWL2Profile::EL,
     );
 }
@@ -661,142 +660,142 @@ Ontology(<http://example.org/test>
 #[test]
 fn test_el_rejects_property_chain_in_restriction() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   SubClassOf(:A ObjectSomeValuesFrom(ObjectPropertyChain(:p :q) :B))
 )
-"#,
+",
         OWL2Profile::EL,
     );
 }
 
 // ── OWL 2 QL ─────────────────────────────────────────────────────────────────
 
-/// QL: disjunction (ObjectUnionOf) breadth is rejected.
+/// QL: disjunction (`ObjectUnionOf`) breadth is rejected.
 #[test]
 fn test_ql_rejects_union_breadth() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   SubClassOf(:A ObjectUnionOf(:B :C))
 )
-"#,
+",
         OWL2Profile::QL,
     );
 }
 
-/// QL: HasKey axioms are not permitted.
+/// QL: `HasKey` axioms are not permitted.
 #[test]
 fn test_ql_rejects_haskey() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   HasKey(:Person () (:ssn))
 )
-"#,
+",
         OWL2Profile::QL,
     );
 }
 
-/// QL: FunctionalObjectProperty is not permitted.
+/// QL: `FunctionalObjectProperty` is not permitted.
 #[test]
 fn test_ql_rejects_functional_property() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   FunctionalObjectProperty(:p)
 )
-"#,
+",
         OWL2Profile::QL,
     );
 }
 
-/// QL: ObjectHasSelf is not permitted.
+/// QL: `ObjectHasSelf` is not permitted.
 #[test]
 fn test_ql_rejects_object_has_self() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   SubClassOf(:A ObjectHasSelf(:r))
 )
-"#,
+",
         OWL2Profile::QL,
     );
 }
 
 // ── OWL 2 RL ─────────────────────────────────────────────────────────────────
 
-/// RL (B3): HasKey is rejected by the RL validator (now enforced).
+/// RL (B3): `HasKey` is rejected by the RL validator (now enforced).
 #[test]
 fn test_rl_rejects_haskey() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   HasKey(:Person () (:ssn))
 )
-"#,
+",
         OWL2Profile::RL,
     );
 }
 
-/// RL: ObjectOneOf (nominals) is not permitted.
+/// RL: `ObjectOneOf` (nominals) is not permitted.
 #[test]
 fn test_rl_rejects_one_of() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   SubClassOf(:A ObjectOneOf(:i))
 )
-"#,
+",
         OWL2Profile::RL,
     );
 }
 
-/// RL: ObjectHasSelf is not permitted.
+/// RL: `ObjectHasSelf` is not permitted.
 #[test]
 fn test_rl_rejects_has_self() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   SubClassOf(:A ObjectHasSelf(:r))
 )
-"#,
+",
         OWL2Profile::RL,
     );
 }
 
-/// RL: ObjectComplementOf is not permitted.
+/// RL: `ObjectComplementOf` is not permitted.
 #[test]
 fn test_rl_rejects_complement() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   SubClassOf(:A ObjectComplementOf(:B))
 )
-"#,
+",
         OWL2Profile::RL,
     );
 }
 
-/// RL: DisjointUnion is not permitted.
+/// RL: `DisjointUnion` is not permitted.
 #[test]
 fn test_rl_rejects_disjoint_union() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   DisjointUnion(:A :B :C)
 )
-"#,
+",
         OWL2Profile::RL,
     );
 }
@@ -808,14 +807,14 @@ Ontology(<http://example.org/test>
 #[test]
 fn test_dl_rejects_class_datatype_punning() {
     ConformanceExtRunner::expect_profile_invalid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   Declaration(Class(:x))
   Declaration(Datatype(:x))
   SubClassOf(:x :B)
 )
-"#,
+",
         OWL2Profile::DL,
     );
 }
@@ -825,14 +824,14 @@ Ontology(<http://example.org/test>
 #[test]
 fn test_full_accepts_class_datatype_punning() {
     ConformanceExtRunner::expect_profile_valid_fs(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   Declaration(Class(:x))
   Declaration(Datatype(:x))
   SubClassOf(:x :B)
 )
-"#,
+",
         OWL2Profile::Full,
     );
 }
@@ -857,30 +856,30 @@ Ontology(<http://example.org/test>
     );
 }
 
-/// Round-trip preserves DatatypeDefinition axioms.
+/// Round-trip preserves `DatatypeDefinition` axioms.
 #[test]
 fn test_roundtrip_datatype_definition() {
     ConformanceExtRunner::assert_functional_roundtrip(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
 Ontology(<http://example.org/test>
   DatatypeDefinition(:MyDatatype xsd:int)
 )
-"#,
+",
     );
 }
 
-/// Round-trip preserves SWRL rules (DLSafeRule) in Functional Syntax.
+/// Round-trip preserves SWRL rules (`DLSafeRule`) in Functional Syntax.
 #[test]
 fn test_roundtrip_swrl_rule() {
     ConformanceExtRunner::assert_functional_roundtrip(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   DLSafeRule(Body(ClassAtom(:Person ?x)) Head(ClassAtom(:Adult ?x)))
 )
-"#,
+",
     );
 }
 
@@ -899,17 +898,17 @@ Ontology(<http://example.org/test>
     );
 }
 
-/// Round-trip preserves SameIndividual and DifferentIndividuals axioms.
+/// Round-trip preserves `SameIndividual` and `DifferentIndividuals` axioms.
 #[test]
 fn test_roundtrip_same_different_individuals() {
     ConformanceExtRunner::assert_functional_roundtrip(
-        r#"
+        r"
 Prefix(:=<http://example.org/test#>)
 Ontology(<http://example.org/test>
   SameIndividual(:a :b)
   DifferentIndividuals(:c :d)
 )
-"#,
+",
     );
 }
 

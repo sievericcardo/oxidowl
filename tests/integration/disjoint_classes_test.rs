@@ -43,13 +43,13 @@ async fn test_disjoint_classes_greenhouse_integration() -> Result<()> {
     for (iri, class) in ontology.classes().iter().take(3) {
         let class_expr = ClassExpression::Class(class.clone());
         let is_satisfiable = reasoner.is_class_satisfiable(&class_expr)?;
-        let name = iri.as_str().split('#').last().unwrap_or("unknown");
+        let name = iri.as_str().split('#').next_back().unwrap_or("unknown");
         println!(
             "   Class {} is satisfiable: {}",
             name,
             if is_satisfiable { "YES" } else { "NO" }
         );
-        assert!(is_satisfiable, "Class {} should be satisfiable", name);
+        assert!(is_satisfiable, "Class {name} should be satisfiable");
     }
 
     // Test 4: Test disjoint class reasoning
@@ -128,8 +128,16 @@ fn test_disjoint_class_reasoning(reasoner: &mut Reasoner, ontology: &Ontology) -
 
         println!(
             "   Testing intersection of {} and {}",
-            class1_iri.as_str().split('#').last().unwrap_or("class1"),
-            class2_iri.as_str().split('#').last().unwrap_or("class2")
+            class1_iri
+                .as_str()
+                .split('#')
+                .next_back()
+                .unwrap_or("class1"),
+            class2_iri
+                .as_str()
+                .split('#')
+                .next_back()
+                .unwrap_or("class2")
         );
 
         // For now, just test individual class satisfiability since
@@ -143,12 +151,20 @@ fn test_disjoint_class_reasoning(reasoner: &mut Reasoner, ontology: &Ontology) -
 
         println!(
             "     {} is satisfiable: {}",
-            class1_iri.as_str().split('#').last().unwrap_or("class1"),
+            class1_iri
+                .as_str()
+                .split('#')
+                .next_back()
+                .unwrap_or("class1"),
             is_sat1
         );
         println!(
             "     {} is satisfiable: {}",
-            class2_iri.as_str().split('#').last().unwrap_or("class2"),
+            class2_iri
+                .as_str()
+                .split('#')
+                .next_back()
+                .unwrap_or("class2"),
             is_sat2
         );
 
@@ -156,12 +172,20 @@ fn test_disjoint_class_reasoning(reasoner: &mut Reasoner, ontology: &Ontology) -
         assert!(
             is_sat1,
             "Individual class {} should be satisfiable",
-            class1_iri.as_str().split('#').last().unwrap_or("class1")
+            class1_iri
+                .as_str()
+                .split('#')
+                .next_back()
+                .unwrap_or("class1")
         );
         assert!(
             is_sat2,
             "Individual class {} should be satisfiable",
-            class2_iri.as_str().split('#').last().unwrap_or("class2")
+            class2_iri
+                .as_str()
+                .split('#')
+                .next_back()
+                .unwrap_or("class2")
         );
     }
 
@@ -181,7 +205,7 @@ fn test_health_state_disjointness(reasoner: &mut Reasoner, ontology: &Ontology) 
         .filter(|(iri, _class)| {
             iri.as_str()
                 .split('#')
-                .last()
+                .next_back()
                 .unwrap_or("")
                 .contains("Health")
         })
@@ -200,28 +224,25 @@ fn test_health_state_disjointness(reasoner: &mut Reasoner, ontology: &Ontology) 
                 ]);
 
                 // Implement complex class expression satisfiability testing
-                let name1 = iri1.as_str().split('#').last().unwrap_or("unknown");
-                let name2 = iri2.as_str().split('#').last().unwrap_or("unknown");
+                let name1 = iri1.as_str().split('#').next_back().unwrap_or("unknown");
+                let name2 = iri2.as_str().split('#').next_back().unwrap_or("unknown");
 
                 // Test satisfiability of the intersection
-                match test_intersection_satisfiability(&reasoner, &intersection) {
+                match test_intersection_satisfiability(reasoner, &intersection) {
                     Ok(is_satisfiable) => {
                         if is_satisfiable {
                             println!(
-                                "   WARNING: Intersection of {} and {} is satisfiable (classes may not be truly disjoint)",
-                                name1, name2
+                                "   WARNING: Intersection of {name1} and {name2} is satisfiable (classes may not be truly disjoint)"
                             );
                         } else {
                             println!(
-                                "   ✓ Intersection of {} and {} is unsatisfiable (properly disjoint)",
-                                name1, name2
+                                "   ✓ Intersection of {name1} and {name2} is unsatisfiable (properly disjoint)"
                             );
                         }
                     }
                     Err(e) => {
                         println!(
-                            "   Error testing intersection satisfiability for {} and {}: {}",
-                            name1, name2, e
+                            "   Error testing intersection satisfiability for {name1} and {name2}: {e}"
                         );
 
                         // Fallback: test individual class satisfiability
@@ -234,15 +255,13 @@ fn test_health_state_disjointness(reasoner: &mut Reasoner, ontology: &Ontology) 
                             (Ok(sat1), Ok(sat2)) => {
                                 if sat1 && sat2 {
                                     println!(
-                                        "   {} and {} are both satisfiable individually",
-                                        name1, name2
+                                        "   {name1} and {name2} are both satisfiable individually"
                                     );
                                 }
                             }
                             _ => {
                                 println!(
-                                    "   Error testing individual class satisfiability for {} and {}",
-                                    name1, name2
+                                    "   Error testing individual class satisfiability for {name1} and {name2}"
                                 );
                             }
                         }
@@ -315,7 +334,7 @@ fn test_pump_disjointness(_reasoner: &mut Reasoner, ontology: &Ontology) -> Resu
     let pump_classes: Vec<_> = all_classes
         .iter()
         .filter(|(iri, _class)| {
-            let fragment = iri.as_str().split('#').last().unwrap_or("");
+            let fragment = iri.as_str().split('#').next_back().unwrap_or("");
             fragment == "Pump"
                 || fragment == "Maintenance"
                 || fragment == "Operational"
@@ -339,12 +358,9 @@ fn test_pump_disjointness(_reasoner: &mut Reasoner, ontology: &Ontology) -> Resu
                 ]);
 
                 // Skip complex expression testing for now - API doesn't support it
-                let name1 = iri1.as_str().split('#').last().unwrap_or("unknown");
-                let name2 = iri2.as_str().split('#').last().unwrap_or("unknown");
-                println!(
-                    "   Skipping intersection test for {} and {} (API limitation)",
-                    name1, name2
-                );
+                let name1 = iri1.as_str().split('#').next_back().unwrap_or("unknown");
+                let name2 = iri2.as_str().split('#').next_back().unwrap_or("unknown");
+                println!("   Skipping intersection test for {name1} and {name2} (API limitation)");
             }
         }
     }

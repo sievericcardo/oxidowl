@@ -213,8 +213,7 @@ fn test_swrl_alternate_namespace() {
     // rule must survive the roundtrip.
     assert_eq!(
         rule_count, 1,
-        "Exactly 1 SWRL rule expected after roundtrip, found {}",
-        rule_count
+        "Exactly 1 SWRL rule expected after roundtrip, found {rule_count}"
     );
 }
 
@@ -326,13 +325,12 @@ fn test_swrl_data_property_atom() {
     ont.set_iri(IRI::new("http://ex.org/dataprop"));
     ont.add_axiom(axiom);
 
-    if let Axiom::Rule(ra) = &ont.axioms()[0] {
-        if let SWRLAtom::DataPropertyAtom {
+    if let Axiom::Rule(ra) = &ont.axioms()[0]
+        && let SWRLAtom::DataPropertyAtom {
             second_argument, ..
         } = &ra.rule.body[0]
-        {
-            assert!(matches!(second_argument, SWRLDArgument::Literal(_)));
-        }
+    {
+        assert!(matches!(second_argument, SWRLDArgument::Literal(_)));
     }
 }
 
@@ -370,18 +368,17 @@ fn test_swrl_builtin_atom() {
     ont.set_iri(IRI::new("http://ex.org/builtin"));
     ont.add_axiom(axiom);
 
-    if let Axiom::Rule(ra) = &ont.axioms()[0] {
-        if let SWRLAtom::BuiltInAtom {
+    if let Axiom::Rule(ra) = &ont.axioms()[0]
+        && let SWRLAtom::BuiltInAtom {
             predicate,
             arguments,
         } = &ra.rule.body[0]
-        {
-            assert_eq!(predicate.to_string(), "http://www.w3.org/2003/11/swrlb#add");
-            assert_eq!(arguments.len(), 3);
-            assert!(matches!(arguments[0], SWRLDArgument::Variable(_)));
-            assert!(matches!(arguments[1], SWRLDArgument::Literal(_)));
-            assert!(matches!(arguments[2], SWRLDArgument::Variable(_)));
-        }
+    {
+        assert_eq!(predicate.to_string(), "http://www.w3.org/2003/11/swrlb#add");
+        assert_eq!(arguments.len(), 3);
+        assert!(matches!(arguments[0], SWRLDArgument::Variable(_)));
+        assert!(matches!(arguments[1], SWRLDArgument::Literal(_)));
+        assert!(matches!(arguments[2], SWRLDArgument::Variable(_)));
     }
 }
 

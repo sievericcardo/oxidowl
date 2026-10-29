@@ -63,9 +63,9 @@ fn test_ore_batch_loading() {
 
     let mut entries: Vec<_> = fs::read_dir(dir)
         .expect("ORE test dir should exist")
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .map(|e| e.path())
-        .filter(|p| p.extension().map_or(false, |e| e == "owl"))
+        .filter(|p| p.extension().is_some_and(|e| e == "owl"))
         .collect();
     entries.sort();
     let entries = &entries[..entries.len().min(20)];
@@ -75,7 +75,7 @@ fn test_ore_batch_loading() {
         match parse_file_auto(path_str) {
             Ok(onto) => {
                 assert!(
-                    onto.axioms.len() > 0,
+                    !onto.axioms.is_empty(),
                     "{} loaded but has 0 axioms",
                     path.file_name().unwrap().to_str().unwrap()
                 );
@@ -89,12 +89,11 @@ fn test_ore_batch_loading() {
         }
     }
 
-    if failed > 0 {
-        panic!(
-            "{}/{} ORE files failed to load:\n{}",
-            failed,
-            passed + failed,
-            failures.join("\n")
-        );
-    }
+    assert!(
+        failed == 0,
+        "{}/{} ORE files failed to load:\n{}",
+        failed,
+        passed + failed,
+        failures.join("\n")
+    );
 }

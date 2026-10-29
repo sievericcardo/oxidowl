@@ -2051,7 +2051,8 @@ mod tests {
             RdfTerm::iri("http://example.org/bob").unwrap(),
         );
 
-        s.update_from_triples(&[triple.clone()]).unwrap();
+        s.update_from_triples(std::slice::from_ref(&triple))
+            .unwrap();
 
         let count = s
             .execute_select("SELECT * WHERE { ?s ?p ?o }")
@@ -2089,7 +2090,8 @@ mod tests {
             RdfTerm::iri("http://example.org/knows").unwrap(),
             RdfTerm::iri("http://example.org/bob").unwrap(),
         );
-        s.update_from_triples(&[triple.clone()]).unwrap();
+        s.update_from_triples(std::slice::from_ref(&triple))
+            .unwrap();
         assert!(s.contains_triple(&triple).unwrap());
 
         let other = OxidowlTriple::new(
@@ -2124,11 +2126,11 @@ mod tests {
     #[test]
     fn test_load_turtle() {
         let mut s = SparqlStore::new().unwrap();
-        let ttl = r#"
+        let ttl = r"
             @prefix ex: <http://example.org/> .
             ex:Alice ex:knows ex:Bob .
             ex:Bob ex:knows ex:Charlie .
-        "#;
+        ";
         s.load_turtle(ttl).unwrap();
         assert_eq!(s.len().unwrap(), 2);
     }

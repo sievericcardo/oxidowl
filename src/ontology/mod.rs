@@ -1779,7 +1779,8 @@ impl Ontology {
 
         // Use horned-owl's RDF parser for all file types (most compatible)
         let result = horned_owl::io::rdf::reader::read::<RcStr, RcAnnotatedComponent, _, _>(
-            &mut reader, config,
+            &mut reader,
+            config,
         )
         .map_err(|e| Error::ontology_parsing(format!("Horned-owl parsing error: {e}")))?;
 

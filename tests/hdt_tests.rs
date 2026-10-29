@@ -8,7 +8,7 @@
 //!    `<http://purl.org/HDT/hdt#HDTv1>`, NUL-terminated, CRC16-ARC).
 //! 2. **Write → read → `Ontology` axiom equality** for a rich ontology
 //!    (declarations, subclass, class/object/data/annotation assertions,
-//!    EquivalentClasses, a blank-node restriction, literals of several
+//!    `EquivalentClasses`, a blank-node restriction, literals of several
 //!    datatypes incl. escaped characters, ontology IRI + version IRI +
 //!    ontology-level annotation).
 //! 3. **Real upstream fixture** (`tests/fixtures/snikmeta.hdt`, produced by

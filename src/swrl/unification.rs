@@ -444,13 +444,13 @@ mod tests {
 
     fn make_variable(name: &str) -> SWRLVariable {
         SWRLVariable {
-            iri: IRI::new(&format!("http://example.org/var/{}", name)),
+            iri: IRI::new(&format!("http://example.org/var/{name}")),
         }
     }
 
     fn make_individual(name: &str) -> Individual {
         Individual::Named(crate::ontology::NamedIndividual {
-            iri: IRI::new(&format!("http://example.org/{}", name)),
+            iri: IRI::new(&format!("http://example.org/{name}")),
         })
     }
 

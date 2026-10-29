@@ -14,11 +14,7 @@ mod tests {
 
         // Empty ontology should validate successfully
         let result = validator.validate();
-        assert!(
-            result.is_ok(),
-            "Empty ontology should validate: {:?}",
-            result
-        );
+        assert!(result.is_ok(), "Empty ontology should validate: {result:?}");
 
         println!("✓ OWL 2 DL Validator test passed");
     }

@@ -257,7 +257,7 @@ impl RdfXmlParser {
                     for attr in e.attributes().flatten() {
                         let key = attr.key.as_ref().to_string();
                         let value = attr.value.to_string();
-                        current_attributes.insert(key.to_string(), value.to_string());
+                        current_attributes.insert(key.clone(), value.clone());
                     }
 
                     // Check for owl:Class elements
@@ -285,7 +285,7 @@ impl RdfXmlParser {
                     for attr in e.attributes().flatten() {
                         let key = attr.key.as_ref().to_string();
                         let value = attr.value.to_string();
-                        current_attributes.insert(key.to_string(), value.to_string());
+                        current_attributes.insert(key.clone(), value.clone());
                     }
 
                     // Handle self-closing owl:Class elements
@@ -1430,11 +1430,11 @@ mod tests {
 
     #[test]
     fn test_basic_rdf_xml_parsing() {
-        let content = r##"<?xml version="1.0"?>
+        let content = r#"<?xml version="1.0"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
          xmlns:owl="http://www.w3.org/2002/07/owl#">
   <owl:Class rdf:about="http://example.org/Person"/>
-</rdf:RDF>"##;
+</rdf:RDF>"#;
 
         let parser = RdfXmlParser::new();
         let result = parser.parse_string(content);

@@ -2,7 +2,6 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::*;
 use oxidowl::ELValidator;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
@@ -15,30 +14,21 @@ fn validate_el(axioms: &[Axiom]) -> bool {
     let df = DF::new();
     let onto = df.build_ontology(axioms.to_vec());
     let validator = ELValidator::new();
-    validator
-        .validate(&onto)
-        .map(|r| r.is_valid())
-        .unwrap_or(false)
+    validator.validate(&onto).is_ok_and(|r| r.is_valid())
 }
 
 fn validate_ql(axioms: &[Axiom]) -> bool {
     let df = DF::new();
     let onto = df.build_ontology(axioms.to_vec());
     let validator = QLValidator::new();
-    validator
-        .validate(&onto)
-        .map(|r| r.is_valid())
-        .unwrap_or(false)
+    validator.validate(&onto).is_ok_and(|r| r.is_valid())
 }
 
 fn validate_rl(axioms: &[Axiom]) -> bool {
     let df = DF::new();
     let onto = df.build_ontology(axioms.to_vec());
     let validator = RLValidator::new();
-    validator
-        .validate(&onto)
-        .map(|r| r.is_valid())
-        .unwrap_or(false)
+    validator.validate(&onto).is_ok_and(|r| r.is_valid())
 }
 
 /// Simple ontology that should pass all profiles.

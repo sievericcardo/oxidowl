@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates how to:
 //! 1. Load an ontology
-//! 2. Start a web server for remote access (OWLlink, SPARQL, REST API)
+//! 2. Start a web server for remote access (`OWLlink`, SPARQL, REST API)
 //! 3. Configure server ports and bind addresses
 //!
 //! Usage:
@@ -34,11 +34,11 @@ struct Args {
     #[arg(short, long, default_value = "127.0.0.1")]
     bind: String,
 
-    /// Enable OWLlink server
+    /// Enable `OWLlink` server
     #[arg(long)]
     owllink: bool,
 
-    /// OWLlink port (default: 8081)
+    /// `OWLlink` port (default: 8081)
     #[arg(long, default_value = "8081")]
     owllink_port: u16,
 }

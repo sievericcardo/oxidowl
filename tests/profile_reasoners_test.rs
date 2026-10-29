@@ -69,7 +69,7 @@ fn test_el_reasoner_concurrent() -> Result<()> {
 
     // Create multiple class hierarchy
     for i in 0..10 {
-        let class_a = Class::new(IRI::new(&format!("http://example.org/Class{}", i)));
+        let class_a = Class::new(IRI::new(&format!("http://example.org/Class{i}")));
         let class_b = Class::new(IRI::new(&format!("http://example.org/Class{}", i + 1)));
 
         ontology.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
@@ -345,7 +345,7 @@ fn nominal_ontology() -> Ontology {
 
 /// EL-conforming ontology whose `DataSomeValuesFrom` the `ELReasoner`
 /// normal form cannot translate (so `ELReasoner::initialize` fails).  The
-/// ClassAssertion keeps `el_covered_by_absorption` false, i.e. it bypasses the
+/// `ClassAssertion` keeps `el_covered_by_absorption` false, i.e. it bypasses the
 /// A8 sub-path and forces the EL fast path — which must fall back instead of
 /// propagating the error.
 fn el_but_untranslatable_ontology() -> Ontology {

@@ -15,7 +15,7 @@
 //! 6. `bugfix_sub_data_property_propagation` — P ⊑ Q + P(a,"x") ⇒ Q(a,"x").
 //! 7. `bugfix_disjoint_union_instance` — DisjointUnion(A,[B,C]) + B(x) ⇒ A(x).
 //! 8. `bugfix_object_one_of_instance` — A ≡ ≥1 R.{b}, A(a) ⇒ R(a,b) / a ∈ ∃R.{b}.
-//! 9. `bugfix_el_accepts_disjoint_classes` — OWL 2 EL permits DisjointClasses.
+//! 9. `bugfix_el_accepts_disjoint_classes` — OWL 2 EL permits `DisjointClasses`.
 //! 10. `bugfix_ql_rejects_class_datatype_punning` — QL rejects class↔datatype punning.
 //! 11. `bugfix_rl_rejects_class_datatype_punning` — RL rejects class↔datatype punning.
 
@@ -77,10 +77,10 @@ fn assert_entailed(r: &dyn OWLReasoner, ax: Axiom, msg: &str) {
 #[test]
 fn bugfix_union_soundness() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let a = df.named(&format!("{EX}a"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let a = df.named(format!("{EX}a"));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(
             a_cls.clone(),
@@ -111,11 +111,11 @@ fn bugfix_union_soundness() -> Result<()> {
 #[test]
 fn bugfix_inverse_bidirectional() -> Result<()> {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
-    let x = df.named(&format!("{EX}x"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
+    let x = df.named(format!("{EX}x"));
 
     // Direction 1: R(a,b) must yield S(b,a).
     let ont1 = df.build_ontology(vec![
@@ -164,12 +164,12 @@ fn bugfix_inverse_bidirectional() -> Result<()> {
 #[test]
 fn bugfix_asymmetry_self_loop() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let r = df.obj_prop(&format!("{EX}R"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let r = df.obj_prop(format!("{EX}R"));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.has_self(r.clone())),
         df.asymmetric_object_property(r),
-        df.class_assertion(a_cls, df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -188,9 +188,9 @@ fn bugfix_asymmetry_self_loop() -> Result<()> {
 #[test]
 fn bugfix_data_property_domain() -> Result<()> {
     let df = DF::new();
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let dp = df.data_prop(&format!("{EX}dp"));
-    let a = df.named(&format!("{EX}a"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let dp = df.data_prop(format!("{EX}dp"));
+    let a = df.named(format!("{EX}a"));
     let mut ont = df.build_ontology(vec![
         df.data_property_domain(dp.clone(), c_cls.clone()),
         df.data_property_assertion(
@@ -216,8 +216,8 @@ fn bugfix_data_property_domain() -> Result<()> {
 #[test]
 fn bugfix_data_property_range() -> Result<()> {
     let df = DF::new();
-    let dp = df.data_prop(&format!("{EX}dp"));
-    let a = df.named(&format!("{EX}a"));
+    let dp = df.data_prop(format!("{EX}dp"));
+    let a = df.named(format!("{EX}a"));
 
     let mut ok_ont = df.build_ontology(vec![
         df.data_property_range(dp.clone(), df.data_range_integer()),
@@ -254,9 +254,9 @@ fn bugfix_data_property_range() -> Result<()> {
 #[test]
 fn bugfix_sub_data_property_propagation() -> Result<()> {
     let df = DF::new();
-    let p = df.data_prop(&format!("{EX}P"));
-    let q = df.data_prop(&format!("{EX}Q"));
-    let a = df.named(&format!("{EX}a"));
+    let p = df.data_prop(format!("{EX}P"));
+    let q = df.data_prop(format!("{EX}Q"));
+    let a = df.named(format!("{EX}a"));
     let lit = df.typed_literal("x", &format!("{XSD}string"));
 
     let onto = df.build_ontology(vec![
@@ -280,10 +280,10 @@ fn bugfix_sub_data_property_propagation() -> Result<()> {
 #[test]
 fn bugfix_disjoint_union_instance() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let x = df.named(&format!("{EX}x"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let x = df.named(format!("{EX}x"));
     let mut ont = df.build_ontology(vec![
         df.disjoint_union(a_cls.clone(), vec![b_cls.clone(), c_cls.clone()]),
         df.class_assertion(b_cls.clone(), x.clone()),
@@ -313,10 +313,10 @@ fn bugfix_disjoint_union_instance() -> Result<()> {
 #[test]
 fn bugfix_object_one_of_instance() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_ind = df.named(&format!("{EX}b"));
-    let rop = df.obj_prop(&format!("{EX}R"));
-    let a = df.named(&format!("{EX}a"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_ind = df.named(format!("{EX}b"));
+    let rop = df.obj_prop(format!("{EX}R"));
+    let a = df.named(format!("{EX}a"));
     let some_r_b = df.some_values_from(rop.clone(), df.one_of(vec![b_ind.clone()]));
 
     let mut ont = df.build_ontology(vec![
@@ -350,8 +350,8 @@ fn bugfix_object_one_of_instance() -> Result<()> {
 #[test]
 fn bugfix_el_accepts_disjoint_classes() {
     let df = DF::new();
-    let a = df.class_ce(&format!("{EX}A"));
-    let b = df.class_ce(&format!("{EX}B"));
+    let a = df.class_ce(format!("{EX}A"));
+    let b = df.class_ce(format!("{EX}B"));
     let onto = df.build_ontology(vec![df.disjoint_classes(vec![a, b])]);
 
     let validator = ELValidator::new();

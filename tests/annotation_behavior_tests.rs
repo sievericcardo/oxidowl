@@ -472,7 +472,7 @@ fn test_punning_annotation() {
         matches!(a, Axiom::Declaration(d) if matches!(&d.entity, Entity::Class(iri) if iri == &punned_iri))
     }).collect();
     assert!(
-        class_decls.len() >= 1,
+        !class_decls.is_empty(),
         "Should have at least 1 Class declaration for punned IRI, got {}",
         class_decls.len()
     );
@@ -481,7 +481,7 @@ fn test_punning_annotation() {
         matches!(a, Axiom::Declaration(d) if matches!(&d.entity, Entity::AnnotationProperty(iri) if iri == &punned_iri))
     }).collect();
     assert!(
-        ann_prop_decls.len() >= 1,
+        !ann_prop_decls.is_empty(),
         "Should have at least 1 AnnotationProperty declaration for punned IRI, got {}",
         ann_prop_decls.len()
     );
@@ -520,8 +520,8 @@ fn test_punning_annotation() {
 #[test]
 fn test_ignore_annotations_semantics() {
     let df = DF::new();
-    let a = df.class_ce(&format!("{}A", ns()));
-    let b = df.class_ce(&format!("{}B", ns()));
+    let a = df.class_ce(format!("{}A", ns()));
+    let b = df.class_ce(format!("{}B", ns()));
 
     let ax_no_annotations = Axiom::SubClassOf(SubClassOfAxiom {
         id: 1,
@@ -714,7 +714,7 @@ fn test_load_annotation_axioms() {
 fn test_ontology_annotations() {
     let df = DF::new();
 
-    let mut ontology = df.new_ontology_with_iri(&format!("{}AnnotatedOntology", ns()));
+    let mut ontology = df.new_ontology_with_iri(format!("{}AnnotatedOntology", ns()));
 
     let version_info = Annotation::new(
         df.annotation_property("http://www.w3.org/2002/07/owl#versionInfo"),
@@ -777,8 +777,8 @@ fn test_ontology_annotations() {
 #[test]
 fn test_sub_annotation_property() {
     let df = DF::new();
-    let sub_prop = df.annotation_property(&format!("{}subLabel", ns()));
-    let super_prop = df.annotation_property(&format!("{}superLabel", ns()));
+    let sub_prop = df.annotation_property(format!("{}subLabel", ns()));
+    let super_prop = df.annotation_property(format!("{}superLabel", ns()));
 
     let axiom = df.sub_annotation_property_of(sub_prop.clone(), super_prop.clone());
 

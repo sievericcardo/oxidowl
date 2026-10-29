@@ -2,7 +2,6 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::*;
 use oxidowl::config::{PerformanceFeature, ReasoningFeature};
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
@@ -31,12 +30,12 @@ fn test_iri(local: &str) -> String {
 // 2.14 DL Expressivity Tests
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// Ontology with just classes and SubClassOf should produce AL expressivity.
+/// Ontology with just classes and `SubClassOf` should produce AL expressivity.
 #[test]
 fn test_expressivity_al_basic() {
     let df = DF::new();
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
     let ont = df.build_ontology(vec![df.sub_class_of(a.clone(), b.clone())]);
 
     let checker = DLExpressivityChecker;
@@ -59,9 +58,9 @@ fn test_expressivity_al_basic() {
 #[test]
 fn test_expressivity_al_with_complement() {
     let df = DF::new();
-    let a = df.class_ce(&ex("A"));
+    let a = df.class_ce(ex("A"));
     let not_a = df.complement_of(a.clone());
-    let b = df.class_ce(&ex("B"));
+    let b = df.class_ce(ex("B"));
     let ont = df.build_ontology(vec![df.sub_class_of(not_a, b)]);
 
     let checker = DLExpressivityChecker;
@@ -83,10 +82,10 @@ fn test_expressivity_al_with_complement() {
 #[test]
 fn test_expressivity_alc_with_role() {
     let df = DF::new();
-    let a = df.class_ce(&ex("A"));
-    let r = df.obj_prop(&ex("r"));
+    let a = df.class_ce(ex("A"));
+    let r = df.obj_prop(ex("r"));
     let some_r_a = df.some_values_from(r, a);
-    let b = df.class_ce(&ex("B"));
+    let b = df.class_ce(ex("B"));
     let ont = df.build_ontology(vec![df.sub_class_of(some_r_a, b)]);
 
     let checker = DLExpressivityChecker;
@@ -104,10 +103,10 @@ fn test_expressivity_alc_with_role() {
 #[test]
 fn test_expressivity_alc_with_union() {
     let df = DF::new();
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
     let union_ab = df.union_of(vec![a.clone(), b.clone()]);
-    let c = df.class_ce(&ex("C"));
+    let c = df.class_ce(ex("C"));
     let ont = df.build_ontology(vec![df.sub_class_of(union_ab, c)]);
 
     let checker = DLExpressivityChecker;
@@ -124,9 +123,9 @@ fn test_expressivity_alc_with_union() {
 #[test]
 fn test_expressivity_with_transitive() {
     let df = DF::new();
-    let r = df.obj_prop(&ex("r"));
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
+    let r = df.obj_prop(ex("r"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
     let ont = df.build_ontology(vec![
         df.sub_class_of(a, b),
         df.transitive_object_property(r),
@@ -143,12 +142,12 @@ fn test_expressivity_with_transitive() {
     );
 }
 
-/// Adding ObjectOneOf (nominals) should add O.
+/// Adding `ObjectOneOf` (nominals) should add O.
 #[test]
 fn test_expressivity_with_nominals() {
     let df = DF::new();
-    let i = df.named(&ex("ind"));
-    let a = df.class_ce(&ex("A"));
+    let i = df.named(ex("ind"));
+    let a = df.class_ce(ex("A"));
     let one_of = df.one_of(vec![i]);
     let ont = df.build_ontology(vec![df.sub_class_of(one_of, a)]);
 
@@ -167,10 +166,10 @@ fn test_expressivity_with_nominals() {
 #[test]
 fn test_expressivity_with_inverse() {
     let df = DF::new();
-    let p1 = df.obj_prop(&ex("p1"));
-    let p2 = df.obj_prop(&ex("p2"));
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
+    let p1 = df.obj_prop(ex("p1"));
+    let p2 = df.obj_prop(ex("p2"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
     let ont = df.build_ontology(vec![
         df.sub_class_of(a, b),
         df.inverse_object_properties(p1, p2),
@@ -191,9 +190,9 @@ fn test_expressivity_with_inverse() {
 #[test]
 fn test_expressivity_with_functional() {
     let df = DF::new();
-    let r = df.obj_prop(&ex("r"));
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
+    let r = df.obj_prop(ex("r"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
     let ont = df.build_ontology(vec![
         df.sub_class_of(a, b),
         df.functional_object_property(r),
@@ -217,9 +216,9 @@ fn test_expressivity_with_functional() {
 #[test]
 fn test_expressivity_with_cardinality() {
     let df = DF::new();
-    let r = df.obj_prop(&ex("r"));
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
+    let r = df.obj_prop(ex("r"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
     let min_card = df.min_cardinality(2, r, a.clone());
     let ont = df.build_ontology(vec![df.sub_class_of(b, min_card)]);
 
@@ -242,10 +241,10 @@ fn test_expressivity_with_cardinality() {
 #[test]
 fn test_expressivity_with_property_chain() {
     let df = DF::new();
-    let p1 = df.obj_prop(&ex("p1"));
-    let p2 = df.obj_prop(&ex("p2"));
+    let p1 = df.obj_prop(ex("p1"));
+    let p2 = df.obj_prop(ex("p2"));
     let chain = ObjectPropertyExpression::PropertyChain(vec![p1, p2]);
-    let super_p = df.obj_prop(&ex("super"));
+    let super_p = df.obj_prop(ex("super"));
     let ont = df.build_ontology(vec![df.sub_object_property_of(chain, super_p)]);
 
     let checker = DLExpressivityChecker;
@@ -261,14 +260,14 @@ fn test_expressivity_with_property_chain() {
 #[test]
 fn test_expressivity_full_sroiq() {
     let df = DF::new();
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
-    let c = df.class_ce(&ex("C"));
-    let r = df.obj_prop(&ex("r"));
-    let s = df.obj_prop(&ex("s"));
-    let t = df.obj_prop(&ex("t"));
-    let i = df.named(&ex("ind"));
-    let j = df.named(&ex("ind2"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
+    let c = df.class_ce(ex("C"));
+    let r = df.obj_prop(ex("r"));
+    let s = df.obj_prop(ex("s"));
+    let t = df.obj_prop(ex("t"));
+    let i = df.named(ex("ind"));
+    let j = df.named(ex("ind2"));
 
     let chain = ObjectPropertyExpression::PropertyChain(vec![r.clone(), s.clone()]);
     let not_a = df.complement_of(a.clone());
@@ -420,7 +419,7 @@ fn test_performance_config() {
 // 2.14 ShortForm Provider Tests
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// Test SimpleShortFormProvider entity-to-string mapping.
+/// Test `SimpleShortFormProvider` entity-to-string mapping.
 #[test]
 fn test_simple_shortform_provider() {
     let provider = SimpleShortFormProvider;
@@ -440,7 +439,7 @@ fn test_simple_shortform_provider() {
     assert_eq!(provider.get_short_form(&entity_nothing), "Nothing");
 }
 
-/// Test QNameShortFormProvider prefix resolution.
+/// Test `QNameShortFormProvider` prefix resolution.
 #[test]
 fn test_qname_shortform_provider() {
     let pm = PrefixManager::new();
@@ -505,11 +504,11 @@ impl OWLObjectVisitor for CountingVisitor {
 #[test]
 fn test_ontology_walker_basic() {
     let df = DF::new();
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
-    let c = df.class_ce(&ex("C"));
-    let r = df.obj_prop(&ex("r"));
-    let i = df.named(&ex("ind"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
+    let c = df.class_ce(ex("C"));
+    let r = df.obj_prop(ex("r"));
+    let i = df.named(ex("ind"));
     let some_r_b = df.some_values_from(r.clone(), b.clone());
 
     let ont = df.build_ontology(vec![
@@ -538,12 +537,12 @@ fn test_ontology_walker_basic() {
     assert!(visitor.ind_count >= 1, "Should visit at least 1 individual");
 }
 
-/// Walk using StructureWalker and verify current axiom access.
+/// Walk using `StructureWalker` and verify current axiom access.
 #[test]
 fn test_structure_walker_current_axiom() {
     let df = DF::new();
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
     let ont = df.build_ontology(vec![df.sub_class_of(a.clone(), b.clone())]);
 
     #[derive(Debug, Default)]
@@ -575,10 +574,10 @@ fn test_ontology_merger_basic() {
     use oxidowl::manager::OntologyManager;
 
     let df = DF::new();
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
-    let c = df.class_ce(&ex("C"));
-    let d = df.class_ce(&ex("D"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
+    let c = df.class_ce(ex("C"));
+    let d = df.class_ce(ex("D"));
 
     let ont1 = df.build_ontology_with_iri(
         "http://test.org/onto1",
@@ -631,8 +630,8 @@ fn test_concise_renderer_basic() {
         rendered.contains("and"),
         "Should contain 'and' for intersection: {rendered}"
     );
-    assert!(rendered.contains("A"), "Should contain short form for A");
-    assert!(rendered.contains("B"), "Should contain short form for B");
+    assert!(rendered.contains('A'), "Should contain short form for A");
+    assert!(rendered.contains('B'), "Should contain short form for B");
 
     let complement = ClassExpression::ObjectComplementOf(Box::new(ClassExpression::Class(Class {
         iri: IRI::new(&ex("C")),
@@ -644,7 +643,7 @@ fn test_concise_renderer_basic() {
     );
 
     let df = DF::new();
-    let ax = df.sub_class_of(df.class_ce(&ex("D")), df.class_ce(&ex("E")));
+    let ax = df.sub_class_of(df.class_ce(ex("D")), df.class_ce(ex("E")));
     let ax_rendered = renderer.render_axiom(&ax);
     assert!(
         ax_rendered.contains("SubClassOf"),
@@ -656,7 +655,7 @@ fn test_concise_renderer_basic() {
 // 2.14 NNF Converter Test
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// Create NNFConverter and verify basic functionality.
+/// Create `NNFConverter` and verify basic functionality.
 #[test]
 fn test_nnf_converter_creation() {
     let converter = NNFConverter;
@@ -673,7 +672,7 @@ fn test_nnf_converter_creation() {
     match &result2 {
         ClassExpression::Class(c) => {
             assert!(
-                c.iri.as_str().contains("A"),
+                c.iri.as_str().contains('A'),
                 "Double negation should unwrap to A"
             );
         }

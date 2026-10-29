@@ -12,13 +12,13 @@ fn validate(shapes: &str, data: &str) -> ShaclValidationReport {
     v.validate().expect("failed to validate")
 }
 
-const PREFIXES: &str = r#"
+const PREFIXES: &str = r"
     @prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
     @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
     @prefix sh:   <http://www.w3.org/ns/shacl#> .
     @prefix ex:   <http://example.org/> .
-"#;
+";
 
 fn with_prefixes(s: &str) -> String {
     format!("{PREFIXES}\n{s}")
@@ -29,14 +29,14 @@ fn with_prefixes(s: &str) -> String {
 #[test]
 fn test_mincount_satisfied() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:PersonShape a sh:NodeShape ;
             sh:targetClass ex:Person ;
             sh:property [
                 sh:path ex:name ;
                 sh:minCount 1 ;
             ] .
-        "#,
+        ",
     );
     let data = with_prefixes(
         r#"
@@ -51,14 +51,14 @@ fn test_mincount_satisfied() {
 #[test]
 fn test_mincount_violated() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:PersonShape a sh:NodeShape ;
             sh:targetClass ex:Person ;
             sh:property [
                 sh:path ex:name ;
                 sh:minCount 1 ;
             ] .
-        "#,
+        ",
     );
     // ex:Bob has no ex:name → violation
     let data = with_prefixes("ex:Bob a ex:Person .");
@@ -70,11 +70,11 @@ fn test_mincount_violated() {
 #[test]
 fn test_maxcount_violated() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:S a sh:NodeShape ;
             sh:targetClass ex:T ;
             sh:property [ sh:path ex:p ; sh:maxCount 1 ] .
-        "#,
+        ",
     );
     let data = with_prefixes(
         r#"
@@ -90,14 +90,14 @@ fn test_maxcount_violated() {
 #[test]
 fn test_datatype_satisfied() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:S a sh:NodeShape ;
             sh:targetClass ex:T ;
             sh:property [
                 sh:path ex:age ;
                 sh:datatype xsd:integer ;
             ] .
-        "#,
+        ",
     );
     let data = with_prefixes(r#"ex:n a ex:T ; ex:age "42"^^xsd:integer ."#);
     let report = validate(&shapes, &data);
@@ -107,7 +107,7 @@ fn test_datatype_satisfied() {
 #[test]
 fn test_datatype_violated() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:S a sh:NodeShape ;
             sh:targetClass ex:T ;
             sh:property [
@@ -115,7 +115,7 @@ fn test_datatype_violated() {
                 sh:datatype xsd:integer ;
                 sh:minCount 1 ;
             ] .
-        "#,
+        ",
     );
     // value is xsd:string, not xsd:integer
     let data = with_prefixes(r#"ex:n a ex:T ; ex:age "hello"^^xsd:string ."#);
@@ -128,11 +128,11 @@ fn test_datatype_violated() {
 #[test]
 fn test_min_length_satisfied() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:S a sh:NodeShape ;
             sh:targetClass ex:T ;
             sh:property [ sh:path ex:code ; sh:minLength 3 ] .
-        "#,
+        ",
     );
     let data = with_prefixes(r#"ex:n a ex:T ; ex:code "ABC" ."#);
     let report = validate(&shapes, &data);
@@ -142,11 +142,11 @@ fn test_min_length_satisfied() {
 #[test]
 fn test_min_length_violated() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:S a sh:NodeShape ;
             sh:targetClass ex:T ;
             sh:property [ sh:path ex:code ; sh:minLength 3 ] .
-        "#,
+        ",
     );
     let data = with_prefixes(r#"ex:n a ex:T ; ex:code "AB" ."#);
     let report = validate(&shapes, &data);
@@ -217,14 +217,14 @@ fn test_min_exclusive_violated() {
 #[test]
 fn test_or_satisfied() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:S a sh:NodeShape ;
             sh:targetClass ex:T ;
             sh:or (
                 [ sh:property [ sh:path ex:a ; sh:minCount 1 ] ]
                 [ sh:property [ sh:path ex:b ; sh:minCount 1 ] ]
             ) .
-        "#,
+        ",
     );
     // has ex:b → satisfies second branch
     let data = with_prefixes(r#"ex:n a ex:T ; ex:b "x" ."#);
@@ -235,17 +235,17 @@ fn test_or_satisfied() {
 #[test]
 fn test_or_violated() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:S a sh:NodeShape ;
             sh:targetClass ex:T ;
             sh:or (
                 [ sh:property [ sh:path ex:a ; sh:minCount 1 ] ]
                 [ sh:property [ sh:path ex:b ; sh:minCount 1 ] ]
             ) .
-        "#,
+        ",
     );
     // has neither ex:a nor ex:b
-    let data = with_prefixes(r#"ex:n a ex:T ."#);
+    let data = with_prefixes(r"ex:n a ex:T .");
     let report = validate(&shapes, &data);
     assert!(!report.conforms);
 }
@@ -255,7 +255,7 @@ fn test_or_violated() {
 #[test]
 fn test_warning_severity() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:S a sh:NodeShape ;
             sh:targetClass ex:T ;
             sh:property [
@@ -263,9 +263,9 @@ fn test_warning_severity() {
                 sh:minCount 1 ;
                 sh:severity sh:Warning ;
             ] .
-        "#,
+        ",
     );
-    let data = with_prefixes(r#"ex:n a ex:T ."#);
+    let data = with_prefixes(r"ex:n a ex:T .");
     let report = validate(&shapes, &data);
     // a sh:Warning result still makes conforms=false per the spec
     assert!(!report.conforms);
@@ -278,11 +278,11 @@ fn test_warning_severity() {
 #[test]
 fn test_target_node() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:S a sh:NodeShape ;
             sh:targetNode ex:Alice ;
             sh:property [ sh:path ex:name ; sh:minCount 1 ] .
-        "#,
+        ",
     );
     // ex:Alice has no ex:name key
     let data = with_prefixes(r#"ex:Alice ex:email "a@b.com" ."#);
@@ -325,11 +325,11 @@ fn test_in_violated() {
 #[test]
 fn test_disjoint_violated() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:S a sh:NodeShape ;
             sh:targetClass ex:T ;
             sh:property [ sh:path ex:a ; sh:disjoint ex:b ] .
-        "#,
+        ",
     );
     // both ex:a and ex:b have the same value → disjoint violated
     let data = with_prefixes(r#"ex:n a ex:T ; ex:a "x" ; ex:b "x" ."#);
@@ -342,12 +342,12 @@ fn test_disjoint_violated() {
 #[test]
 fn test_closed_shape_violated() {
     let shapes = with_prefixes(
-        r#"
+        r"
         ex:S a sh:NodeShape ;
             sh:targetClass ex:T ;
             sh:closed true ;
             sh:property [ sh:path ex:a ] .
-        "#,
+        ",
     );
     // ex:extra is not declared → violation
     let data = with_prefixes(r#"ex:n a ex:T ; ex:a "ok" ; ex:extra "bad" ."#);

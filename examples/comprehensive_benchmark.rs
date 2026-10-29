@@ -9,7 +9,7 @@ fn main() -> Result<()> {
     {
         let mut ontology = Ontology::new();
         for i in 0..50 {
-            let class_a = Class::new(IRI::new(&format!("http://example.org/Class{}", i)));
+            let class_a = Class::new(IRI::new(&format!("http://example.org/Class{i}")));
             let class_b = Class::new(IRI::new(&format!("http://example.org/Class{}", i + 1)));
             ontology.add_axiom(Axiom::SubClassOf(SubClassOfAxiom {
                 id: i as u64,
@@ -27,10 +27,10 @@ fn main() -> Result<()> {
             let _ = reasoner.is_consistent()?;
         }
         let elapsed = start.elapsed();
-        let avg_ms = elapsed.as_millis() as f64 / iterations as f64;
+        let avg_ms = elapsed.as_millis() as f64 / f64::from(iterations);
 
         println!("Test 1: Simple ontology (50 SubClassOf axioms, no individuals)");
-        println!("  Average time: {:.2} ms", avg_ms);
+        println!("  Average time: {avg_ms:.2} ms");
         println!(
             "  Status: {}",
             if avg_ms < 10.0 {
@@ -48,8 +48,8 @@ fn main() -> Result<()> {
     {
         let mut ontology = Ontology::new();
         for i in 0..10 {
-            let class_a = Class::new(IRI::new(&format!("http://example.org/A{}", i)));
-            let class_b = Class::new(IRI::new(&format!("http://example.org/B{}", i)));
+            let class_a = Class::new(IRI::new(&format!("http://example.org/A{i}")));
+            let class_b = Class::new(IRI::new(&format!("http://example.org/B{i}")));
 
             ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
                 id: (i * 2) as u64,
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
                 annotations: vec![],
             }));
 
-            let class_c = Class::new(IRI::new(&format!("http://example.org/C{}", i)));
+            let class_c = Class::new(IRI::new(&format!("http://example.org/C{i}")));
             ontology.add_axiom(Axiom::DisjointClasses(DisjointClassesAxiom {
                 id: (i * 2 + 1) as u64,
                 classes: vec![
@@ -79,10 +79,10 @@ fn main() -> Result<()> {
             let _ = reasoner.is_consistent()?;
         }
         let elapsed = start.elapsed();
-        let avg_ms = elapsed.as_millis() as f64 / iterations as f64;
+        let avg_ms = elapsed.as_millis() as f64 / f64::from(iterations);
 
         println!("Test 2: With EquivalentClasses & DisjointClasses (20 axioms, no individuals)");
-        println!("  Average time: {:.2} ms", avg_ms);
+        println!("  Average time: {avg_ms:.2} ms");
         println!(
             "  Status: {}",
             if avg_ms < 20.0 {
@@ -136,10 +136,10 @@ fn main() -> Result<()> {
             let _ = reasoner.is_consistent()?;
         }
         let elapsed = start.elapsed();
-        let avg_ms = elapsed.as_millis() as f64 / iterations as f64;
+        let avg_ms = elapsed.as_millis() as f64 / f64::from(iterations);
 
         println!("Test 3: With individual causing equivalence-disjointness clash");
-        println!("  Average time: {:.2} ms", avg_ms);
+        println!("  Average time: {avg_ms:.2} ms");
         println!(
             "  Status: {}",
             if avg_ms < 20.0 {

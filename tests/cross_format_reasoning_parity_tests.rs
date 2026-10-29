@@ -58,17 +58,17 @@ const XSD: &str = "http://www.w3.org/2001/XMLSchema#";
 /// intersection of what every format preserves faithfully (see module doc).
 fn canonical_ontology() -> Ontology {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let d_cls = df.class_ce(&format!("{EX}D"));
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
-    let c = df.named(&format!("{EX}c"));
-    let d = df.named(&format!("{EX}d"));
-    let e = df.named(&format!("{EX}e"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let d_cls = df.class_ce(format!("{EX}D"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
+    let c = df.named(format!("{EX}c"));
+    let d = df.named(format!("{EX}d"));
+    let e = df.named(format!("{EX}e"));
 
     let mut ont = df.build_ontology(vec![
         // Class hierarchy: A ⊑ B ⊑ C; A and D disjoint.
@@ -93,24 +93,23 @@ fn canonical_ontology() -> Ontology {
     ont
 }
 
-/// Build the EXTENDED canonical ontology (core + RBox data axioms + data
+/// Build the EXTENDED canonical ontology (core + `RBox` data axioms + data
 /// property assertion) used only by the format-capability test, because only
 /// Functional preserves all of it.
 fn extended_ontology() -> Ontology {
     let df = DF::new();
     let ont = canonical_ontology();
     let mut ont = ont;
-    ont.add_axiom(df.sub_object_property_of(
-        df.obj_prop(&format!("{EX}P")),
-        df.obj_prop(&format!("{EX}R")),
-    ));
+    ont.add_axiom(
+        df.sub_object_property_of(df.obj_prop(format!("{EX}P")), df.obj_prop(format!("{EX}R"))),
+    );
     ont.add_axiom(df.data_property_range(
-        df.data_prop(&format!("{EX}dp")),
-        df.data_range_dt(&format!("{XSD}string")),
+        df.data_prop(format!("{EX}dp")),
+        df.data_range_dt(format!("{XSD}string")),
     ));
     ont.add_axiom(df.data_property_assertion(
-        df.data_prop(&format!("{EX}dp")),
-        df.named(&format!("{EX}a")),
+        df.data_prop(format!("{EX}dp")),
+        df.named(format!("{EX}a")),
         df.typed_literal("x", &format!("{XSD}string")),
     ));
     df.auto_declare(&mut ont);
@@ -119,7 +118,7 @@ fn extended_ontology() -> Ontology {
 
 /// Hand-written Manchester source mirroring `canonical_ontology()`.
 fn manchester_source() -> &'static str {
-    r#"Prefix: ex: <http://parity.org/>
+    r"Prefix: ex: <http://parity.org/>
 
 Ontology: <http://parity.org/manchester>
 
@@ -153,7 +152,7 @@ Individual: ex:d
     Types: ex:D
 
 Individual: ex:e
-"#
+"
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -167,7 +166,7 @@ struct Probe {
     consistent: bool,
     /// Canonical class hierarchy: subclass IRI → sorted superclass IRIs.
     class_hierarchy: BTreeMap<String, Vec<String>>,
-    /// is_entailed results, one per check in `parity_checks`.
+    /// `is_entailed` results, one per check in `parity_checks`.
     entailed: Vec<bool>,
 }
 
@@ -237,16 +236,16 @@ fn canonical_hierarchy(result: &ClassificationResult) -> BTreeMap<String, Vec<St
 /// The entailment checks every format must agree on. These are *queries*: they
 /// do not require the queried complex class expression to appear as an axiom.
 fn parity_checks(df: &DF) -> Vec<(Axiom, &'static str)> {
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
-    let c = df.named(&format!("{EX}c"));
-    let d = df.named(&format!("{EX}d"));
-    let e = df.named(&format!("{EX}e"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
+    let c = df.named(format!("{EX}c"));
+    let d = df.named(format!("{EX}d"));
+    let e = df.named(format!("{EX}e"));
 
     vec![
         // Positive: class hierarchy (transitive).
@@ -361,7 +360,7 @@ fn cross_format_reasoning_parity_manchester() {
     // Sanity: the hierarchy / ABox axioms survived Manchester parsing.
     assert!(
         manchester_ont.axioms().iter().any(
-            |ax| matches!(ax, Axiom::SubClassOf(sc) if sc.superclass.to_string().contains("C"))
+            |ax| matches!(ax, Axiom::SubClassOf(sc) if sc.superclass.to_string().contains('C'))
         ),
         "Manchester parse must include B ⊑ C"
     );
@@ -397,9 +396,9 @@ fn cross_format_reasoning_parity_manchester() {
 #[test]
 fn cross_format_reasoning_parity_ontology_iri_is_non_logical() {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let a = df.named(&format!("{EX}a"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let a = df.named(format!("{EX}a"));
 
     let mut with_iri = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), c_cls.clone()),
@@ -428,7 +427,7 @@ fn cross_format_reasoning_parity_ontology_iri_is_non_logical() {
 #[test]
 fn rbox_data_axiom_roundtrip_format_capability() {
     let ont = extended_ontology();
-    let df = DF::new();
+    let _df = DF::new();
 
     fn roundtrip(ont: &Ontology, format: OntologyFormat) -> Ontology {
         let s = save_to_string(ont, format).expect("serialize");
@@ -506,9 +505,9 @@ fn rbox_data_axiom_roundtrip_format_capability() {
 #[test]
 fn nominal_axiom_roundtrip_format_capability() {
     let df = DF::new();
-    let card = df.class_ce(&format!("{EX}Card"));
-    let r = df.obj_prop(&format!("{EX}R"));
-    let b_ind = df.named(&format!("{EX}b"));
+    let card = df.class_ce(format!("{EX}Card"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let b_ind = df.named(format!("{EX}b"));
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![card, df.min_cardinality(1, r, df.one_of(vec![b_ind]))]),
     ]);
@@ -525,7 +524,7 @@ fn nominal_axiom_roundtrip_format_capability() {
         };
         reloaded.axioms().iter().any(|ax| {
             matches!(ax, Axiom::EquivalentClasses(eq)
-                if eq.classes.iter().any(|c| matches!(c, ClassExpression::Class(cl) if cl.iri.as_str() == &format!("{EX}Card"))))
+                if eq.classes.iter().any(|c| matches!(c, ClassExpression::Class(cl) if cl.iri.as_str() == format!("{EX}Card"))))
         })
     }
 

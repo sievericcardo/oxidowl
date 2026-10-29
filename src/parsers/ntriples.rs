@@ -629,10 +629,10 @@ mod tests {
 
     #[test]
     fn test_parse_basic_ntriples() {
-        let content = r#"
+        let content = r"
 # Comment line
 <http://example.org/subject> <http://example.org/predicate> <http://example.org/object> .
-"#;
+";
 
         let parser = NTriplesParser::new();
         let result = parser.parse_string(content);
@@ -706,9 +706,9 @@ mod tests {
 
     #[test]
     fn test_parse_blank_node() {
-        let content = r#"
+        let content = r"
 _:b1 <http://example.org/predicate> <http://example.org/object> .
-"#;
+";
 
         let parser = NTriplesParser::new();
         let result = parser.parse_string(content);
@@ -718,11 +718,11 @@ _:b1 <http://example.org/predicate> <http://example.org/object> .
     #[test]
     fn test_blank_node_validation_lenient_mode() {
         // Default mode should accept any blank node label (RDF 1.1 compatible)
-        let content = r#"
+        let content = r"
 _:node-with-hyphens <http://example.org/pred> <http://example.org/obj> .
 _:node_with_underscores <http://example.org/pred> <http://example.org/obj> .
 _:node.with.dots <http://example.org/pred> <http://example.org/obj> .
-"#;
+";
 
         let parser = NTriplesParser::with_config(NTriplesConfig {
             validate_blank_nodes: false,
@@ -739,12 +739,12 @@ _:node.with.dots <http://example.org/pred> <http://example.org/obj> .
     #[test]
     fn test_blank_node_validation_strict_mode_valid() {
         // Strict mode should accept RDF 1.2 well-formed blank nodes
-        let content = r#"
+        let content = r"
 _:node1 <http://example.org/pred> <http://example.org/obj1> .
 _:a <http://example.org/pred> <http://example.org/obj2> .
 _:Z <http://example.org/pred> <http://example.org/obj3> .
 _:node123ABC <http://example.org/pred> <http://example.org/obj4> .
-"#;
+";
 
         let parser = NTriplesParser::with_config(NTriplesConfig {
             validate_blank_nodes: true,
@@ -769,10 +769,8 @@ _:node123ABC <http://example.org/pred> <http://example.org/obj4> .
         ];
 
         for invalid_label in invalid_cases {
-            let content = format!(
-                "{} <http://example.org/pred> <http://example.org/obj> .",
-                invalid_label
-            );
+            let content =
+                format!("{invalid_label} <http://example.org/pred> <http://example.org/obj> .");
 
             let parser = NTriplesParser::with_config(NTriplesConfig {
                 validate_blank_nodes: true,
@@ -782,8 +780,7 @@ _:node123ABC <http://example.org/pred> <http://example.org/obj4> .
             let result = parser.parse_string(&content);
             assert!(
                 result.is_err(),
-                "Strict mode should reject invalid blank node: {}",
-                invalid_label
+                "Strict mode should reject invalid blank node: {invalid_label}"
             );
         }
     }

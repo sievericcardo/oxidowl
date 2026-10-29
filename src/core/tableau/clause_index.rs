@@ -389,7 +389,7 @@ mod tests {
 
         // Query with predicate "B" should return clauses 0 and 1
         let candidates = index.get_candidate_clauses(&["B".to_string()]);
-        assert!(candidates.len() >= 1);
+        assert!(!candidates.is_empty());
         assert!(candidates.contains(&1)); // B ∧ C → D
 
         // Query with predicate "D" should return clause 2 (D ∧ E → ⊥)
@@ -476,7 +476,7 @@ mod tests {
         let mut clauses = Vec::with_capacity(100);
         for i in 0..100 {
             let clause =
-                create_test_clause(&format!("c{}", i), vec!["A", "B"], vec![&format!("D{}", i)]);
+                create_test_clause(&format!("c{i}"), vec!["A", "B"], vec![&format!("D{i}")]);
             clauses.push(clause);
         }
 
@@ -527,7 +527,7 @@ mod tests {
         assert_eq!(clause_refs[0].id, "c1");
 
         let clause_refs = index.get_candidate_clause_refs(&["B".to_string()]);
-        assert!(clause_refs.len() >= 1);
+        assert!(!clause_refs.is_empty());
         assert!(clause_refs.iter().any(|c| c.id == "c2"));
     }
 }

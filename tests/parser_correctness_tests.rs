@@ -1,8 +1,6 @@
 #[path = "helpers/mod.rs"]
 mod helpers;
-use helpers::assertions::*;
 use helpers::df::DF;
-use helpers::*;
 
 use oxidowl::ontology::*;
 use oxidowl::parsers::*;
@@ -345,7 +343,7 @@ fn test_owl_xml_roundtrip_all_axioms() {
     let has_class_a = reparsed
         .axioms()
         .iter()
-        .any(|a| format!("{:?}", a).contains(ex("A").as_str()));
+        .any(|a| format!("{a:?}").contains(ex("A").as_str()));
     assert!(has_class_a, "Re-parsed ontology should reference class A");
 }
 
@@ -355,7 +353,7 @@ fn test_owl_xml_roundtrip_all_axioms() {
 
 #[test]
 fn test_turtle_blank_node_parsing() {
-    let turtle_text = r#"
+    let turtle_text = r"
 @prefix ex: <http://ex.org/> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -373,7 +371,7 @@ ex:i a owl:NamedIndividual ;
     ex:p [ a ex:A ] .
 
 ex:j ex:p _:genid1 .
-"#;
+";
 
     let result = parse_turtle(turtle_text);
     assert!(
@@ -504,8 +502,7 @@ fn test_manchester_class_expression_parsing() {
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectIntersectionOf(_)),
-        "Expected ObjectIntersectionOf, got {:?}",
-        ce
+        "Expected ObjectIntersectionOf, got {ce:?}"
     );
 
     let result = parser.parse_class_expression("ex:A or ex:B");
@@ -513,8 +510,7 @@ fn test_manchester_class_expression_parsing() {
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectUnionOf(_)),
-        "Expected ObjectUnionOf, got {:?}",
-        ce
+        "Expected ObjectUnionOf, got {ce:?}"
     );
 
     let result = parser.parse_class_expression("not ex:A");
@@ -526,8 +522,7 @@ fn test_manchester_class_expression_parsing() {
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectComplementOf(_)),
-        "Expected ObjectComplementOf, got {:?}",
-        ce
+        "Expected ObjectComplementOf, got {ce:?}"
     );
 
     let result = parser.parse_class_expression("ex:p some ex:A");
@@ -539,8 +534,7 @@ fn test_manchester_class_expression_parsing() {
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectSomeValuesFrom { .. }),
-        "Expected ObjectSomeValuesFrom, got {:?}",
-        ce
+        "Expected ObjectSomeValuesFrom, got {ce:?}"
     );
 
     let result = parser.parse_class_expression("ex:p only ex:A");
@@ -552,8 +546,7 @@ fn test_manchester_class_expression_parsing() {
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectAllValuesFrom { .. }),
-        "Expected ObjectAllValuesFrom, got {:?}",
-        ce
+        "Expected ObjectAllValuesFrom, got {ce:?}"
     );
 
     let result = parser.parse_class_expression("ex:p min 2 ex:A");
@@ -565,8 +558,7 @@ fn test_manchester_class_expression_parsing() {
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectMinCardinality { .. }),
-        "Expected ObjectMinCardinality, got {:?}",
-        ce
+        "Expected ObjectMinCardinality, got {ce:?}"
     );
 
     let result = parser.parse_class_expression("ex:p max 5 ex:A");
@@ -578,8 +570,7 @@ fn test_manchester_class_expression_parsing() {
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectMaxCardinality { .. }),
-        "Expected ObjectMaxCardinality, got {:?}",
-        ce
+        "Expected ObjectMaxCardinality, got {ce:?}"
     );
 
     let result = parser.parse_class_expression("ex:p exactly 3 ex:A");
@@ -591,8 +582,7 @@ fn test_manchester_class_expression_parsing() {
     let ce = result.unwrap();
     assert!(
         matches!(&ce, ClassExpression::ObjectExactCardinality { .. }),
-        "Expected ObjectExactCardinality, got {:?}",
-        ce
+        "Expected ObjectExactCardinality, got {ce:?}"
     );
 }
 
@@ -604,7 +594,7 @@ fn test_manchester_class_expression_parsing() {
 fn test_dl_syntax_parsing() {
     let dl_text = "A \u{2291} B\n";
 
-    let mut parser = DLSyntaxParser::new();
+    let parser = DLSyntaxParser::new();
     let result = parser.parse(dl_text);
     match result {
         Ok(ont) => {
@@ -618,7 +608,7 @@ fn test_dl_syntax_parsing() {
             }
         }
         Err(e) => {
-            eprintln!("DL syntax parse error: {:?}", e);
+            eprintln!("DL syntax parse error: {e:?}");
         }
     }
 }
@@ -645,7 +635,7 @@ fn test_krss_parsing() {
             );
         }
         Err(e) => {
-            eprintln!("KRSS parse error: {:?}", e);
+            eprintln!("KRSS parse error: {e:?}");
         }
     }
 }
@@ -796,8 +786,7 @@ fn test_cross_format_equivalence() {
             Ok(s) => {
                 assert!(
                     !s.is_empty(),
-                    "Serialized output for {:?} should not be empty",
-                    format
+                    "Serialized output for {format:?} should not be empty"
                 );
                 let reparsed = match format {
                     OntologyFormat::RdfXml => parse_rdf_xml(&s),
@@ -809,7 +798,7 @@ fn test_cross_format_equivalence() {
                 reparse_results.push((*format, reparsed));
             }
             Err(e) => {
-                eprintln!("{:?} serialization error: {:?}", format, e);
+                eprintln!("{format:?} serialization error: {e:?}");
             }
         }
     }
@@ -819,12 +808,11 @@ fn test_cross_format_equivalence() {
             Ok(reparsed) => {
                 assert!(
                     !reparsed.axioms().is_empty(),
-                    "{:?} re-parse should produce axioms",
-                    fmt
+                    "{fmt:?} re-parse should produce axioms"
                 );
             }
             Err(e) => {
-                eprintln!("{:?} re-parse error: {:?}", fmt, e);
+                eprintln!("{fmt:?} re-parse error: {e:?}");
             }
         }
     }
@@ -832,8 +820,7 @@ fn test_cross_format_equivalence() {
     let success_count = reparse_results.iter().filter(|(_, r)| r.is_ok()).count();
     assert!(
         success_count > 0,
-        "At least one format should succeed roundtrip. Original had {} axioms",
-        original_count
+        "At least one format should succeed roundtrip. Original had {original_count} axioms"
     );
 }
 

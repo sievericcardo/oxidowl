@@ -6,10 +6,10 @@
 //! Each test here targets a *gap* (verified by grep against the other test
 //! files). Where a scenario was already covered (e.g. `≥2 R.{a}` unsat in
 //! `cardinality_reasoning_tests`, `R ∘ S ∘ T` chains in `rbox_reasoning_tests`,
-//! HasKey in `semantic_entailment_tests`), no duplicate is added.
+//! `HasKey` in `semantic_entailment_tests`), no duplicate is added.
 //!
 //! Groups covered:
-//! 1. ObjectHasSelf interactions: `∃R.Self ⊓ Irreflexive(R)` → unsat;
+//! 1. `ObjectHasSelf` interactions: `∃R.Self ⊓ Irreflexive(R)` → unsat;
 //!    `∃R.Self ⊓ Asymmetric(R)` → unsat.
 //! 2. `InverseObjectProperties(R,S)` + `Functional(R)` ⇒ `S` inverse-functional
 //!    ⇒ `SameIndividual` inference.
@@ -18,7 +18,7 @@
 //! 4. `DataPropertyDomain` / `DataPropertyRange` instance-level reasoning.
 //! 5. `DisjointUnion(A,[B,C])`: B(x) → A(x); B ⊓ C unsat.
 //! 6. `SubDataPropertyOf`: P ⊑ Q propagates P(a,"x") → Q(a,"x").
-//! 7. AnnotationPropertyDomain/Range + SubAnnotationPropertyOf: non-logical,
+//! 7. AnnotationPropertyDomain/Range + `SubAnnotationPropertyOf`: non-logical,
 //!    must not affect consistency and are not entailment-checked.
 //! 8. owl:Thing ⊑ A forces everything into A; A ⊑ owl:Nothing makes A unsat.
 //! 9. Empty data range `DataOneOf([])` (∃P.[] unsat; ∀P.[] + filler clash).
@@ -91,12 +91,12 @@ fn assert_entailed(r: &dyn OWLReasoner, ax: Axiom, msg: &str) {
 #[test]
 fn self_interaction_has_self_with_irreflexive_inconsistent() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let r = df.obj_prop(&format!("{EX}R"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let r = df.obj_prop(format!("{EX}R"));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.has_self(r.clone())),
         df.irreflexive_object_property(r),
-        df.class_assertion(a_cls, df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -113,12 +113,12 @@ fn self_interaction_has_self_with_irreflexive_inconsistent() -> Result<()> {
 #[test]
 fn self_interaction_has_self_with_asymmetric_inconsistent() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let r = df.obj_prop(&format!("{EX}R"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let r = df.obj_prop(format!("{EX}R"));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.has_self(r.clone())),
         df.asymmetric_object_property(r),
-        df.class_assertion(a_cls, df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -135,11 +135,11 @@ fn self_interaction_has_self_with_asymmetric_inconsistent() -> Result<()> {
 #[test]
 fn self_interaction_has_self_alone_satisfiable() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let r = df.obj_prop(&format!("{EX}R"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let r = df.obj_prop(format!("{EX}R"));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.has_self(r)),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -164,11 +164,11 @@ fn self_interaction_has_self_alone_satisfiable() -> Result<()> {
 #[test]
 fn inverse_object_properties_plus_functional_derives_same_individual() -> Result<()> {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
-    let x = df.named(&format!("{EX}x"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
+    let x = df.named(format!("{EX}x"));
 
     let onto = df.build_ontology(vec![
         df.inverse_object_properties(r.clone(), s.clone()),
@@ -189,7 +189,7 @@ fn inverse_object_properties_plus_functional_derives_same_individual() -> Result
     let contains_b = node
         .get_entities()
         .iter()
-        .any(|i| i.iri().map(|x| x.as_str()) == Some(&format!("{EX}b")));
+        .any(|i| i.iri().map(oxidowl::IRI::as_str) == Some(&format!("{EX}b")));
     assert!(
         contains_b,
         "get_same_individuals(a) must include b via inverse-functional S; got {:?}",
@@ -207,10 +207,10 @@ fn inverse_object_properties_plus_functional_derives_same_individual() -> Result
 #[test]
 fn functional_object_property_entails_same_individual() -> Result<()> {
     let df = DF::new();
-    let p = df.obj_prop(&format!("{EX}P"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
-    let c = df.named(&format!("{EX}c"));
+    let p = df.obj_prop(format!("{EX}P"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
+    let c = df.named(format!("{EX}c"));
 
     let onto = df.build_ontology(vec![
         df.functional_object_property(p.clone()),
@@ -243,9 +243,9 @@ fn functional_object_property_entails_same_individual() -> Result<()> {
 #[test]
 fn data_property_domain_drives_instance() -> Result<()> {
     let df = DF::new();
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let dp = df.data_prop(&format!("{EX}dp"));
-    let a = df.named(&format!("{EX}a"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let dp = df.data_prop(format!("{EX}dp"));
+    let a = df.named(format!("{EX}a"));
     let mut ont = df.build_ontology(vec![
         df.data_property_domain(dp.clone(), c_cls.clone()),
         df.data_property_assertion(
@@ -269,8 +269,8 @@ fn data_property_domain_drives_instance() -> Result<()> {
 #[test]
 fn data_property_range_enforced() -> Result<()> {
     let df = DF::new();
-    let dp = df.data_prop(&format!("{EX}dp"));
-    let a = df.named(&format!("{EX}a"));
+    let dp = df.data_prop(format!("{EX}dp"));
+    let a = df.named(format!("{EX}a"));
 
     // 5^^xsd:int is within xsd:integer → consistent.
     let mut ok_ont = df.build_ontology(vec![
@@ -310,10 +310,10 @@ fn data_property_range_enforced() -> Result<()> {
 #[test]
 fn disjoint_union_members_are_subclasses_and_pairwise_disjoint() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let x = df.named(&format!("{EX}x"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let x = df.named(format!("{EX}x"));
     let mut ont = df.build_ontology(vec![
         df.disjoint_union(a_cls.clone(), vec![b_cls.clone(), c_cls.clone()]),
         df.class_assertion(b_cls.clone(), x.clone()),
@@ -360,9 +360,9 @@ fn disjoint_union_members_are_subclasses_and_pairwise_disjoint() -> Result<()> {
 #[test]
 fn sub_data_property_of_propagates_data_assertion() -> Result<()> {
     let df = DF::new();
-    let p = df.data_prop(&format!("{EX}P"));
-    let q = df.data_prop(&format!("{EX}Q"));
-    let a = df.named(&format!("{EX}a"));
+    let p = df.data_prop(format!("{EX}P"));
+    let q = df.data_prop(format!("{EX}Q"));
+    let a = df.named(format!("{EX}a"));
     let lit = df.typed_literal("x", &format!("{XSD}string"));
 
     let onto = df.build_ontology(vec![
@@ -388,11 +388,11 @@ fn sub_data_property_of_propagates_data_assertion() -> Result<()> {
 #[test]
 fn annotation_axioms_do_not_affect_reasoning() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let a = df.named(&format!("{EX}a"));
-    let ap = df.annotation_property(&format!("{EX}ap"));
-    let ap2 = df.annotation_property(&format!("{EX}ap2"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let a = df.named(format!("{EX}a"));
+    let ap = df.annotation_property(format!("{EX}ap"));
+    let ap2 = df.annotation_property(format!("{EX}ap2"));
 
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), b_cls.clone()),
@@ -449,8 +449,8 @@ fn annotation_axioms_do_not_affect_reasoning() -> Result<()> {
 #[test]
 fn owl_thing_subclass_forces_all_individuals() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let a = df.named(&format!("{EX}a"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let a = df.named(format!("{EX}a"));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(df.owl_thing(), a_cls.clone()),
         df.class_assertion(df.owl_thing(), a.clone()),
@@ -470,9 +470,8 @@ fn owl_thing_subclass_forces_all_individuals() -> Result<()> {
     assert!(
         instances
             .iter()
-            .any(|i| i.iri().map(|x| x.as_str()) == Some(&format!("{EX}a"))),
-        "get_instances(A) must include a when owl:Thing ⊑ A; got {:?}",
-        instances
+            .any(|i| i.iri().map(oxidowl::IRI::as_str) == Some(&format!("{EX}a"))),
+        "get_instances(A) must include a when owl:Thing ⊑ A; got {instances:?}"
     );
     Ok(())
 }
@@ -481,7 +480,7 @@ fn owl_thing_subclass_forces_all_individuals() -> Result<()> {
 #[test]
 fn owl_nothing_superclass_unsatisfiable() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
+    let a_cls = df.class_ce(format!("{EX}A"));
     let mut ont = df.build_ontology(vec![df.sub_class_of(a_cls.clone(), df.owl_nothing())]);
     df.auto_declare(&mut ont);
 
@@ -497,7 +496,7 @@ fn owl_nothing_superclass_unsatisfiable() -> Result<()> {
 
     let mut with_instance = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.owl_nothing()),
-        df.class_assertion(a_cls, df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut with_instance);
     let r = reasoner_for(with_instance)?;
@@ -517,8 +516,8 @@ fn owl_nothing_superclass_unsatisfiable() -> Result<()> {
 #[test]
 fn empty_data_one_of_exists_unsatisfiable() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
     let empty: ClassExpression = df.data_some_values_from(p.clone(), df.data_range_one_of(vec![]));
     let mut ont = df.build_ontology(vec![df.equivalent_classes(vec![a_cls.clone(), empty])]);
     df.auto_declare(&mut ont);
@@ -538,7 +537,7 @@ fn empty_data_one_of_exists_unsatisfiable() -> Result<()> {
             a_cls.clone(),
             df.data_some_values_from(p, df.data_range_one_of(vec![])),
         ]),
-        df.class_assertion(a_cls, df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut with_instance);
     let r = reasoner_for(with_instance)?;
@@ -554,9 +553,9 @@ fn empty_data_one_of_exists_unsatisfiable() -> Result<()> {
 #[test]
 fn empty_data_one_of_all_values_clashes_on_filler() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let p = df.data_prop(&format!("{EX}P"));
-    let a = df.named(&format!("{EX}a"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let p = df.data_prop(format!("{EX}P"));
+    let a = df.named(format!("{EX}a"));
     let all: ClassExpression = df.data_all_values_from(p.clone(), df.data_range_one_of(vec![]));
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_cls.clone(), all]),
@@ -582,10 +581,10 @@ fn empty_data_one_of_all_values_clashes_on_filler() -> Result<()> {
 #[test]
 fn union_antecedent_branching_entails_other_disjunct() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let a = df.named(&format!("{EX}a"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let a = df.named(format!("{EX}a"));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(
             a_cls.clone(),
@@ -614,7 +613,7 @@ fn union_antecedent_branching_entails_other_disjunct() -> Result<()> {
         reasoner.as_ref(),
         df.sub_class_of(
             a_cls,
-            df.union_of(vec![c_cls.clone(), df.class_ce(&format!("{EX}B"))]),
+            df.union_of(vec![c_cls.clone(), df.class_ce(format!("{EX}B"))]),
         ),
         "A ⊑ (B ⊔ C) asserted ⊨ A ⊑ (B ⊔ C)",
     );
@@ -630,11 +629,11 @@ fn union_antecedent_branching_entails_other_disjunct() -> Result<()> {
 #[test]
 fn role_hierarchy_plus_transitivity_composes() -> Result<()> {
     let df = DF::new();
-    let p = df.obj_prop(&format!("{EX}P"));
-    let r = df.obj_prop(&format!("{EX}R"));
-    let a = df.named(&format!("{EX}a"));
-    let b = df.named(&format!("{EX}b"));
-    let c = df.named(&format!("{EX}c"));
+    let p = df.obj_prop(format!("{EX}P"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let a = df.named(format!("{EX}a"));
+    let b = df.named(format!("{EX}b"));
+    let c = df.named(format!("{EX}c"));
 
     let onto = df.build_ontology(vec![
         df.sub_object_property_of(p.clone(), r.clone()),
@@ -661,10 +660,10 @@ fn role_hierarchy_plus_transitivity_composes() -> Result<()> {
 #[test]
 fn min_cardinality_nominal_instance_interaction() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_ind = df.named(&format!("{EX}b"));
-    let rop = df.obj_prop(&format!("{EX}R"));
-    let a = df.named(&format!("{EX}a"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_ind = df.named(format!("{EX}b"));
+    let rop = df.obj_prop(format!("{EX}R"));
+    let a = df.named(format!("{EX}a"));
     let some_r_b = df.some_values_from(rop.clone(), df.one_of(vec![b_ind.clone()]));
 
     let mut ont = df.build_ontology(vec![
@@ -713,8 +712,8 @@ fn import_driven_reasoning_over_closure_union() -> Result<()> {
     let mut imported = Ontology::new();
     imported.set_iri(imported_iri.clone());
     imported.add_axiom(df.sub_class_of(
-        df.class_ce(&format!("{base}B")),
-        df.class_ce(&format!("{base}C")),
+        df.class_ce(format!("{base}B")),
+        df.class_ce(format!("{base}C")),
     ));
 
     let mut main = Ontology::new();
@@ -723,12 +722,12 @@ fn import_driven_reasoning_over_closure_union() -> Result<()> {
         imported_ontology_iri: imported_iri.clone(),
     });
     main.add_axiom(df.sub_class_of(
-        df.class_ce(&format!("{base}A")),
-        df.class_ce(&format!("{base}B")),
+        df.class_ce(format!("{base}A")),
+        df.class_ce(format!("{base}B")),
     ));
     main.add_axiom(df.class_assertion(
-        df.class_ce(&format!("{base}A")),
-        df.named(&format!("{base}a")),
+        df.class_ce(format!("{base}A")),
+        df.named(format!("{base}a")),
     ));
 
     let mut manager = oxidowl::OntologyManager::new();
@@ -759,8 +758,8 @@ fn import_driven_reasoning_over_closure_union() -> Result<()> {
     df.auto_declare(&mut union);
 
     let r = reasoner_for(union)?;
-    let a = df.named(&format!("{base}a"));
-    let c_cls = df.class_ce(&format!("{base}C"));
+    let a = df.named(format!("{base}a"));
+    let c_cls = df.class_ce(format!("{base}C"));
     assert!(r.is_consistent()?, "the imports-union must be consistent");
     assert!(
         r.is_instance_of(&a, &c_cls)?,
@@ -771,10 +770,10 @@ fn import_driven_reasoning_over_closure_union() -> Result<()> {
     let mut main_only = Ontology::new();
     main_only.set_iri(IRI::new(&format!("{base}mainOnly")));
     main_only.add_axiom(df.sub_class_of(
-        df.class_ce(&format!("{base}A")),
-        df.class_ce(&format!("{base}B")),
+        df.class_ce(format!("{base}A")),
+        df.class_ce(format!("{base}B")),
     ));
-    main_only.add_axiom(df.class_assertion(df.class_ce(&format!("{base}A")), a.clone()));
+    main_only.add_axiom(df.class_assertion(df.class_ce(format!("{base}A")), a.clone()));
     df.auto_declare(&mut main_only);
     let r = reasoner_for(main_only)?;
     assert!(

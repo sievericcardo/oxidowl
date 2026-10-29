@@ -9,16 +9,16 @@
 //!
 //! `DatatypeValidator::literal_values_equal` treats `(Some, None)` as unequal,
 //! so `DataHasValue { value: Literal { "true", datatype: None } }` never matched
-//! the ABox literal `"true"^^xsd:boolean`, the whole `ObjectIntersectionOf`
+//! the `ABox` literal `"true"^^xsd:boolean`, the whole `ObjectIntersectionOf`
 //! conjunction failed, and `realize()` never derived the defined class.
 //!
 //! RDF 1.1 plain literals and explicit `xsd:string` are the same value, and
 //! this crate normalises that equivalence to `datatype: None` (see
-//! `rdf_to_owl::normalize_literal`; the legacy Turtle ABox object path leaves
+//! `rdf_to_owl::normalize_literal`; the legacy Turtle `ABox` object path leaves
 //! untagged literals as `None` too). Restriction literals without an explicit
 //! tag therefore default to `datatype: None` as well — otherwise an untagged
 //! `owl:hasValue "x"` would hit `literal_values_equal`'s `(Some, None)` arm
-//! and silently stop matching an untagged ABox `"x"`. Only *explicit* `^^`
+//! and silently stop matching an untagged `ABox` `"x"`. Only *explicit* `^^`
 //! tags are preserved (the actual defect fix).
 
 use oxidowl::{
@@ -74,7 +74,7 @@ const ONTOLOGY: &str = r#"
 "#;
 
 /// `Plainish ≡ (status = "active") ⊓ (tier = "gold")` — every literal
-/// (restriction *and* ABox) untagged, exactly like `greenhouse.ttl`-style
+/// (restriction *and* `ABox`) untagged, exactly like `greenhouse.ttl`-style
 /// ontologies.
 const UNTAGGED_ONTOLOGY: &str = r#"
 @prefix : <http://example.org/> .
@@ -172,7 +172,7 @@ fn realise_does_not_derive_class_for_non_members() {
 }
 
 /// Regression lock for the parser/reasoner convention mismatch: an **untagged**
-/// `owl:hasValue "x"` and an **untagged** ABox literal `"x"` must both parse as
+/// `owl:hasValue "x"` and an **untagged** `ABox` literal `"x"` must both parse as
 /// `datatype: None` (this crate's RDF 1.1 plain-literal convention), so
 /// `literal_values_equal`'s `(None, None)` arm matches and the defined class is
 /// still derived — the pre-fix behaviour that an `xsd:string` default would

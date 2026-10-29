@@ -140,9 +140,7 @@ mod tests {
             let temporal_value = TemporalValue::from_literal(&literal);
             assert!(
                 temporal_value.is_ok(),
-                "Failed to parse {} as {}",
-                value,
-                datatype_iri
+                "Failed to parse {value} as {datatype_iri}"
             );
         }
     }

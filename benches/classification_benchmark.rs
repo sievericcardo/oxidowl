@@ -2,7 +2,7 @@
 //!
 //! Gates:
 //! - 1000-class linear chain classify (with / without role axioms) < 500 ms.
-//! - ORE-scale ontology (ore_ont_10004.owl) classify < 1 s.
+//! - ORE-scale ontology (`ore_ont_10004.owl`) classify < 1 s.
 //! - 100 repeated subsumption queries after classification < 100 ms (cache).
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
@@ -131,7 +131,8 @@ fn bench_classification(c: &mut Criterion) {
         });
     }
 
-    for size in [1000usize] {
+    {
+        let size = 1000usize;
         // Non-EL role chain (role-successor + domain absorption).  A single
         // union leaf forces the general absorption + dependency-graph path
         // (workstream A8); the pure-EL chain timing gate is `linear_chain`.
@@ -155,7 +156,8 @@ fn bench_classification(c: &mut Criterion) {
         });
     }
 
-    for size in [1000usize] {
+    {
+        let size = 1000usize;
         let ont = build_absorption_mixed(size);
         let config = ReasonerConfig::default();
         group.throughput(Throughput::Elements(size as u64));
@@ -220,7 +222,7 @@ fn bench_queries_after_classification(c: &mut Criterion) {
                     let r = service.is_subsumed_by(&sub, &sup).await;
                     let _ = black_box(r);
                 }
-            })
+            });
         });
     });
 

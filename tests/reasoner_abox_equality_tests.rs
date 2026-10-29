@@ -6,12 +6,10 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::*;
-use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 use oxidowl::{
     IndividualNodeSetPolicy, Node, NodeSet, OWLReasoner, OWLReasonerConfiguration, ReasonerFactory,
-    StructuralReasoner, StructuralReasonerFactory, TableauReasonerFactory,
+    StructuralReasoner, TableauReasonerFactory,
 };
 use std::collections::HashSet;
 use std::sync::Arc;

@@ -151,8 +151,7 @@ fn test_import_cycle_detection() {
     let cycle_contains_c = cycles.iter().any(|cycle| cycle.contains(&iri_c));
     assert!(
         cycle_contains_a && cycle_contains_b && cycle_contains_c,
-        "Cycle should contain A, B, and C. Found cycles: {:?}",
-        cycles
+        "Cycle should contain A, B, and C. Found cycles: {cycles:?}"
     );
 }
 
@@ -226,9 +225,9 @@ fn test_transitive_import_chain() {
         .filter_map(|r| r.read().ok())
         .filter_map(|g| g.get_iri().cloned())
         .collect();
-    assert!(closure_iris.contains(&&iri_a));
-    assert!(closure_iris.contains(&&iri_b));
-    assert!(closure_iris.contains(&&iri_c));
+    assert!(closure_iris.contains(&iri_a));
+    assert!(closure_iris.contains(&iri_b));
+    assert!(closure_iris.contains(&iri_c));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -307,8 +306,7 @@ fn test_auto_iri_mapper() {
     let onto_iri = IRI::new(onto_iri_str);
     let file_path = dir.join("auto.owl");
     let rdf_content = format!(
-        "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n<{}> rdf:type owl:Ontology .\n",
-        onto_iri_str
+        "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n<{onto_iri_str}> rdf:type owl:Ontology .\n"
     );
     std::fs::write(&file_path, rdf_content).expect("Should write test file");
 
@@ -321,8 +319,7 @@ fn test_auto_iri_mapper() {
     let doc_iri_str = doc_iri.unwrap().as_str().to_string();
     assert!(
         doc_iri_str.starts_with("file://"),
-        "Document IRI should be a file URL, got: {}",
-        doc_iri_str
+        "Document IRI should be a file URL, got: {doc_iri_str}"
     );
 }
 
@@ -367,7 +364,7 @@ fn test_simple_iri_mapper() {
 
 #[test]
 fn test_non_mapping_iri_mapper() {
-    let mapper = NonMappingOntologyIRIMapper::default();
+    let mapper = NonMappingOntologyIRIMapper;
     let result = mapper.get_document_iri(&IRI::new("http://example.org/anything"));
     assert!(
         result.is_none(),

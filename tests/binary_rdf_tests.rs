@@ -4,7 +4,7 @@
 //! `src/parsers/rio/binary_rdf.rs`:
 //!
 //! 1. **Round-trip axiom equality** for a rich ontology (declarations,
-//!    subclass, class/object/data/annotation assertions, EquivalentClasses,
+//!    subclass, class/object/data/annotation assertions, `EquivalentClasses`,
 //!    a blank-node restriction, literals of several datatypes) carrying a
 //!    dictionary of ≥ 130 distinct values (value ids ≥ 128 ⇒ multi-byte
 //!    varints).
@@ -62,7 +62,7 @@ fn brdf_parse(bytes: &[u8]) -> Ontology {
 
 /// A rich ontology covering every axiom kind required by the slice:
 /// declarations, subclass, class/object/data/annotation assertions,
-/// EquivalentClasses (named pair + blank-node restriction), literals of
+/// `EquivalentClasses` (named pair + blank-node restriction), literals of
 /// several datatypes — plus `130` extra class declarations so the value
 /// dictionary exceeds 128 entries (multi-byte varint ids).
 fn rich_ontology() -> Ontology {
@@ -608,7 +608,7 @@ fn formula_annotation(ont: &Ontology) -> Vec<Annotation> {
 }
 
 /// Twin of `n3_rule_and_iri_less_annotation_survive_{jsonld,hdt}_roundtrip`
-/// for BinaryRDF (CR-011 M2, re-review NR-2): the BinaryRDF writer emits the
+/// for `BinaryRDF` (CR-011 M2, re-review NR-2): the `BinaryRDF` writer emits the
 /// shared preservation triples (`urn:oxidowl:swrlRule` rule text +
 /// `urn:oxidowl:ontology` annotations) and the parser decodes them back —
 /// both were only *statically* wired before this asserted round-trip.

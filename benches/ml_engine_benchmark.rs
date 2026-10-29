@@ -25,9 +25,9 @@ fn default_constraints() -> ExecutionConstraints {
 /// Helper: Create a test ontology
 fn create_ontology(name: &str, class_count: usize) -> Ontology {
     let mut ontology = Ontology::new();
-    ontology.set_iri(IRI::new(&format!("http://bench.org/{}", name)));
+    ontology.set_iri(IRI::new(&format!("http://bench.org/{name}")));
     for i in 0..class_count {
-        let class_iri = IRI::new(&format!("http://bench.org/{}#C{}", name, i));
+        let class_iri = IRI::new(&format!("http://bench.org/{name}#C{i}"));
         ontology.add_class(Class::new(class_iri));
     }
     ontology
@@ -40,8 +40,7 @@ fn create_star_query(var_name: &str, class_name: &str) -> ConjunctiveQuery {
         body_atoms: vec![QueryAtom::ClassAtom {
             variable: QueryVariable::new(var_name.to_string()),
             class_expression: ClassExpression::class(IRI::new(&format!(
-                "http://bench.org/#{}",
-                class_name
+                "http://bench.org/#{class_name}"
             ))),
         }],
         constraints: Default::default(),
@@ -54,7 +53,7 @@ fn bench_strategy_selection(c: &mut Criterion) {
     let mut group = c.benchmark_group("strategy_selection");
     group.measurement_time(Duration::from_secs(10));
 
-    for size in [10, 50, 100, 500].iter() {
+    for size in &[10, 50, 100, 500] {
         let ontology = create_ontology("strategy_bench", *size);
         let ontology_arc = Arc::new(ontology.clone());
         let reasoning = Arc::new(
@@ -137,7 +136,7 @@ fn bench_query_throughput(c: &mut Criterion) {
             tokio::runtime::Runtime::new().expect("Failed to create tokio runtime for benchmark");
         b.iter(|| {
             for i in 0..10 {
-                let query = create_star_query("x", &format!("Class{}", i));
+                let query = create_star_query("x", &format!("Class{i}"));
                 let constraints = default_constraints();
                 let _ = rt.block_on(engine.execute_query(&query, constraints));
             }
@@ -242,7 +241,7 @@ fn bench_concurrent_execution(c: &mut Criterion) {
                 let handle = std::thread::spawn(move || {
                     let rt = tokio::runtime::Runtime::new()
                         .expect("Failed to create tokio runtime for benchmark");
-                    let query = create_star_query("x", &format!("C{}", i));
+                    let query = create_star_query("x", &format!("C{i}"));
                     let constraints = default_constraints();
                     rt.block_on(engine_clone.execute_query(&query, constraints))
                 });
@@ -262,7 +261,7 @@ fn bench_concurrent_execution(c: &mut Criterion) {
                 let handle = std::thread::spawn(move || {
                     let rt = tokio::runtime::Runtime::new()
                         .expect("Failed to create tokio runtime for benchmark");
-                    let query = create_star_query("x", &format!("C{}", i));
+                    let query = create_star_query("x", &format!("C{i}"));
                     let constraints = default_constraints();
                     rt.block_on(engine_clone.execute_query(&query, constraints))
                 });
@@ -283,7 +282,7 @@ fn bench_scalability(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(20));
     group.sample_size(10); // Reduce sample size for large ontologies
 
-    for size in [100, 500, 1000, 5000].iter() {
+    for size in &[100, 500, 1000, 5000] {
         let ontology = create_ontology("scale_bench", *size);
         let ontology_arc = Arc::new(ontology.clone());
         let reasoning = Arc::new(

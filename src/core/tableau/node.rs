@@ -576,7 +576,7 @@ mod tests {
         // Test nested quoted triple structure
         // << << :a :b :c >> :d :e >> :f :g
         let inner_qt_id = "<<http://ex.org/a http://ex.org/b http://ex.org/c>>".to_string();
-        let outer_qt_id = format!("<<{} http://ex.org/d http://ex.org/e>>", inner_qt_id);
+        let outer_qt_id = format!("<<{inner_qt_id} http://ex.org/d http://ex.org/e>>");
 
         let mut node = TableauNode::new(3, NodeType::Individual);
 

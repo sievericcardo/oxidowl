@@ -1376,13 +1376,13 @@ mod tests {
 
     #[test]
     fn test_manchester_ontology_parsing() {
-        let manchester_content = r#"
+        let manchester_content = r"
 Prefix: ex: <http://example.org/>
 
 Class: ex:Person
 
 Class: ex:Student
-"#;
+";
 
         let mut parser = ManchesterParser::default();
         let ontology = parser
@@ -1401,7 +1401,7 @@ Class: ex:Student
 
     #[test]
     fn test_full_manchester_ontology() {
-        let manchester_content = r#"
+        let manchester_content = r"
 Prefix: ex: <http://example.org/>
 
 Ontology: <http://example.org/onto>
@@ -1434,7 +1434,7 @@ Individual: ex:Bob
 AnnotationProperty: ex:label
     Domain: ex:Thing
     Range: xsd:string
-"#;
+";
 
         let mut parser = ManchesterParser::default();
         let ontology = parser

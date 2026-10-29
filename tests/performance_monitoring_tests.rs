@@ -47,7 +47,7 @@ fn test_query_profiling_integration() {
             5 * i as usize,
             100 * i as usize,
         );
-        let _ = profiler.record(timing).expect("Failed to record timing");
+        let () = profiler.record(timing).expect("Failed to record timing");
     }
 
     let stats = profiler.get_stats().expect("Failed to get query stats");
@@ -89,11 +89,11 @@ fn test_performance_monitor_integration() {
             Duration::from_millis((40 * i) as u64),
             Duration::from_millis((30 * i) as u64),
             Duration::from_millis((30 * i) as u64),
-            10 * i as usize,
-            5 * i as usize,
-            100 * i as usize,
+            10 * i,
+            5 * i,
+            100 * i,
         );
-        let _ = monitor
+        let () = monitor
             .record_query_timing(timing)
             .expect("Failed to record query timing");
     }
@@ -117,7 +117,7 @@ fn test_performance_monitor_integration() {
     assert!(formatted.contains("Memory:"));
     assert!(formatted.contains("Query Profiling:"));
 
-    println!("\n{}", formatted);
+    println!("\n{formatted}");
 }
 
 #[test]
@@ -140,7 +140,7 @@ fn test_performance_monitor_disabled() {
         5,
         100,
     );
-    let _ = monitor
+    let () = monitor
         .record_query_timing(timing)
         .expect("Failed to record timing");
 
@@ -209,7 +209,7 @@ fn test_profiler_max_timings_limit() {
             i as usize,
             i as usize,
         );
-        let _ = profiler.record(timing).expect("Failed to record timing");
+        let () = profiler.record(timing).expect("Failed to record timing");
     }
 
     // Should only have the last 5

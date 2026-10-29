@@ -508,7 +508,7 @@ mod tests {
                 let cache = cache.clone();
                 thread::spawn(move || {
                     let concept = ClassExpression::Class(Class {
-                        iri: format!("test{}", i).into(),
+                        iri: format!("test{i}").into(),
                     });
                     cache.put(concept.clone(), true);
                     cache.get(&concept)

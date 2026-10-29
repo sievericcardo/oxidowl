@@ -106,11 +106,11 @@ fn node_has_concept(tableau: &Tableau, node_id: usize, ce: &ClassExpression) -> 
 #[test]
 fn nested_existential_intersection_expands() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
 
     let filler = df.intersection_of(vec![
         b_cls.clone(),
@@ -118,7 +118,7 @@ fn nested_existential_intersection_expands() -> Result<()> {
     ]);
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.some_values_from(r.clone(), filler)),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -141,8 +141,7 @@ fn nested_existential_intersection_expands() -> Result<()> {
     assert_eq!(
         r_succs.len(),
         1,
-        "∃R.(B ⊓ ∃S.C) must create exactly one R-successor; got {:?}",
-        r_succs
+        "∃R.(B ⊓ ∃S.C) must create exactly one R-successor; got {r_succs:?}"
     );
     let y = r_succs[0];
 
@@ -161,8 +160,7 @@ fn nested_existential_intersection_expands() -> Result<()> {
     assert_eq!(
         s_succs.len(),
         1,
-        "nested ∃S.C must create exactly one S-successor; got {:?}",
-        s_succs
+        "nested ∃S.C must create exactly one S-successor; got {s_succs:?}"
     );
     let z = s_succs[0];
     assert!(
@@ -183,17 +181,17 @@ fn nested_existential_intersection_expands() -> Result<()> {
 #[test]
 fn universal_union_with_existential_complement_derives_b() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let r = df.obj_prop(&format!("{EX}R"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let r = df.obj_prop(format!("{EX}R"));
 
     let union = df.union_of(vec![b_cls.clone(), c_cls.clone()]);
     let not_c = df.complement_of(c_cls.clone());
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.all_values_from(r.clone(), union)),
         df.sub_class_of(a_cls.clone(), df.some_values_from(r.clone(), not_c.clone())),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -212,8 +210,7 @@ fn universal_union_with_existential_complement_derives_b() -> Result<()> {
     assert_eq!(
         r_succs.len(),
         1,
-        "∃R.¬C must create exactly one R-successor; got {:?}",
-        r_succs
+        "∃R.¬C must create exactly one R-successor; got {r_succs:?}"
     );
     let y = r_succs[0];
 
@@ -241,11 +238,11 @@ fn universal_union_with_existential_complement_derives_b() -> Result<()> {
 #[test]
 fn nested_cardinality_filler_expands() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let d_cls = df.class_ce(&format!("{EX}D"));
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let d_cls = df.class_ce(format!("{EX}D"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
 
     let filler = df.intersection_of(vec![
         b_cls.clone(),
@@ -253,7 +250,7 @@ fn nested_cardinality_filler_expands() -> Result<()> {
     ]);
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.some_values_from(r.clone(), filler)),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -289,8 +286,7 @@ fn nested_cardinality_filler_expands() -> Result<()> {
     assert_eq!(
         s_succs.len(),
         2,
-        "the nested ≥2 S.D on the R-successor must create two S-successors; got {:?}",
-        s_succs
+        "the nested ≥2 S.D on the R-successor must create two S-successors; got {s_succs:?}"
     );
     let d_label = ConceptLabel::Complex(Box::new(d_cls.clone()));
     for z in s_succs {
@@ -311,17 +307,17 @@ fn nested_cardinality_filler_expands() -> Result<()> {
 #[test]
 fn deep_nesting_three_levels_expands_to_leaf() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let t = df.obj_prop(&format!("{EX}T"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let t = df.obj_prop(format!("{EX}T"));
 
     let level3 = df.some_values_from(t.clone(), a_cls.clone());
     let level2 = df.some_values_from(s.clone(), level3);
     let level1 = df.some_values_from(r.clone(), level2);
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), level1),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -369,10 +365,10 @@ fn deep_nesting_three_levels_expands_to_leaf() -> Result<()> {
 #[test]
 fn nested_expression_with_data_some_values_expands() -> Result<()> {
     let df = DF::new();
-    let a_cls = df.class_ce(&format!("{EX}A"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
-    let r = df.obj_prop(&format!("{EX}R"));
-    let p = df.data_prop(&format!("{EX}P"));
+    let a_cls = df.class_ce(format!("{EX}A"));
+    let b_cls = df.class_ce(format!("{EX}B"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let p = df.data_prop(format!("{EX}P"));
     let int_range: DataRange = DataRange::Datatype(IRI::new(&format!("{XSD}int")));
 
     let data_some = ClassExpression::DataSomeValuesFrom {
@@ -382,7 +378,7 @@ fn nested_expression_with_data_some_values_expands() -> Result<()> {
     let filler = df.intersection_of(vec![b_cls.clone(), data_some.clone()]);
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a_cls.clone(), df.some_values_from(r.clone(), filler)),
-        df.class_assertion(a_cls.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(a_cls.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -419,8 +415,7 @@ fn nested_expression_with_data_some_values_expands() -> Result<()> {
     assert_eq!(
         data_succs.len(),
         1,
-        "the nested ∃P.xsd:int on the R-successor must mint one data successor; got {:?}",
-        data_succs
+        "the nested ∃P.xsd:int on the R-successor must mint one data successor; got {data_succs:?}"
     );
     let data_node = data_succs[0];
     assert!(
@@ -452,15 +447,15 @@ fn nested_expression_with_data_some_values_expands() -> Result<()> {
 #[test]
 fn cyclic_nested_expression_terminates_and_consistent() -> Result<()> {
     let df = DF::new();
-    let c_cls = df.class_ce(&format!("{EX}C"));
-    let d_cls = df.class_ce(&format!("{EX}D"));
-    let r = df.obj_prop(&format!("{EX}R"));
+    let c_cls = df.class_ce(format!("{EX}C"));
+    let d_cls = df.class_ce(format!("{EX}D"));
+    let r = df.obj_prop(format!("{EX}R"));
 
     let filler = df.intersection_of(vec![c_cls.clone(), d_cls.clone()]);
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(c_cls.clone(), df.some_values_from(r.clone(), filler)),
-        df.class_assertion(c_cls.clone(), df.named(&format!("{EX}a"))),
-        df.class_assertion(c_cls.clone(), df.named(&format!("{EX}b"))),
+        df.class_assertion(c_cls.clone(), df.named(format!("{EX}a"))),
+        df.class_assertion(c_cls.clone(), df.named(format!("{EX}b"))),
     ]);
     df.auto_declare(&mut ont);
 

@@ -6,13 +6,9 @@
 
 use oxidowl::{
     Ontology, ReasonerConfig, ReasoningService,
-    ontology::{
-        Class, ClassExpression, IRI, OntologyFormat,
-        axioms::{Axiom, SubClassOfAxiom},
-    },
-    parsers::{ParserFactory, parse_file_auto},
+    ontology::{Class, ClassExpression, IRI, OntologyFormat, axioms::Axiom},
+    parsers::ParserFactory,
 };
-use std::sync::Arc;
 
 fn rt() -> tokio::runtime::Runtime {
     tokio::runtime::Builder::new_current_thread()
@@ -43,7 +39,7 @@ fn parse_fs(owl: &str) -> Ontology {
 fn test_ore_small_consistency() {
     // Verifies that a small chemistry-domain ontology (typical ORE structure) loads
     // and passes consistency checking.
-    let owl = r#"
+    let owl = r"
 Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
 Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
 Ontology(<http://example.org/ore-mini>
@@ -54,7 +50,7 @@ Ontology(<http://example.org/ore-mini>
   SubClassOf(<http://example.org/C2> <http://example.org/C3>)
   DisjointClasses(<http://example.org/C1> owl:Nothing)
 )
-"#;
+";
     let ontology = parse_fs(owl);
     let rt = rt();
     let service = rt
@@ -74,7 +70,7 @@ Ontology(<http://example.org/ore-mini>
 fn test_transitive_property_subsumption() {
     // Verifies: if partOf is transitive, A partOf B, B partOf C → A partOf C
     // This is a key pattern in bio-ontologies (e.g., Gene Ontology) in ORE.
-    let owl = r#"
+    let owl = r"
 Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
 Ontology(<http://example.org/ore-transitive>
   Declaration(Class(<http://example.org/A>))
@@ -87,7 +83,7 @@ Ontology(<http://example.org/ore-transitive>
   SubClassOf(<http://example.org/B>
     ObjectSomeValuesFrom(<http://example.org/partOf> <http://example.org/C>))
 )
-"#;
+";
     let ontology = parse_fs(owl);
     let rt = rt();
     let service = rt
@@ -112,7 +108,7 @@ Ontology(<http://example.org/ore-transitive>
 
 #[test]
 fn test_equivalent_classes_subsumption() {
-    let owl = r#"
+    let owl = r"
 Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
 Ontology(<http://example.org/ore-equiv>
   Declaration(Class(<http://example.org/Parent>))
@@ -122,7 +118,7 @@ Ontology(<http://example.org/ore-equiv>
   EquivalentClasses(<http://example.org/Parent>
     ObjectMinCardinality(1 <http://example.org/hasChild> owl:Thing))
 )
-"#;
+";
     let ontology = parse_fs(owl);
     let rt = rt();
     let service = rt
@@ -151,7 +147,7 @@ Ontology(<http://example.org/ore-equiv>
 #[test]
 fn test_gene_ontology_like_classification() {
     // Mimics a fragment of GO-style ontology used in ORE-2015 benchmarks
-    let owl = r#"
+    let owl = r"
 Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
 Prefix(obo:=<http://purl.obolibrary.org/obo/>)
 Ontology(<http://purl.obolibrary.org/obo/test-go-fragment>
@@ -167,7 +163,7 @@ Ontology(<http://purl.obolibrary.org/obo/test-go-fragment>
     ObjectSomeValuesFrom(obo:BFO_0000050 obo:GO_0000003))
   SubClassOf(obo:GO_0000003 obo:GO_0000004)
 )
-"#;
+";
     let ontology = parse_fs(owl);
     let rt = rt();
     let service = rt
@@ -187,8 +183,7 @@ Ontology(<http://purl.obolibrary.org/obo/test-go-fragment>
     let owl_thing = make_class("http://www.w3.org/2002/07/owl#Thing");
     assert!(
         superclasses.contains(&owl_thing) || superclasses.contains(&go4),
-        "GO_0000001 should have superclasses. Got: {:?}",
-        superclasses
+        "GO_0000001 should have superclasses. Got: {superclasses:?}"
     );
 }
 

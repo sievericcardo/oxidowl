@@ -2,7 +2,6 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::*;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 

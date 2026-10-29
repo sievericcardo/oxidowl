@@ -1,6 +1,6 @@
 //! Lock Poisoning Tests
 //!
-//! This test suite ensures that poisoned RwLocks are handled gracefully with proper
+//! This test suite ensures that poisoned `RwLocks` are handled gracefully with proper
 //! error messages and backtraces, rather than propagating panics or ignoring the poison.
 
 use oxidowl::{
@@ -40,7 +40,7 @@ fn test_read_lock_poisoned() {
                 "Error should include context"
             );
         }
-        Err(e) => panic!("Expected LockPoisoned error, got: {:?}", e),
+        Err(e) => panic!("Expected LockPoisoned error, got: {e:?}"),
         Ok(_) => panic!("Should not succeed reading poisoned lock"),
     }
 }
@@ -77,7 +77,7 @@ fn test_write_lock_poisoned() {
                 "Error should include context"
             );
         }
-        Err(e) => panic!("Expected LockPoisoned error, got: {:?}", e),
+        Err(e) => panic!("Expected LockPoisoned error, got: {e:?}"),
         Ok(_) => panic!("Should not succeed writing to poisoned lock"),
     }
 }
@@ -133,8 +133,8 @@ fn test_multiple_threads_with_poisoned_lock() {
     for i in 0..5 {
         let data_clone = Arc::clone(&data);
         let handle = thread::spawn(move || {
-            let result = read_lock(&data_clone, &format!("thread {}: reading", i));
-            assert!(result.is_err(), "Thread {} should see poisoned lock", i);
+            let result = read_lock(&data_clone, &format!("thread {i}: reading"));
+            assert!(result.is_err(), "Thread {i} should see poisoned lock");
 
             match result {
                 Err(Error::LockPoisoned { .. }) => true,
@@ -219,11 +219,11 @@ fn test_concurrent_readers_no_poison() {
     for i in 0..10 {
         let data_clone = Arc::clone(&data);
         let handle = thread::spawn(move || {
-            let result = read_lock(&data_clone, &format!("reader {}", i));
-            assert!(result.is_ok(), "Reader {} should succeed", i);
+            let result = read_lock(&data_clone, &format!("reader {i}"));
+            assert!(result.is_ok(), "Reader {i} should succeed");
 
             let guard = result.expect("Test operation failed");
-            assert_eq!(guard.len(), 5, "Reader {} should see 5 elements", i);
+            assert_eq!(guard.len(), 5, "Reader {i} should see 5 elements");
             guard.clone()
         });
         handles.push(handle);
@@ -272,7 +272,7 @@ fn test_error_message_quality() {
                 "Should include detailed context"
             );
 
-            println!("Lock poisoning error message: {}", message);
+            println!("Lock poisoning error message: {message}");
         }
         _ => panic!("Expected LockPoisoned error with descriptive message"),
     }

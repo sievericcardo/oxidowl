@@ -17,7 +17,7 @@ fn main() -> Result<()> {
         // Get DL clauses as a string
         let dl_clauses_output = reasoner.get_dl_clauses_string()?;
         println!("DL Clauses generated programmatically:");
-        println!("{}", dl_clauses_output);
+        println!("{dl_clauses_output}");
 
         // Save to file
         reasoner.save_dl_clauses("library_test_dl_clauses.txt")?;

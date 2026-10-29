@@ -172,12 +172,12 @@ fn test_error_display_vs_debug() {
     let error = Error::internal("test: internal error");
 
     // Display should be user-friendly
-    let display_str = format!("{}", error);
+    let display_str = format!("{error}");
     assert!(display_str.contains("Internal logic error"));
     assert!(display_str.contains("test: internal error"));
 
     // Debug should include more details
-    let debug_str = format!("{:?}", error);
+    let debug_str = format!("{error:?}");
     assert!(debug_str.contains("Internal"));
 
     // Note: Backtrace is not automatically included in thiserror-based errors
@@ -275,7 +275,7 @@ fn test_nested_error_handling() {
 
     fn outer() -> Result<String, Error> {
         let value = middle()?;
-        Ok(format!("Value: {}", value))
+        Ok(format!("Value: {value}"))
     }
 
     let result = outer();

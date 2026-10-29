@@ -20,7 +20,7 @@ fn ex(local: &str) -> String {
 // 2.6 NNF Converter Tests
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// test_nnf_object_complement_of_intersection: ¬(C ⊓ D) → ¬C ⊔ ¬D (De Morgan)
+/// `test_nnf_object_complement_of_intersection`: ¬(C ⊓ D) → ¬C ⊔ ¬D (De Morgan)
 #[test]
 fn test_nnf_object_complement_of_intersection() {
     let conv = NNFConverter;
@@ -55,7 +55,7 @@ fn test_nnf_object_complement_of_intersection() {
     }
 }
 
-/// test_nnf_object_complement_of_union: ¬(C ⊔ D) → ¬C ⊓ ¬D
+/// `test_nnf_object_complement_of_union`: ¬(C ⊔ D) → ¬C ⊓ ¬D
 #[test]
 fn test_nnf_object_complement_of_union() {
     let conv = NNFConverter;
@@ -86,7 +86,7 @@ fn test_nnf_object_complement_of_union() {
     }
 }
 
-/// test_nnf_double_complement_elimination: ¬¬C → C
+/// `test_nnf_double_complement_elimination`: ¬¬C → C
 #[test]
 fn test_nnf_double_complement_elimination() {
     let conv = NNFConverter;
@@ -101,7 +101,7 @@ fn test_nnf_double_complement_elimination() {
     assert_eq!(result, a, "Double negation should be eliminated");
 }
 
-/// test_nnf_complement_of_some_values_from: ¬(∃R.C) → ∀R.¬C
+/// `test_nnf_complement_of_some_values_from`: ¬(∃R.C) → ∀R.¬C
 #[test]
 fn test_nnf_complement_of_some_values_from() {
     let conv = NNFConverter;
@@ -124,7 +124,7 @@ fn test_nnf_complement_of_some_values_from() {
     );
 }
 
-/// test_nnf_complement_of_all_values_from: ¬(∀R.C) → ∃R.¬C
+/// `test_nnf_complement_of_all_values_from`: ¬(∀R.C) → ∃R.¬C
 #[test]
 fn test_nnf_complement_of_all_values_from() {
     let conv = NNFConverter;
@@ -147,7 +147,7 @@ fn test_nnf_complement_of_all_values_from() {
     );
 }
 
-/// test_nnf_complement_of_min_cardinality: ¬(≥n R.C) → ≤(n-1) R.C for n≥1
+/// `test_nnf_complement_of_min_cardinality`: ¬(≥n R.C) → ≤(n-1) R.C for n≥1
 #[test]
 fn test_nnf_complement_of_min_cardinality() {
     let conv = NNFConverter;
@@ -192,7 +192,7 @@ fn test_nnf_complement_of_min_cardinality() {
     }
 }
 
-/// test_nnf_deeply_nested_expression: Apply NNF to 5+ levels deep nested class expression
+/// `test_nnf_deeply_nested_expression`: Apply NNF to 5+ levels deep nested class expression
 #[test]
 fn test_nnf_deeply_nested_expression() {
     let conv = NNFConverter;
@@ -234,7 +234,7 @@ fn test_nnf_deeply_nested_expression() {
     );
 }
 
-/// test_nnf_object_has_self: Document ¬(∃R.Self) behavior
+/// `test_nnf_object_has_self`: Document ¬(∃R.Self) behavior
 #[test]
 fn test_nnf_object_has_self() {
     let conv = NNFConverter;
@@ -274,7 +274,7 @@ fn test_nnf_object_has_self() {
 // 2.6 Class Expression Tests
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// test_class_expression_hash_equality: Same structure → same Debug representation
+/// `test_class_expression_hash_equality`: Same structure → same Debug representation
 #[test]
 fn test_class_expression_hash_equality() {
     let a = ClassExpression::class(IRI::new(&ex("A")));
@@ -289,7 +289,7 @@ fn test_class_expression_hash_equality() {
     // Structural equality via PartialEq
     assert_eq!(inter1, inter2, "Same structure should be equal");
     assert_eq!(
-        format!("{:?}", inter1),
+        format!("{inter1:?}"),
         format!("{:?}", inter2),
         "Same structure should have same Debug output"
     );
@@ -299,7 +299,7 @@ fn test_class_expression_hash_equality() {
     assert_ne!(inter1, inter3, "Different order should be unequal");
 }
 
-/// test_class_expression_deep_nesting_preservation: 10+ levels deep
+/// `test_class_expression_deep_nesting_preservation`: 10+ levels deep
 #[test]
 fn test_class_expression_deep_nesting_preservation() {
     // Build: ¬(¬(¬(...(A ⊓ B)...)))
@@ -334,7 +334,7 @@ fn test_class_expression_deep_nesting_preservation() {
 // 2.7 Axiom Construction Tests
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// test_builtin_class_recognition: owl:Thing and owl:Nothing recognized as built-in
+/// `test_builtin_class_recognition`: owl:Thing and owl:Nothing recognized as built-in
 #[test]
 fn test_builtin_class_recognition() {
     let thing = Class::thing();
@@ -359,7 +359,7 @@ fn test_builtin_class_recognition() {
     assert!(!custom.is_nothing());
 }
 
-/// test_builtin_property_recognition: owl:topObjectProperty, owl:bottomObjectProperty
+/// `test_builtin_property_recognition`: owl:topObjectProperty, owl:bottomObjectProperty
 #[test]
 fn test_builtin_property_recognition() {
     let top_iri = IRI::new("http://www.w3.org/2002/07/owl#topObjectProperty");
@@ -387,7 +387,7 @@ fn test_builtin_property_recognition() {
     assert!(!custom_iri.is_reserved_vocabulary());
 }
 
-/// test_declaration_entity_references: Declaration axiom entity reference tracking
+/// `test_declaration_entity_references`: Declaration axiom entity reference tracking
 #[test]
 fn test_declaration_entity_references() {
     let df = DF::new();
@@ -418,13 +418,13 @@ fn test_declaration_entity_references() {
     assert_eq!(decl_count, 3);
 }
 
-/// test_three_equivalents_roundtrip: EquivalentClasses(A, B, C) survives roundtrip
+/// `test_three_equivalents_roundtrip`: EquivalentClasses(A, B, C) survives roundtrip
 #[test]
 fn test_three_equivalents_roundtrip() {
     let df = DF::new();
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
-    let c = df.class_ce(&ex("C"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
+    let c = df.class_ce(ex("C"));
 
     let eq_ax = df.equivalent_classes(vec![a.clone(), b.clone(), c.clone()]);
 
@@ -449,14 +449,14 @@ fn test_three_equivalents_roundtrip() {
     }
 }
 
-/// test_disjoint_union_construction: Create DisjointUnion(C, [D, E, F]) and verify
+/// `test_disjoint_union_construction`: Create DisjointUnion(C, [D, E, F]) and verify
 #[test]
 fn test_disjoint_union_construction() {
     let df = DF::new();
-    let parent = df.class_ce(&ex("C"));
-    let d = df.class_ce(&ex("D"));
-    let e = df.class_ce(&ex("E"));
-    let f = df.class_ce(&ex("F"));
+    let parent = df.class_ce(ex("C"));
+    let d = df.class_ce(ex("D"));
+    let e = df.class_ce(ex("E"));
+    let f = df.class_ce(ex("F"));
 
     let ax = df.disjoint_union(parent.clone(), vec![d.clone(), e.clone(), f.clone()]);
 
@@ -478,14 +478,14 @@ fn test_disjoint_union_construction() {
     assert!(matches!(&axioms[0], Axiom::DisjointUnion(_)));
 }
 
-/// test_has_key_axiom_construction: Full HasKey axiom with object and data properties
+/// `test_has_key_axiom_construction`: Full `HasKey` axiom with object and data properties
 #[test]
 fn test_has_key_axiom_construction() {
     let df = DF::new();
-    let person = df.class_ce(&ex("Person"));
-    let ssn_obj_prop = df.obj_prop(&ex("hasSSN"));
-    let passport_obj_prop = df.obj_prop(&ex("hasPassport"));
-    let ssn_data_prop = df.data_prop(&ex("ssn"));
+    let person = df.class_ce(ex("Person"));
+    let ssn_obj_prop = df.obj_prop(ex("hasSSN"));
+    let passport_obj_prop = df.obj_prop(ex("hasPassport"));
+    let ssn_data_prop = df.data_prop(ex("ssn"));
 
     let ax = df.has_key(
         person.clone(),
@@ -512,7 +512,7 @@ fn test_has_key_axiom_construction() {
     assert!(has_haskey, "Ontology should contain the HasKey axiom");
 }
 
-/// test_datatype_definition_construction: DatatypeDefinition(customDT, DataComplementOf(Integer))
+/// `test_datatype_definition_construction`: DatatypeDefinition(customDT, DataComplementOf(Integer))
 #[test]
 fn test_datatype_definition_construction() {
     let df = DF::new();
@@ -544,7 +544,7 @@ fn test_datatype_definition_construction() {
     );
 }
 
-/// test_dl_expressivity_checker: Verify all 14 DL expressivity flags work
+/// `test_dl_expressivity_checker`: Verify all 14 DL expressivity flags work
 #[test]
 fn test_dl_expressivity_checker() {
     let checker = DLExpressivityChecker;
@@ -570,8 +570,8 @@ fn test_dl_expressivity_checker() {
 
     // Ontology with complement → should detect complement
     let df = DF::new();
-    let a = df.class_ce(&ex("A"));
-    let b = df.class_ce(&ex("B"));
+    let a = df.class_ce(ex("A"));
+    let b = df.class_ce(ex("B"));
     let not_b = ClassExpression::ObjectComplementOf(Box::new(b));
     let mut o1 = Ontology::new();
     o1.add_axiom(df.sub_class_of(a, not_b));
@@ -581,8 +581,8 @@ fn test_dl_expressivity_checker() {
     assert!(!expr1.has_universal, "No universal in this ontology");
 
     // Ontology with existential + universal → ALC base confirmed
-    let a2 = df.class_ce(&ex("A"));
-    let b2 = df.class_ce(&ex("B"));
+    let a2 = df.class_ce(ex("A"));
+    let b2 = df.class_ce(ex("B"));
     let p = ObjectPropertyExpression::ObjectProperty(ObjectProperty {
         iri: IRI::new(&ex("P")),
     });
@@ -619,15 +619,15 @@ fn test_dl_expressivity_checker() {
         iri: IRI::new(&ex("i")),
     });
     let one_of = ClassExpression::ObjectOneOf(vec![individual]);
-    let a3 = df.class_ce(&ex("A"));
+    let a3 = df.class_ce(ex("A"));
     let mut o4 = Ontology::new();
     o4.add_axiom(df.sub_class_of(a3, one_of));
     let expr4 = checker.analyze(&o4);
     assert!(expr4.has_nominals);
 
     // Cardinality
-    let a4 = df.class_ce(&ex("A"));
-    let b4 = df.class_ce(&ex("B"));
+    let a4 = df.class_ce(ex("A"));
+    let b4 = df.class_ce(ex("B"));
     let p2 = ObjectPropertyExpression::ObjectProperty(ObjectProperty {
         iri: IRI::new(&ex("P2")),
     });
@@ -642,7 +642,7 @@ fn test_dl_expressivity_checker() {
     assert!(expr5.has_cardinality);
 }
 
-/// test_owl_entity_renamer_basic: Rename an entity IRI and verify it's renamed in axioms
+/// `test_owl_entity_renamer_basic`: Rename an entity IRI and verify it's renamed in axioms
 #[test]
 fn test_owl_entity_renamer_basic() {
     let df = DF::new();
@@ -653,7 +653,7 @@ fn test_owl_entity_renamer_basic() {
     renamer.add_rename(old_iri.clone(), new_iri.clone(), EntityType::Class);
 
     // Create ontology with declaration and subclass axiom
-    let a = df.class_ce(&ex("A"));
+    let a = df.class_ce(ex("A"));
     let old_class = ClassExpression::class(old_iri.clone());
 
     let mut o = Ontology::new();
@@ -694,14 +694,12 @@ fn test_owl_entity_renamer_basic() {
 
     // Verify: the renamed axiom should reference new_iri, not old_iri
     for change in &changes {
-        if let oxidowl::manager::changes::OntologyChange::AddAxiom { axiom, .. } = change {
-            if let Axiom::SubClassOf(sc) = axiom {
-                if let ClassExpression::Class(cls) = &sc.superclass {
-                    if cls.iri == new_iri {
-                        return; // Success — found renamed class
-                    }
-                }
-            }
+        if let oxidowl::manager::changes::OntologyChange::AddAxiom { axiom, .. } = change
+            && let Axiom::SubClassOf(sc) = axiom
+            && let ClassExpression::Class(cls) = &sc.superclass
+            && cls.iri == new_iri
+        {
+            return; // Success — found renamed class
         }
     }
 
@@ -709,12 +707,12 @@ fn test_owl_entity_renamer_basic() {
     assert!(changes.len() >= 2, "Should have at least remove+add pair");
 }
 
-/// test_owl_entity_remover_basic: Remove an entity from ontology, verify related axioms removed
+/// `test_owl_entity_remover_basic`: Remove an entity from ontology, verify related axioms removed
 #[test]
 fn test_owl_entity_remover_basic() {
     let df = DF::new();
     let target_iri = IRI::new(&ex("TargetClass"));
-    let a = df.class_ce(&ex("A"));
+    let a = df.class_ce(ex("A"));
     let target_ce = ClassExpression::class(target_iri.clone());
 
     // Build ontology with axioms mentioning the target
@@ -732,8 +730,8 @@ fn test_owl_entity_remover_basic() {
     }));
 
     // Also add an unrelated axiom
-    let b = df.class_ce(&ex("B"));
-    let c = df.class_ce(&ex("C"));
+    let b = df.class_ce(ex("B"));
+    let c = df.class_ce(ex("C"));
     o.add_axiom(df.sub_class_of(b, c));
 
     let onto_ref = Arc::new(std::sync::RwLock::new(o));

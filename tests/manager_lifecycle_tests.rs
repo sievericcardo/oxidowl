@@ -606,7 +606,7 @@ fn test_save_ontology_to_string_and_reload() {
         .save_ontology_to_string(&iri, OntologyFormat::Functional)
         .expect("Save to string should succeed");
 
-    let mut tb2 = TestBase::new();
+    let tb2 = TestBase::new();
     let reloaded = tb2
         .load_and_get_ontology(&serialized, OntologyFormat::Functional)
         .expect("Reload should succeed");
@@ -639,7 +639,7 @@ fn test_save_ontology_to_file() {
 
     assert!(file_path.exists());
 
-    let mut tb2 = TestBase::new();
+    let tb2 = TestBase::new();
     let content = std::fs::read_to_string(&file_path).expect("Should read saved file");
     let reloaded = tb2
         .load_and_get_ontology(&content, OntologyFormat::Functional)
@@ -712,8 +712,8 @@ fn test_manager_config_history_depth() {
 
     for i in 0..5 {
         let axiom = df.sub_class_of(
-            df.class_ce(&format!("http://ex.org/C{i}")),
-            df.class_ce(&format!("http://ex.org/C{}", i + 1)),
+            df.class_ce(format!("http://ex.org/C{i}")),
+            df.class_ce(format!("http://ex.org/C{}", i + 1)),
         );
         manager.apply_change(OntologyChange::AddAxiom {
             ontology_iri: iri.clone(),
@@ -754,7 +754,7 @@ fn test_loader_resolves_imports_recursively() {
     let imported_iri = IRI::new(&format!("{base}/B"));
 
     // Write the imported ontology to a temp file.
-    let mut tb = TestBase::new();
+    let tb = TestBase::new();
     let b_path = tb.temp_dir.path().join("B.ofn");
     let b_content = format!(
         "Ontology(<{imported_iri}>\n  ClassAssertion(<http://test.org/C> <http://test.org/i>)\n)\n"
@@ -815,7 +815,7 @@ fn test_loader_resolves_imports_recursively() {
 fn test_loader_skips_unresolved_imports_in_silent_mode() {
     use oxidowl::OntologyLoader;
 
-    let mut tb = TestBase::new();
+    let tb = TestBase::new();
     let a_iri = IRI::new("http://test.org/missingimport/A");
     let missing = IRI::new("urn:test:does-not-exist");
     let a_path = tb.temp_dir.path().join("missing.ofn");
@@ -840,7 +840,7 @@ fn test_loader_skips_unresolved_imports_in_silent_mode() {
 fn test_loader_errors_on_unresolved_imports_in_strict_mode() {
     use oxidowl::OntologyLoader;
 
-    let mut tb = TestBase::new();
+    let tb = TestBase::new();
     let a_iri = IRI::new("http://test.org/strictmissing/A");
     let missing = IRI::new("urn:test:does-not-exist");
     let a_path = tb.temp_dir.path().join("strict.ofn");

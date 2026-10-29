@@ -703,7 +703,7 @@ mod tests {
         cache.get(fp, 2); // Miss
 
         let stats = cache.statistics();
-        let display = format!("{}", stats);
+        let display = format!("{stats}");
 
         // Should contain key metrics
         assert!(display.contains("Cache:"));

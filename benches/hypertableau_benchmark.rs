@@ -24,7 +24,7 @@ fn create_linear_hierarchy(size: usize) -> Ontology {
 
     for i in 0..size {
         let subclass = Class {
-            iri: IRI::new(&format!("http://example.org/Class{}", i)),
+            iri: IRI::new(&format!("http://example.org/Class{i}")),
         };
         let superclass = Class {
             iri: IRI::new(&format!("http://example.org/Class{}", i + 1)),
@@ -90,13 +90,13 @@ fn create_complex_expressions(size: usize) -> Ontology {
 
     for i in 0..(size / 2) {
         let class_a = Class {
-            iri: IRI::new(&format!("http://example.org/A{}", i)),
+            iri: IRI::new(&format!("http://example.org/A{i}")),
         };
         let class_b = Class {
-            iri: IRI::new(&format!("http://example.org/B{}", i)),
+            iri: IRI::new(&format!("http://example.org/B{i}")),
         };
         let class_c = Class {
-            iri: IRI::new(&format!("http://example.org/C{}", i)),
+            iri: IRI::new(&format!("http://example.org/C{i}")),
         };
 
         // Create: C ⊑ A ⊓ B (intersection)
@@ -114,7 +114,7 @@ fn create_complex_expressions(size: usize) -> Ontology {
 
         // Create: A ⊔ B ⊑ D (union)
         let class_d = Class {
-            iri: IRI::new(&format!("http://example.org/D{}", i)),
+            iri: IRI::new(&format!("http://example.org/D{i}")),
         };
         let union = ClassExpression::ObjectUnionOf(vec![
             ClassExpression::Class(class_a),
@@ -138,10 +138,10 @@ fn create_equivalent_classes(size: usize) -> Ontology {
 
     for i in 0..size {
         let class_a = Class {
-            iri: IRI::new(&format!("http://example.org/A{}", i)),
+            iri: IRI::new(&format!("http://example.org/A{i}")),
         };
         let class_b = Class {
-            iri: IRI::new(&format!("http://example.org/B{}", i)),
+            iri: IRI::new(&format!("http://example.org/B{i}")),
         };
 
         ontology.add_axiom(Axiom::EquivalentClasses(EquivalentClassesAxiom {
@@ -163,10 +163,10 @@ fn create_disjoint_classes(size: usize) -> Ontology {
 
     for i in 0..size {
         let class_a = Class {
-            iri: IRI::new(&format!("http://example.org/A{}", i)),
+            iri: IRI::new(&format!("http://example.org/A{i}")),
         };
         let class_b = Class {
-            iri: IRI::new(&format!("http://example.org/B{}", i)),
+            iri: IRI::new(&format!("http://example.org/B{i}")),
         };
 
         ontology.add_axiom(Axiom::DisjointClasses(DisjointClassesAxiom {
@@ -186,7 +186,7 @@ fn create_disjoint_classes(size: usize) -> Ontology {
 fn bench_linear_hierarchy(c: &mut Criterion) {
     let mut group = c.benchmark_group("linear_hierarchy");
 
-    for size in [10, 50, 100, 200].iter() {
+    for size in &[10, 50, 100, 200] {
         let ontology = create_linear_hierarchy(*size);
 
         group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {
@@ -228,9 +228,9 @@ fn bench_tree_hierarchy(c: &mut Criterion) {
     let mut group = c.benchmark_group("tree_hierarchy");
 
     // Test different tree configurations: (depth, branching_factor)
-    for (depth, branching) in [(3, 3), (4, 2), (3, 4)].iter() {
+    for (depth, branching) in &[(3, 3), (4, 2), (3, 4)] {
         let ontology = create_tree_hierarchy(*depth, *branching);
-        let label = format!("d{}_b{}", depth, branching);
+        let label = format!("d{depth}_b{branching}");
 
         group.bench_with_input(
             BenchmarkId::new("traditional", &label),
@@ -278,7 +278,7 @@ fn bench_tree_hierarchy(c: &mut Criterion) {
 fn bench_complex_expressions(c: &mut Criterion) {
     let mut group = c.benchmark_group("complex_expressions");
 
-    for size in [10, 20, 50, 100].iter() {
+    for size in &[10, 20, 50, 100] {
         let ontology = create_complex_expressions(*size);
 
         group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {
@@ -319,7 +319,7 @@ fn bench_complex_expressions(c: &mut Criterion) {
 fn bench_equivalent_classes(c: &mut Criterion) {
     let mut group = c.benchmark_group("equivalent_classes");
 
-    for size in [10, 50, 100].iter() {
+    for size in &[10, 50, 100] {
         let ontology = create_equivalent_classes(*size);
 
         group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {
@@ -360,7 +360,7 @@ fn bench_equivalent_classes(c: &mut Criterion) {
 fn bench_disjoint_classes(c: &mut Criterion) {
     let mut group = c.benchmark_group("disjoint_classes");
 
-    for size in [10, 50, 100].iter() {
+    for size in &[10, 50, 100] {
         let ontology = create_disjoint_classes(*size);
 
         group.bench_with_input(BenchmarkId::new("traditional", size), size, |b, _size| {

@@ -900,7 +900,7 @@ mod tests {
         for i in 0..5 {
             let node_info = NodeInfo {
                 id: Uuid::new_v4(),
-                address: format!("127.0.0.1:808{}", i)
+                address: format!("127.0.0.1:808{i}")
                     .parse()
                     .expect("Failed to parse socket address for cluster node"),
                 capabilities: crate::distributed::NodeCapabilities::default(),

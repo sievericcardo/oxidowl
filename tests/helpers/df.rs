@@ -21,6 +21,7 @@ impl Default for DF {
 }
 
 impl DF {
+    #[must_use]
     pub fn new() -> Self {
         DF {
             df: DataFactory::new(),
@@ -691,8 +692,8 @@ impl DF {
         let mut declared_ann_props = std::collections::HashSet::new();
 
         for ax in ontology.axioms() {
-            match ax {
-                Axiom::Declaration(d) => match &d.entity {
+            if let Axiom::Declaration(d) = ax {
+                match &d.entity {
                     Entity::Class(iri) => {
                         declared_classes.insert(iri.clone());
                     }
@@ -709,8 +710,7 @@ impl DF {
                         declared_ann_props.insert(iri.clone());
                     }
                     _ => {}
-                },
-                _ => {}
+                }
             }
         }
 
@@ -1156,7 +1156,7 @@ impl DF {
         }
     }
 
-    /// Wrap as Arc<RwLock<Ontology>>
+    /// Wrap as Arc<`RwLock`<Ontology>>
     pub fn onto_ref(&self, ontology: Ontology) -> OntologyRef {
         Arc::new(std::sync::RwLock::new(ontology))
     }
@@ -1175,10 +1175,12 @@ pub mod pred {
     pub const RDFS: &str = "http://www.w3.org/2000/01/rdf-schema#";
     pub const XSD: &str = "http://www.w3.org/2001/XMLSchema#";
 
+    #[must_use]
     pub fn ex_iri(local: &str) -> IRI {
         IRI::new(&format!("{EX}{local}"))
     }
 
+    #[must_use]
     pub fn test_iri(local: &str) -> IRI {
         IRI::new(&format!("{TEST}{local}"))
     }

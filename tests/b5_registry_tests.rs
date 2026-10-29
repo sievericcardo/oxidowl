@@ -1,12 +1,12 @@
 //! B5 Slice 0 — format-registry foundation (docs/PLAN.md, CR-008 follow-up).
 //!
 //! Locks the *registry plumbing* that makes the B5 formats (JSON-LD, N3,
-//! N-Quads, TriG, TriX, RDFa, RDF/JSON, HDT, BinaryRDF) reachable:
+//! N-Quads, `TriG`, `TriX`, `RDFa`, RDF/JSON, HDT, `BinaryRDF`) reachable:
 //!
 //! 1. **Extension mapping** — `OntologyFormat::from_extension` and
 //!    `parse_file_auto` route every B5 extension to its format.
 //! 2. **Content detection** — `$HDT` / `BRDF` magic, JSON-LD `@context` /
-//!    `@graph`, HTML → RDFa; plus non-regression of the pre-existing
+//!    `@graph`, HTML → `RDFa`; plus non-regression of the pre-existing
 //!    detections (Turtle, Functional, RDF/XML).
 //! 3. **Binary-safe I/O** — `BinaryRDF` byte round-trip with a ≥128-entry
 //!    dictionary (varint bytes ≥ 0x80), the `save_to_string` refusal guard,
@@ -441,7 +441,7 @@ fn parser_factory_reaches_all_rio_formats() {
 /// Round-trips through the `Parser`-trait bridge for the text formats whose
 /// renderer/parser pair is symmetric (registry plumbing, not spec compliance).
 ///
-/// The *binary* formats (BinaryRDF, HDT) are excluded from the string path
+/// The *binary* formats (`BinaryRDF`, HDT) are excluded from the string path
 /// on purpose: `save_to_string` refuses them by design (a `String` cannot
 /// hold their bytes losslessly), so they reach the bridge through the
 /// byte-oriented `parse_file` — exercised in the second loop.

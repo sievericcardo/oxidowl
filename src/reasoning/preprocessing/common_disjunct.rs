@@ -197,7 +197,7 @@ mod tests {
     fn atom(pred: &str, args: &[&str]) -> DLAtom {
         DLAtom {
             predicate: pred.to_string(),
-            arguments: args.iter().map(|s| s.to_string()).collect(),
+            arguments: args.iter().map(std::string::ToString::to_string).collect(),
             is_positive: true,
             constraints: Vec::new(),
         }

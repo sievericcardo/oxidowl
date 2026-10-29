@@ -741,7 +741,7 @@ fn test_many_different_individuals() {
     let df = DF::new();
 
     let individuals: Vec<Individual> = (0..7)
-        .map(|i| df.named(&format!("http://ex.org/ind_{i}")))
+        .map(|i| df.named(format!("http://ex.org/ind_{i}")))
         .collect();
 
     assert_eq!(individuals.len(), 7, "Should have 7 individuals");
@@ -758,8 +758,7 @@ fn test_many_different_individuals() {
             for (i, ind) in individuals.iter().enumerate() {
                 assert!(
                     di.individuals.contains(ind),
-                    "Must contain individual ind_{}",
-                    i
+                    "Must contain individual ind_{i}"
                 );
             }
         }

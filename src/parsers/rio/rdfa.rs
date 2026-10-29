@@ -629,6 +629,7 @@ impl DocumentScan {
         scan
     }
 
+    #[allow(clippy::needless_borrow, clippy::explicit_auto_deref)]
     fn walk(&mut self, node: &Handle, fallback: &Url, depth: usize) {
         // CR-011 B1: never recurse past the shared depth cap.  Documents this
         // deep are rejected up front by `parse_with_base`, so this is a

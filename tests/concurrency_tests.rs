@@ -15,8 +15,8 @@ use std::thread;
 
 fn make_axiom(i: usize) -> Axiom {
     let df = DF::new();
-    let a = df.class_ce(&format!("http://ex.org/A{i}"));
-    let b = df.class_ce(&format!("http://ex.org/B{i}"));
+    let a = df.class_ce(format!("http://ex.org/A{i}"));
+    let b = df.class_ce(format!("http://ex.org/B{i}"));
     df.sub_class_of(a, b)
 }
 
@@ -218,8 +218,8 @@ fn test_ontology_ref_shared_access() {
     // Pre-create all axioms before sharing
     let axioms: Vec<Axiom> = (0..10)
         .map(|i| {
-            let a = df.class_ce(&format!("http://ex.org/A{i}"));
-            let b = df.class_ce(&format!("http://ex.org/B{i}"));
+            let a = df.class_ce(format!("http://ex.org/A{i}"));
+            let b = df.class_ce(format!("http://ex.org/B{i}"));
             df.sub_class_of(a, b)
         })
         .collect();

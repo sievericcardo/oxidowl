@@ -157,7 +157,7 @@ mod tests {
         let flat = subs.get_flattened();
         assert!(flat.iter().any(|c| {
             match c {
-                ClassExpression::Class(cls) => cls.iri.as_str().contains("A"),
+                ClassExpression::Class(cls) => cls.iri.as_str().contains('A'),
                 _ => false,
             }
         }));
@@ -175,7 +175,7 @@ mod tests {
         assert!(!sups.is_empty());
         assert!(sups.get_flattened().iter().any(|c| {
             match c {
-                ClassExpression::Class(cls) => cls.iri.as_str().contains("B"),
+                ClassExpression::Class(cls) => cls.iri.as_str().contains('B'),
                 _ => false,
             }
         }));

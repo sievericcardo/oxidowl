@@ -2,7 +2,6 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::*;
 use oxidowl::debug::{BlackBoxOWLDebugger, DebuggerConfig, OWLDebugger};
 use oxidowl::explanation::blackbox::{BlackBoxConfig, BlackBoxExplanation};
 use oxidowl::explanation::converter::SatisfiabilityConverter;

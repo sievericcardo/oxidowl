@@ -1,7 +1,6 @@
 #[path = "helpers/mod.rs"]
 mod helpers;
 use helpers::df::DF;
-use helpers::*;
 use oxidowl::modularity::decomposition::compute_atomic_decomposition;
 use oxidowl::modularity::extractor::{ModuleExtractor, ModuleExtractorConfig, ModuleType};
 use oxidowl::modularity::locality::{LocalityClass, LocalityEvaluator, SyntacticLocalityEvaluator};
@@ -61,7 +60,7 @@ fn test_module_extraction_upper_bound() {
     let contains_a = module
         .axioms()
         .iter()
-        .any(|ax| format!("{:?}", ax).contains("http://ex.org/A"));
+        .any(|ax| format!("{ax:?}").contains("http://ex.org/A"));
     assert!(
         contains_a,
         "Upper bound module should contain axioms mentioning A"
@@ -94,7 +93,7 @@ fn test_module_extraction_lower_bound() {
     let contains_a = module
         .axioms()
         .iter()
-        .any(|ax| format!("{:?}", ax).contains("http://ex.org/A"));
+        .any(|ax| format!("{ax:?}").contains("http://ex.org/A"));
     assert!(
         contains_a,
         "Lower bound module should contain axioms mentioning A"

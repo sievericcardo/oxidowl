@@ -1,11 +1,11 @@
 //! Comprehensive Example: OWL API v5 Features in Oxidowl
 //!
-//! Demonstrates all major OWL API v5 feature areas: DataFactory,
-//! OntologyManager, parsers, reasoners, profiles, SWRL, SHACL,
+//! Demonstrates all major OWL API v5 feature areas: `DataFactory`,
+//! `OntologyManager`, parsers, reasoners, profiles, SWRL, SHACL,
 //! explanation, modularity, transforms, DL clauses, distributed
 //! config, shortform providers, vocabularies, and datatypes.
 //!
-//! Run: cargo run --example comprehensive_owlapi_usage
+//! Run: cargo run --example `comprehensive_owlapi_usage`
 
 #![allow(unused_imports, unused_variables, dead_code)]
 
@@ -405,10 +405,10 @@ async fn demo_query_system() -> Result<()> {
     )?);
     let engine = DLQueryEngine::new_with_namespace(svc.clone(), NS.into());
     let result = engine.execute_query("subclasses: Person").await?;
-    println!("   DLQuery 'subclasses: Person': {:?}", result);
+    println!("   DLQuery 'subclasses: Person': {result:?}");
     let parser = DLQueryParser::new();
     let parsed = parser.parse("Employee and Manager")?;
-    println!("   DLQueryParser: {:?}", parsed);
+    println!("   DLQueryParser: {parsed:?}");
     Ok(())
 }
 
@@ -597,10 +597,7 @@ fn demo_change_system() -> Result<()> {
     mgr.set_broadcast_strategy(ChangeBroadcastStrategy::Immediate);
     println!("   Broadcast strategy: Immediate");
     let snap = mgr.snapshot_ontology(&iri);
-    println!(
-        "   Snapshot: {} axioms",
-        snap.map(|s| s.axioms.len()).unwrap_or(0)
-    );
+    println!("   Snapshot: {} axioms", snap.map_or(0, |s| s.axioms.len()));
     Ok(())
 }
 

@@ -1,9 +1,9 @@
-//! Integration tests for RBox (role-axiom) enforcement in the active tableau
+//! Integration tests for `RBox` (role-axiom) enforcement in the active tableau
 //! (workstream A5).
 //!
 //! Covers: transitivity, symmetry, asymmetry, irreflexivity, reflexivity, disjoint
 //! roles, functional / inverse-functional merging, role inclusions, complex role
-//! inclusions (RIAs of length > 2), negative object property assertions, HasKey,
+//! inclusions (RIAs of length > 2), negative object property assertions, `HasKey`,
 //! and the non-simple-property interplay (no crash).
 
 mod helpers;
@@ -75,18 +75,18 @@ fn has_edge(tableau: &Tableau, a: &str, b: &str, role: &str) -> bool {
 #[test]
 fn rbox_transitivity_entails_direct_edge() -> Result<()> {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
     let mut ont = df.build_ontology(vec![
         df.transitive_object_property(r.clone()),
         df.object_property_assertion(
             r.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
         df.object_property_assertion(
             r.clone(),
-            df.named(&format!("{EX}b")),
-            df.named(&format!("{EX}c")),
+            df.named(format!("{EX}b")),
+            df.named(format!("{EX}c")),
         ),
     ]);
     df.auto_declare(&mut ont);
@@ -113,13 +113,13 @@ fn rbox_transitivity_entails_direct_edge() -> Result<()> {
 #[test]
 fn rbox_symmetry_derives_reverse_edge() -> Result<()> {
     let df = DF::new();
-    let s = df.obj_prop(&format!("{EX}S"));
+    let s = df.obj_prop(format!("{EX}S"));
     let mut ont = df.build_ontology(vec![
         df.symmetric_object_property(s.clone()),
         df.object_property_assertion(
             s.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
     ]);
     df.auto_declare(&mut ont);
@@ -146,18 +146,18 @@ fn rbox_symmetry_derives_reverse_edge() -> Result<()> {
 #[test]
 fn rbox_asymmetry_clash() -> Result<()> {
     let df = DF::new();
-    let a = df.obj_prop(&format!("{EX}A"));
+    let a = df.obj_prop(format!("{EX}A"));
     let mut ont = df.build_ontology(vec![
         df.asymmetric_object_property(a.clone()),
         df.object_property_assertion(
             a.clone(),
-            df.named(&format!("{EX}x")),
-            df.named(&format!("{EX}y")),
+            df.named(format!("{EX}x")),
+            df.named(format!("{EX}y")),
         ),
         df.object_property_assertion(
             a.clone(),
-            df.named(&format!("{EX}y")),
-            df.named(&format!("{EX}x")),
+            df.named(format!("{EX}y")),
+            df.named(format!("{EX}x")),
         ),
     ]);
     df.auto_declare(&mut ont);
@@ -185,13 +185,13 @@ fn rbox_asymmetry_clash() -> Result<()> {
 #[test]
 fn rbox_irreflexivity_clash() -> Result<()> {
     let df = DF::new();
-    let i = df.obj_prop(&format!("{EX}I"));
+    let i = df.obj_prop(format!("{EX}I"));
     let mut ont = df.build_ontology(vec![
         df.irreflexive_object_property(i.clone()),
         df.object_property_assertion(
             i.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}a")),
         ),
     ]);
     df.auto_declare(&mut ont);
@@ -215,11 +215,11 @@ fn rbox_irreflexivity_clash() -> Result<()> {
 #[test]
 fn rbox_reflexivity_derives_self_loops() -> Result<()> {
     let df = DF::new();
-    let rf = df.obj_prop(&format!("{EX}RF"));
+    let rf = df.obj_prop(format!("{EX}RF"));
     let mut ont = df.build_ontology(vec![
         df.reflexive_object_property(rf.clone()),
         // A named individual a so there is an individual witness in the tableau.
-        df.class_assertion(df.owl_thing(), df.named(&format!("{EX}a"))),
+        df.class_assertion(df.owl_thing(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -245,19 +245,19 @@ fn rbox_reflexivity_derives_self_loops() -> Result<()> {
 #[test]
 fn rbox_disjoint_roles_clash() -> Result<()> {
     let df = DF::new();
-    let p = df.obj_prop(&format!("{EX}P"));
-    let q = df.obj_prop(&format!("{EX}Q"));
+    let p = df.obj_prop(format!("{EX}P"));
+    let q = df.obj_prop(format!("{EX}Q"));
     let mut ont = df.build_ontology(vec![
         df.disjoint_object_properties(vec![p.clone(), q.clone()]),
         df.object_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
         df.object_property_assertion(
             q.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
     ]);
     df.auto_declare(&mut ont);
@@ -281,18 +281,18 @@ fn rbox_disjoint_roles_clash() -> Result<()> {
 #[test]
 fn rbox_functional_merges_successors() -> Result<()> {
     let df = DF::new();
-    let p = df.obj_prop(&format!("{EX}P"));
+    let p = df.obj_prop(format!("{EX}P"));
     let mut ont = df.build_ontology(vec![
         df.functional_object_property(p.clone()),
         df.object_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
         df.object_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}c")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}c")),
         ),
     ]);
     df.auto_declare(&mut ont);
@@ -323,18 +323,18 @@ fn rbox_functional_merges_successors() -> Result<()> {
 #[test]
 fn rbox_inverse_functional_merges_sources() -> Result<()> {
     let df = DF::new();
-    let p = df.obj_prop(&format!("{EX}P"));
+    let p = df.obj_prop(format!("{EX}P"));
     let mut ont = df.build_ontology(vec![
         df.inverse_functional_object_property(p.clone()),
         df.object_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}c")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}c")),
         ),
         df.object_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}b")),
-            df.named(&format!("{EX}c")),
+            df.named(format!("{EX}b")),
+            df.named(format!("{EX}c")),
         ),
     ]);
     df.auto_declare(&mut ont);
@@ -364,14 +364,14 @@ fn rbox_inverse_functional_merges_sources() -> Result<()> {
 #[test]
 fn rbox_role_inclusion_derives_super_edge() -> Result<()> {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
     let mut ont = df.build_ontology(vec![
         df.sub_object_property_of(r.clone(), s.clone()),
         df.object_property_assertion(
             r.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
     ]);
     df.auto_declare(&mut ont);
@@ -399,27 +399,27 @@ fn rbox_role_inclusion_derives_super_edge() -> Result<()> {
 #[test]
 fn rbox_ria_length_three_composes_path() -> Result<()> {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let t = df.obj_prop(&format!("{EX}T"));
-    let u = df.obj_prop(&format!("{EX}U"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let t = df.obj_prop(format!("{EX}T"));
+    let u = df.obj_prop(format!("{EX}U"));
     let chain = ObjectPropertyExpression::PropertyChain(vec![r.clone(), s.clone(), t.clone()]);
     let mut ont = df.build_ontology(vec![
         df.sub_object_property_of(chain, u.clone()),
         df.object_property_assertion(
             r.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
         df.object_property_assertion(
             s.clone(),
-            df.named(&format!("{EX}b")),
-            df.named(&format!("{EX}c")),
+            df.named(format!("{EX}b")),
+            df.named(format!("{EX}c")),
         ),
         df.object_property_assertion(
             t.clone(),
-            df.named(&format!("{EX}c")),
-            df.named(&format!("{EX}d")),
+            df.named(format!("{EX}c")),
+            df.named(format!("{EX}d")),
         ),
     ]);
     df.auto_declare(&mut ont);
@@ -446,17 +446,17 @@ fn rbox_ria_length_three_composes_path() -> Result<()> {
 #[test]
 fn rbox_negative_object_property_assertion_clash() -> Result<()> {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
     let mut ont = df.build_ontology(vec![
         df.negative_object_property_assertion(
             r.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
         df.object_property_assertion(
             r.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
     ]);
     df.auto_declare(&mut ont);
@@ -480,17 +480,14 @@ fn rbox_negative_object_property_assertion_clash() -> Result<()> {
 #[test]
 fn rbox_negative_assertion_conflicts_with_same_individual() -> Result<()> {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
+    let r = df.obj_prop(format!("{EX}R"));
     let mut ont = df.build_ontology(vec![
         df.negative_object_property_assertion(
             r.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
-        df.same_individual(vec![
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
-        ]),
+        df.same_individual(vec![df.named(format!("{EX}a")), df.named(format!("{EX}b"))]),
     ]);
     df.auto_declare(&mut ont);
 
@@ -512,15 +509,15 @@ fn rbox_negative_assertion_conflicts_with_same_individual() -> Result<()> {
 #[test]
 fn rbox_has_key_merges_individuals() -> Result<()> {
     let df = DF::new();
-    let c = df.class_ce(&format!("{EX}C"));
-    let p = df.obj_prop(&format!("{EX}P"));
-    let v = df.named(&format!("{EX}v"));
+    let c = df.class_ce(format!("{EX}C"));
+    let p = df.obj_prop(format!("{EX}P"));
+    let v = df.named(format!("{EX}v"));
     let mut ont = df.build_ontology(vec![
         df.has_key(c.clone(), vec![p.clone()], vec![]),
-        df.class_assertion(c.clone(), df.named(&format!("{EX}a"))),
-        df.class_assertion(c.clone(), df.named(&format!("{EX}b"))),
-        df.object_property_assertion(p.clone(), df.named(&format!("{EX}a")), v.clone()),
-        df.object_property_assertion(p.clone(), df.named(&format!("{EX}b")), v.clone()),
+        df.class_assertion(c.clone(), df.named(format!("{EX}a"))),
+        df.class_assertion(c.clone(), df.named(format!("{EX}b"))),
+        df.object_property_assertion(p.clone(), df.named(format!("{EX}a")), v.clone()),
+        df.object_property_assertion(p.clone(), df.named(format!("{EX}b")), v.clone()),
     ]);
     df.auto_declare(&mut ont);
 
@@ -547,13 +544,13 @@ fn rbox_has_key_merges_individuals() -> Result<()> {
 #[test]
 fn rbox_cardinality_on_transitive_property_does_not_crash() -> Result<()> {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let c = df.class_ce(&format!("{EX}C"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let c = df.class_ce(format!("{EX}C"));
     let atleast2 = df.min_cardinality(2, r.clone(), df.owl_thing());
     let mut ont = df.build_ontology(vec![
         df.transitive_object_property(r.clone()),
         df.sub_class_of(c.clone(), atleast2),
-        df.class_assertion(c.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(c.clone(), df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -582,14 +579,8 @@ fn rbox_cardinality_on_transitive_property_does_not_crash() -> Result<()> {
 fn rbox_same_individual_conflicts_with_different_individuals() -> Result<()> {
     let df = DF::new();
     let mut ont = df.build_ontology(vec![
-        df.same_individual(vec![
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
-        ]),
-        df.different_individuals(vec![
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
-        ]),
+        df.same_individual(vec![df.named(format!("{EX}a")), df.named(format!("{EX}b"))]),
+        df.different_individuals(vec![df.named(format!("{EX}a")), df.named(format!("{EX}b"))]),
     ]);
     df.auto_declare(&mut ont);
 
@@ -613,23 +604,20 @@ fn rbox_same_individual_conflicts_with_different_individuals() -> Result<()> {
 #[test]
 fn rbox_functional_merge_conflicts_with_different_individuals() -> Result<()> {
     let df = DF::new();
-    let p = df.obj_prop(&format!("{EX}P"));
+    let p = df.obj_prop(format!("{EX}P"));
     let mut ont = df.build_ontology(vec![
         df.functional_object_property(p.clone()),
         df.object_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
         df.object_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}c")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}c")),
         ),
-        df.different_individuals(vec![
-            df.named(&format!("{EX}b")),
-            df.named(&format!("{EX}c")),
-        ]),
+        df.different_individuals(vec![df.named(format!("{EX}b")), df.named(format!("{EX}c"))]),
     ]);
     df.auto_declare(&mut ont);
 
@@ -652,19 +640,19 @@ fn rbox_functional_merge_conflicts_with_different_individuals() -> Result<()> {
 #[test]
 fn rbox_equivalent_object_properties_both_directions() -> Result<()> {
     let df = DF::new();
-    let p = df.obj_prop(&format!("{EX}P"));
-    let q = df.obj_prop(&format!("{EX}Q"));
+    let p = df.obj_prop(format!("{EX}P"));
+    let q = df.obj_prop(format!("{EX}Q"));
     let mut ont = df.build_ontology(vec![
         df.equivalent_object_properties(vec![p.clone(), q.clone()]),
         df.object_property_assertion(
             p.clone(),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
         df.object_property_assertion(
             q.clone(),
-            df.named(&format!("{EX}b")),
-            df.named(&format!("{EX}a")),
+            df.named(format!("{EX}b")),
+            df.named(format!("{EX}a")),
         ),
     ]);
     df.auto_declare(&mut ont);

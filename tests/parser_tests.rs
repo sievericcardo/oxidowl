@@ -1,8 +1,6 @@
 #[path = "helpers/mod.rs"]
 mod helpers;
 
-use helpers::df::DF;
-use helpers::*;
 use oxidowl::ontology::*;
 use oxidowl::parsers::*;
 

@@ -1258,7 +1258,7 @@ impl CostPredictionModel {
         let mut total_loss = 0.0;
         let mut epoch_losses = Vec::new();
 
-        for epoch in 0..epochs {
+        for _epoch in 0..epochs {
             let mut epoch_loss = 0.0;
             let mut batch_count = 0;
 
@@ -1377,7 +1377,7 @@ impl CostPredictionModel {
         }
 
         let training_time = start_time.elapsed();
-        let avg_loss = total_loss / epochs as f64;
+        let _avg_loss = total_loss / epochs as f64;
 
         // Compute final metrics on all samples
         let (mae, rmse, r2) = self.compute_metrics(samples)?;

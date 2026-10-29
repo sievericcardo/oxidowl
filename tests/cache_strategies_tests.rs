@@ -210,7 +210,7 @@ fn test_realistic_cache_workload() {
 
     // Simulate realistic access pattern
     for i in 0..150 {
-        cache.insert(format!("key{}", i), i, 10);
+        cache.insert(format!("key{i}"), i, 10);
     }
 
     // Cache should be at capacity
@@ -218,12 +218,12 @@ fn test_realistic_cache_workload() {
 
     // Access some recent entries (should be hits)
     for i in 100..150 {
-        assert!(cache.get(&format!("key{}", i)).is_some());
+        assert!(cache.get(&format!("key{i}")).is_some());
     }
 
     // Access some old entries (should be misses)
     for i in 0..50 {
-        assert!(cache.get(&format!("key{}", i)).is_none());
+        assert!(cache.get(&format!("key{i}")).is_none());
     }
 
     let stats = cache.stats();

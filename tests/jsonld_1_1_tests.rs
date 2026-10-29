@@ -9,9 +9,9 @@
 //! 2. **Context features** — `@vocab` term resolution, `@base`/parser-base
 //!    relative-IRI resolution, and `@type` coercion (both value datatype
 //!    coercion and `"@type": "@id"` IRI coercion).
-//! 3. **Serialize → parse axiom equality** for SubClassOf, ClassAssertion,
-//!    ObjectPropertyAssertion, DataPropertyAssertion, AnnotationAssertion,
-//!    `ObjectSomeValuesFrom` (incl. inside EquivalentClasses) and nested
+//! 3. **Serialize → parse axiom equality** for `SubClassOf`, `ClassAssertion`,
+//!    `ObjectPropertyAssertion`, `DataPropertyAssertion`, `AnnotationAssertion`,
+//!    `ObjectSomeValuesFrom` (incl. inside `EquivalentClasses`) and nested
 //!    blank-node restrictions, plus language-tagged literals.
 
 #[allow(dead_code)]

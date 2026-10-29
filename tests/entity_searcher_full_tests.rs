@@ -2,7 +2,6 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::*;
 use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 use oxidowl::searcher::{EntityIndex, EntitySearcher};
@@ -400,7 +399,7 @@ fn test_get_declaration_axioms() {
     let df = DF::new();
     let mut ont = df.build_ontology(vec![]);
     df.auto_declare(&mut ont);
-    let index = EntityIndex::from_ontology(&ont);
+    let _index = EntityIndex::from_ontology(&ont);
 
     let entity = Entity::Class(IRI::new("http://ex.org/X"));
     let decl = df.declaration_axiom(entity.clone());

@@ -313,9 +313,9 @@ mod tests {
     fn test_loader_load_from_string() {
         let manager = Arc::new(RwLock::new(OntologyManager::new()));
         let loader = OntologyLoader::new(manager.clone());
-        let content = r#"Ontology(<http://example.org/test>
+        let content = r"Ontology(<http://example.org/test>
             ClassAssertion(<http://example.org/A> <http://example.org/ind>)
-        )"#;
+        )";
         let result = loader.load_from_string(content, OntologyFormat::Functional, "test");
         assert!(result.is_ok());
         let ont_ref = result.unwrap();

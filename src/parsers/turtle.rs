@@ -3226,7 +3226,7 @@ ast:Pump rdf:type owl:Class ;
         let result = parser.parse_string(content);
 
         if let Err(err) = &result {
-            println!("Parse error: {:?}", err);
+            println!("Parse error: {err:?}");
         }
         assert!(result.is_ok(), "Enhanced parsing should succeed");
 
@@ -3258,7 +3258,7 @@ ast:Operational rdfs:subClassOf ast:Pump .
         let result = parser.parse_string(content);
 
         if let Err(err) = &result {
-            println!("Parse error: {:?}", err);
+            println!("Parse error: {err:?}");
         }
         assert!(result.is_ok(), "Enhanced parsing should succeed");
 
@@ -3273,8 +3273,7 @@ ast:Operational rdfs:subClassOf ast:Pump .
 
         assert!(
             subclass_count >= 2,
-            "Should have created at least 2 SubClassOf axioms, found: {}",
-            subclass_count
+            "Should have created at least 2 SubClassOf axioms, found: {subclass_count}"
         );
     }
 
@@ -3332,7 +3331,7 @@ ast:Operational rdfs:subClassOf ast:Pump .
     /// Regression: `parse_facet` and the `owl:hasValue` branch used to build
     /// literals with `datatype: None`; `DatatypeValidator::literal_values_equal`
     /// treats `(Some, None)` as unequal, so the `DataHasValue` conjunct never
-    /// matched the typed ABox literal and `realize()` never derived the
+    /// matched the typed `ABox` literal and `realize()` never derived the
     /// defined class (see `tests/restriction_literal_datatype_tests.rs`).
     #[test]
     fn test_restriction_literals_keep_datatype_tags() {
@@ -3369,7 +3368,7 @@ ast:Operational rdfs:subClassOf ast:Pump .
 
     /// Edge cases: an untagged restriction literal defaults to `datatype: None`
     /// — the crate's convention for RDF 1.1 plain literals (shared with
-    /// `rdf_to_owl::normalize_literal` and the legacy ABox object path), a
+    /// `rdf_to_owl::normalize_literal` and the legacy `ABox` object path), a
     /// full-IRI `^^<…>` tag resolves, and a `^^` *inside* the quoted value is
     /// not mistaken for a datatype tag.
     #[test]

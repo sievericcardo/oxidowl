@@ -50,8 +50,7 @@ mod comprehensive_tests {
         let builtin_count = registry.get_builtin_iris().len();
         assert!(
             builtin_count >= 15,
-            "Expected at least 15 datetime built-ins, got {}",
-            builtin_count
+            "Expected at least 15 datetime built-ins, got {builtin_count}"
         );
     }
 
@@ -405,8 +404,7 @@ mod comprehensive_tests {
         for builtin in key_builtins {
             assert!(
                 all_iris.contains(&builtin.to_string()),
-                "Missing key built-in: {}",
-                builtin
+                "Missing key built-in: {builtin}"
             );
         }
 

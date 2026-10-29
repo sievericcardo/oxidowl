@@ -632,7 +632,7 @@ mod tests {
     /// Regression: a reflexive subsumption entry (A ∈ super(A), as produced
     /// for some ORE EL-corpus ontologies, e.g. `ore_ont_304.owl` with 18 such
     /// entries) used to make `build_children_for_iri_direct` descend forever:
-    /// the CLI ballooned to ~15 GiB and was SIGKILLed (exit 137) *after* a
+    /// the CLI ballooned to ~15 GiB and was `SIGKILLed` (exit 137) *after* a
     /// successful classification while printing the HermiT-style hierarchy.
     #[test]
     fn hermit_style_print_terminates_with_reflexive_subsumer_entries() {

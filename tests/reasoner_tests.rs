@@ -2,11 +2,9 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::*;
 use oxidowl::StructuralReasoner;
 use oxidowl::StructuralReasonerFactory;
 use oxidowl::TableauReasonerFactory;
-use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 use oxidowl::reasoner_api::{
     Node, NodeSet, OWLReasoner, OWLReasonerConfiguration, ReasonerFactory,

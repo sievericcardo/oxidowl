@@ -2,11 +2,9 @@
 mod helpers;
 
 use helpers::df::DF;
-use helpers::*;
 use oxidowl::modularity::decomposition::compute_atomic_decomposition;
 use oxidowl::modularity::extractor::{ModuleExtractor, ModuleExtractorConfig, ModuleType};
 use oxidowl::modularity::locality::{LocalityClass, LocalityEvaluator, SyntacticLocalityEvaluator};
-use oxidowl::ontology::axioms::*;
 use oxidowl::ontology::*;
 use std::collections::HashSet;
 

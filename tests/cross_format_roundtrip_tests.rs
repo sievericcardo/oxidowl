@@ -614,7 +614,7 @@ fn test_many_classes_equivalent_roundtrip() {
     let df = DF::new();
     let mut classes: Vec<ClassExpression> = Vec::new();
     for i in 0..15 {
-        classes.push(df.class_ce(&format!("http://ex.org/C{i}")));
+        classes.push(df.class_ce(format!("http://ex.org/C{i}")));
     }
 
     let eq = df.equivalent_classes(classes);
@@ -631,7 +631,7 @@ fn test_many_different_individuals_roundtrip() {
     let df = DF::new();
     let mut inds: Vec<Individual> = Vec::new();
     for i in 0..25 {
-        inds.push(df.named(&format!("http://ex.org/ind{i}")));
+        inds.push(df.named(format!("http://ex.org/ind{i}")));
     }
 
     let diff = df.different_individuals(inds);

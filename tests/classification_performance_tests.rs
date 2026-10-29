@@ -28,10 +28,10 @@ fn rt() -> tokio::runtime::Runtime {
 /// Size override via env (`A8_SIZE_<KEY>`); falls back to a debug / release
 /// default so CI can tune without editing code.
 fn env_size(key: &str, debug_default: usize, release_default: usize) -> usize {
-    if let Ok(v) = std::env::var(format!("A8_SIZE_{key}")) {
-        if let Ok(n) = v.parse::<usize>() {
-            return n;
-        }
+    if let Ok(v) = std::env::var(format!("A8_SIZE_{key}"))
+        && let Ok(n) = v.parse::<usize>()
+    {
+        return n;
     }
     if cfg!(debug_assertions) {
         debug_default
@@ -235,7 +235,7 @@ fn test_highly_absorbable_ontology_avoids_tableau_for_most_classes() {
         result.counters
     );
     assert!(
-        result.counters.classes_avoiding_tableau as usize >= n.saturating_sub(4),
+        result.counters.classes_avoiding_tableau >= n.saturating_sub(4),
         "expected most classes to avoid the tableau, counters: {:?}",
         result.counters
     );

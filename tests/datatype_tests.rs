@@ -1,7 +1,6 @@
 #[path = "helpers/mod.rs"]
 mod helpers;
 
-use helpers::*;
 use oxidowl::ontology::*;
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -131,7 +130,7 @@ fn datatype_from_iri() {
 #[test]
 fn datatype_facets_string() {
     let facets = OWL2Datatype::String.facets();
-    let names: Vec<_> = facets.iter().map(|f| f.short_name()).collect();
+    let names: Vec<_> = facets.iter().map(oxidowl::OWLFacet::short_name).collect();
     assert!(names.contains(&"length"));
     assert!(names.contains(&"minLength"));
     assert!(names.contains(&"maxLength"));
@@ -141,7 +140,7 @@ fn datatype_facets_string() {
 #[test]
 fn datatype_facets_numeric() {
     let facets = OWL2Datatype::Integer.facets();
-    let names: Vec<_> = facets.iter().map(|f| f.short_name()).collect();
+    let names: Vec<_> = facets.iter().map(oxidowl::OWLFacet::short_name).collect();
     assert!(names.contains(&"minInclusive"));
     assert!(names.contains(&"maxInclusive"));
     assert!(names.contains(&"minExclusive"));

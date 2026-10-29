@@ -2,7 +2,7 @@
 //!
 //! These tests verify that:
 //! 1. `ObjectHasValue` (∃R.{a}) creates an R-edge to the existing nominal node for `a`.
-//! 2. `∃R.{a}` (ObjectSomeValuesFrom with a single-nominal filler) reuses the nominal
+//! 2. `∃R.{a}` (`ObjectSomeValuesFrom` with a single-nominal filler) reuses the nominal
 //!    node instead of minting a fresh successor, so it interacts correctly with `≤n R.…`.
 //! 3. `{a} ⊑ owl:Nothing` is detected as an inconsistency (nominal bottom clash).
 //! 4. Nominal-only cycles (`A ⊑ ∃R.{a}`) terminate.
@@ -79,17 +79,17 @@ fn has_edge(tableau: &Tableau, from: usize, to: usize, role: &str) -> bool {
 // ObjectHasValue rule
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// `A ⊑ ObjectHasValue(R, b)`, `A(a)`, `b:B` — the HAS_VALUE rule must create an
+/// `A ⊑ ObjectHasValue(R, b)`, `A(a)`, `b:B` — the `HAS_VALUE` rule must create an
 /// R-edge from the nominal node for `a` to the nominal node for `b`.
 #[test]
 fn object_has_value_creates_edge_to_nominal() -> Result<()> {
     let df = DF::new();
-    let a = df.class_ce(&format!("{EX}A"));
-    let has_value = df.has_value(df.obj_prop(&format!("{EX}R")), df.named(&format!("{EX}b")));
+    let a = df.class_ce(format!("{EX}A"));
+    let has_value = df.has_value(df.obj_prop(format!("{EX}R")), df.named(format!("{EX}b")));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a.clone(), has_value.clone()),
-        df.class_assertion(a, df.named(&format!("{EX}a"))),
-        df.class_assertion(df.class_ce(&format!("{EX}B")), df.named(&format!("{EX}b"))),
+        df.class_assertion(a, df.named(format!("{EX}a"))),
+        df.class_assertion(df.class_ce(format!("{EX}B")), df.named(format!("{EX}b"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -120,16 +120,16 @@ fn object_has_value_creates_edge_to_nominal() -> Result<()> {
 #[test]
 fn object_some_values_oneof_reuses_nominal() -> Result<()> {
     let df = DF::new();
-    let a = df.class_ce(&format!("{EX}A"));
-    let b_individual = df.named(&format!("{EX}b"));
+    let a = df.class_ce(format!("{EX}A"));
+    let b_individual = df.named(format!("{EX}b"));
     let some_r_b = df.some_values_from(
-        df.obj_prop(&format!("{EX}R")),
+        df.obj_prop(format!("{EX}R")),
         df.one_of(vec![b_individual.clone()]),
     );
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a.clone(), some_r_b.clone()]),
-        df.class_assertion(a.clone(), df.named(&format!("{EX}a"))),
-        df.class_assertion(df.class_ce(&format!("{EX}B")), b_individual),
+        df.class_assertion(a.clone(), df.named(format!("{EX}a"))),
+        df.class_assertion(df.class_ce(format!("{EX}B")), b_individual),
     ]);
     df.auto_declare(&mut ont);
 
@@ -174,19 +174,19 @@ fn object_some_values_oneof_reuses_nominal() -> Result<()> {
 }
 
 /// Instance query for `ObjectHasValue(R,b)`: given `a : ObjectHasValue(R,b)` and the
-/// ABox assertion `R(a,b)`, `get_instances(ObjectHasValue(R,b))` must return `a`.
+/// `ABox` assertion `R(a,b)`, `get_instances(ObjectHasValue(R,b))` must return `a`.
 #[test]
 fn object_has_value_instance_query() -> Result<()> {
     let df = DF::new();
-    let has_value = df.has_value(df.obj_prop(&format!("{EX}R")), df.named(&format!("{EX}b")));
+    let has_value = df.has_value(df.obj_prop(format!("{EX}R")), df.named(format!("{EX}b")));
     let mut ont = df.build_ontology(vec![
-        df.class_assertion(has_value.clone(), df.named(&format!("{EX}a"))),
+        df.class_assertion(has_value.clone(), df.named(format!("{EX}a"))),
         df.object_property_assertion(
-            df.obj_prop(&format!("{EX}R")),
-            df.named(&format!("{EX}a")),
-            df.named(&format!("{EX}b")),
+            df.obj_prop(format!("{EX}R")),
+            df.named(format!("{EX}a")),
+            df.named(format!("{EX}b")),
         ),
-        df.class_assertion(df.class_ce(&format!("{EX}B")), df.named(&format!("{EX}b"))),
+        df.class_assertion(df.class_ce(format!("{EX}B")), df.named(format!("{EX}b"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -195,9 +195,8 @@ fn object_has_value_instance_query() -> Result<()> {
     assert!(
         instances
             .iter()
-            .any(|i| i.iri().map(|x| x.as_str()) == Some(&format!("{EX}a"))),
-        "instance query for ObjectHasValue(R,b) should return a; got: {:?}",
-        instances
+            .any(|i| i.iri().map(oxidowl::IRI::as_str) == Some(&format!("{EX}a"))),
+        "instance query for ObjectHasValue(R,b) should return a; got: {instances:?}"
     );
     Ok(())
 }
@@ -211,16 +210,16 @@ fn object_has_value_instance_query() -> Result<()> {
 #[test]
 fn nominal_atmost_single_successor() -> Result<()> {
     let df = DF::new();
-    let a = df.class_ce(&format!("{EX}A"));
+    let a = df.class_ce(format!("{EX}A"));
     let some_r_b = df.some_values_from(
-        df.obj_prop(&format!("{EX}R")),
-        df.one_of(vec![df.named(&format!("{EX}b"))]),
+        df.obj_prop(format!("{EX}R")),
+        df.one_of(vec![df.named(format!("{EX}b"))]),
     );
-    let atmost = df.max_cardinality(1, df.obj_prop(&format!("{EX}R")), df.owl_thing());
+    let atmost = df.max_cardinality(1, df.obj_prop(format!("{EX}R")), df.owl_thing());
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a.clone(), some_r_b),
         df.sub_class_of(a.clone(), atmost),
-        df.class_assertion(a, df.named(&format!("{EX}a"))),
+        df.class_assertion(a, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -244,8 +243,7 @@ fn nominal_atmost_single_successor() -> Result<()> {
     assert_eq!(
         successors.len(),
         1,
-        "a must have exactly one R-successor; got {:?}",
-        successors
+        "a must have exactly one R-successor; got {successors:?}"
     );
     assert!(
         successors.contains(&b_id),
@@ -263,7 +261,7 @@ fn nominal_atmost_single_successor() -> Result<()> {
 fn nominal_subclass_of_bottom_inconsistent() -> Result<()> {
     let df = DF::new();
     let mut ont = df.build_ontology(vec![df.sub_class_of(
-        df.one_of(vec![df.named(&format!("{EX}a"))]),
+        df.one_of(vec![df.named(format!("{EX}a"))]),
         df.owl_nothing(),
     )]);
     df.auto_declare(&mut ont);
@@ -280,7 +278,7 @@ fn nominal_subclass_of_bottom_inconsistent() -> Result<()> {
 #[test]
 fn nominal_and_its_complement_clash() -> Result<()> {
     let df = DF::new();
-    let a_individual = df.named(&format!("{EX}a"));
+    let a_individual = df.named(format!("{EX}a"));
     let not_oneof = df.complement_of(df.one_of(vec![a_individual.clone()]));
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(df.one_of(vec![a_individual]), not_oneof),
@@ -301,14 +299,14 @@ fn nominal_and_its_complement_clash() -> Result<()> {
 #[test]
 fn nominal_cycle_terminates() -> Result<()> {
     let df = DF::new();
-    let a = df.class_ce(&format!("{EX}A"));
+    let a = df.class_ce(format!("{EX}A"));
     let some_r_a = df.some_values_from(
-        df.obj_prop(&format!("{EX}R")),
-        df.one_of(vec![df.named(&format!("{EX}a"))]),
+        df.obj_prop(format!("{EX}R")),
+        df.one_of(vec![df.named(format!("{EX}a"))]),
     );
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a.clone(), some_r_a),
-        df.class_assertion(a, df.named(&format!("{EX}a"))),
+        df.class_assertion(a, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -341,23 +339,23 @@ fn nominal_cycle_terminates() -> Result<()> {
 #[test]
 fn inverse_role_name_is_canonical_inv_form() {
     let df = DF::new();
-    let inv = df.inv_obj_prop(&format!("{EX}R"));
+    let inv = df.inv_obj_prop(format!("{EX}R"));
     assert_eq!(inv.to_string(), format!("inv({EX}R)"));
 }
 
-/// `A ⊑ ObjectHasValue(R⁻, b)`, `A(a)` — the HAS_VALUE rule must create the edge using
+/// `A ⊑ ObjectHasValue(R⁻, b)`, `A(a)` — the `HAS_VALUE` rule must create the edge using
 /// the canonical `inv(...)` role name, end-to-end through the tableau.
 #[test]
 fn inverse_property_object_has_value_edge() -> Result<()> {
     let df = DF::new();
-    let a = df.class_ce(&format!("{EX}A"));
+    let a = df.class_ce(format!("{EX}A"));
     let has_value = df.has_value(
-        df.inv_obj_prop(&format!("{EX}R")),
-        df.named(&format!("{EX}b")),
+        df.inv_obj_prop(format!("{EX}R")),
+        df.named(format!("{EX}b")),
     );
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a.clone(), has_value),
-        df.class_assertion(a, df.named(&format!("{EX}a"))),
+        df.class_assertion(a, df.named(format!("{EX}a"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -381,17 +379,17 @@ fn inverse_property_object_has_value_edge() -> Result<()> {
 
 /// `InverseObjectProperties(R,S)` + `ObjectPropertyDomain(S, B)` + `R(a,b)` — the RL
 /// saturation path must derive `S(b,a)` (via the inverse rule) and then `b:B` (via the
-/// domain rule). This exercises the inverse-role handling end-to-end at the ABox level.
+/// domain rule). This exercises the inverse-role handling end-to-end at the `ABox` level.
 #[test]
 fn inverse_object_properties_rl_path() -> Result<()> {
     let df = DF::new();
-    let r = df.obj_prop(&format!("{EX}R"));
-    let s = df.obj_prop(&format!("{EX}S"));
-    let b_cls = df.class_ce(&format!("{EX}B"));
+    let r = df.obj_prop(format!("{EX}R"));
+    let s = df.obj_prop(format!("{EX}S"));
+    let b_cls = df.class_ce(format!("{EX}B"));
     let mut ont = df.build_ontology(vec![
         df.inverse_object_properties(r.clone(), s.clone()),
         df.object_property_domain(s.clone(), b_cls),
-        df.object_property_assertion(r, df.named(&format!("{EX}a")), df.named(&format!("{EX}b"))),
+        df.object_property_assertion(r, df.named(format!("{EX}a")), df.named(format!("{EX}b"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -401,9 +399,9 @@ fn inverse_object_properties_rl_path() -> Result<()> {
 
     // S(b,a) is derived by the inverse rule; domain(S) = B then gives b : B.
     let derived = rl.class_assertion_pairs().iter().any(|(ind, classes)| {
-        ind.iri().map(|x| x.as_str()) == Some(&format!("{EX}b"))
+        ind.iri().map(oxidowl::IRI::as_str) == Some(&format!("{EX}b"))
             && classes.iter().any(|c| match c {
-                ClassExpression::Class(cls) => cls.iri.as_str() == &format!("{EX}B"),
+                ClassExpression::Class(cls) => cls.iri.as_str() == format!("{EX}B"),
                 _ => false,
             })
     });
@@ -423,15 +421,15 @@ fn inverse_object_properties_rl_path() -> Result<()> {
 #[test]
 fn nominal_labeled_nodes_never_blocked() -> Result<()> {
     let df = DF::new();
-    let a = df.class_ce(&format!("{EX}A"));
+    let a = df.class_ce(format!("{EX}A"));
     let some_r_a = df.some_values_from(
-        df.obj_prop(&format!("{EX}R")),
-        df.one_of(vec![df.named(&format!("{EX}a"))]),
+        df.obj_prop(format!("{EX}R")),
+        df.one_of(vec![df.named(format!("{EX}a"))]),
     );
     let mut ont = df.build_ontology(vec![
         df.sub_class_of(a.clone(), some_r_a),
-        df.class_assertion(a.clone(), df.named(&format!("{EX}a"))),
-        df.class_assertion(a, df.named(&format!("{EX}b"))),
+        df.class_assertion(a.clone(), df.named(format!("{EX}a"))),
+        df.class_assertion(a, df.named(format!("{EX}b"))),
     ]);
     df.auto_declare(&mut ont);
 
@@ -459,7 +457,7 @@ fn nominal_labeled_nodes_never_blocked() -> Result<()> {
 // CR-008 MAJOR #2 — diff_005 nominal visible on BOTH reasoner surfaces
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// diff_005 ontology: `EquivalentClasses(:A ObjectOneOf(:a))` +
+/// `diff_005` ontology: `EquivalentClasses(:A ObjectOneOf(:a))` +
 /// `ClassAssertion(:A :x)`.
 ///
 /// `a` occurs *only* inside the nominal, so it is visible solely through the
@@ -474,9 +472,9 @@ fn diff_005_nominal_visible_on_core_and_owlapi_surfaces() -> Result<()> {
     use oxidowl::{OWLReasoner, OWLReasonerConfiguration, ReasonerFactory, TableauReasonerFactory};
 
     let df = DF::new();
-    let a_class = df.class_ce(&format!("{EX}A"));
-    let nominal_a = df.named(&format!("{EX}a"));
-    let x = df.named(&format!("{EX}x"));
+    let a_class = df.class_ce(format!("{EX}A"));
+    let nominal_a = df.named(format!("{EX}a"));
+    let x = df.named(format!("{EX}x"));
 
     let mut ont = df.build_ontology(vec![
         df.equivalent_classes(vec![a_class.clone(), df.one_of(vec![nominal_a.clone()])]),

@@ -15,13 +15,13 @@ fn ex(local: &str) -> String {
 // 2.13 Object Property Tests
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// test_object_property_subsumption_chain: P ⊑ Q, Q ⊑ R — verify transitive sub-property
+/// `test_object_property_subsumption_chain`: P ⊑ Q, Q ⊑ R — verify transitive sub-property
 #[test]
 fn test_object_property_subsumption_chain() {
     let df = DF::new();
-    let p = df.obj_prop(&ex("P"));
-    let q = df.obj_prop(&ex("Q"));
-    let r = df.obj_prop(&ex("R"));
+    let p = df.obj_prop(ex("P"));
+    let q = df.obj_prop(ex("Q"));
+    let r = df.obj_prop(ex("R"));
 
     let ax_pq = df.sub_object_property_of(p.clone(), q.clone());
     let ax_qr = df.sub_object_property_of(q.clone(), r.clone());
@@ -58,12 +58,12 @@ fn test_object_property_subsumption_chain() {
     );
 }
 
-/// test_object_property_inverse: InverseObjectProperties(P, Q) — verify structure
+/// `test_object_property_inverse`: InverseObjectProperties(P, Q) — verify structure
 #[test]
 fn test_object_property_inverse() {
     let df = DF::new();
-    let p = df.obj_prop(&ex("P"));
-    let q = df.obj_prop(&ex("Q"));
+    let p = df.obj_prop(ex("P"));
+    let q = df.obj_prop(ex("Q"));
 
     let ax = df.inverse_object_properties(p.clone(), q.clone());
 
@@ -83,7 +83,7 @@ fn test_object_property_inverse() {
     assert!(!inv_q.is_property_chain());
 }
 
-/// test_property_chain: R ∘ S ⊑ T — verify property chain semantics
+/// `test_property_chain`: R ∘ S ⊑ T — verify property chain semantics
 #[test]
 fn test_property_chain() {
     let df = DF::new();
@@ -93,7 +93,7 @@ fn test_property_chain() {
     let s = ObjectProperty {
         iri: IRI::new(&ex("S")),
     };
-    let t = df.obj_prop(&ex("T"));
+    let t = df.obj_prop(ex("T"));
 
     let chain = ObjectPropertyExpression::PropertyChain(vec![
         ObjectPropertyExpression::ObjectProperty(r.clone()),
@@ -130,12 +130,12 @@ fn test_property_chain() {
     }
 }
 
-/// test_equivalent_object_properties: EquivalentObjectProperties(P, Q) — verify equivalence
+/// `test_equivalent_object_properties`: EquivalentObjectProperties(P, Q) — verify equivalence
 #[test]
 fn test_equivalent_object_properties() {
     let df = DF::new();
-    let p = df.obj_prop(&ex("P"));
-    let q = df.obj_prop(&ex("Q"));
+    let p = df.obj_prop(ex("P"));
+    let q = df.obj_prop(ex("Q"));
 
     let ax = df.equivalent_object_properties(vec![p.clone(), q.clone()]);
 
@@ -149,7 +149,7 @@ fn test_equivalent_object_properties() {
     }
 
     // Three equivalent properties
-    let r = df.obj_prop(&ex("R"));
+    let r = df.obj_prop(ex("R"));
     let ax3 = df.equivalent_object_properties(vec![p.clone(), q.clone(), r.clone()]);
 
     match &ax3 {
@@ -160,12 +160,12 @@ fn test_equivalent_object_properties() {
     }
 }
 
-/// test_disjoint_object_properties: DisjointObjectProperties(P, Q) — verify disjointness
+/// `test_disjoint_object_properties`: DisjointObjectProperties(P, Q) — verify disjointness
 #[test]
 fn test_disjoint_object_properties() {
     let df = DF::new();
-    let p = df.obj_prop(&ex("P"));
-    let q = df.obj_prop(&ex("Q"));
+    let p = df.obj_prop(ex("P"));
+    let q = df.obj_prop(ex("Q"));
 
     let ax = df.disjoint_object_properties(vec![p.clone(), q.clone()]);
 
@@ -186,12 +186,12 @@ fn test_disjoint_object_properties() {
     assert!(matches!(&axioms[0], Axiom::DisjointObjectProperties(_)));
 }
 
-/// test_all_object_property_characteristics: All 7 characteristics
-/// (Functional, Transitive, Symmetric, Asymmetric, Reflexive, Irreflexive, InverseFunctional)
+/// `test_all_object_property_characteristics`: All 7 characteristics
+/// (Functional, Transitive, Symmetric, Asymmetric, Reflexive, Irreflexive, `InverseFunctional`)
 #[test]
 fn test_all_object_property_characteristics() {
     let df = DF::new();
-    let p = df.obj_prop(&ex("P"));
+    let p = df.obj_prop(ex("P"));
 
     // 1. Functional
     let func = df.functional_object_property(p.clone());
@@ -270,13 +270,13 @@ fn test_all_object_property_characteristics() {
     );
 }
 
-/// test_object_property_domain_range: ObjectPropertyDomain(P, C), ObjectPropertyRange(P, D)
+/// `test_object_property_domain_range`: ObjectPropertyDomain(P, C), ObjectPropertyRange(P, D)
 #[test]
 fn test_object_property_domain_range() {
     let df = DF::new();
-    let p = df.obj_prop(&ex("P"));
-    let c = df.class_ce(&ex("C"));
-    let d = df.class_ce(&ex("D"));
+    let p = df.obj_prop(ex("P"));
+    let c = df.class_ce(ex("C"));
+    let d = df.class_ce(ex("D"));
 
     let domain_ax = df.object_property_domain(p.clone(), c.clone());
     let range_ax = df.object_property_range(p.clone(), d.clone());
@@ -315,14 +315,14 @@ fn test_object_property_domain_range() {
     assert!(range_count >= 1);
 }
 
-/// test_inverse_property_expression: ObjectInverseOf(P) in complex expressions
+/// `test_inverse_property_expression`: ObjectInverseOf(P) in complex expressions
 #[test]
 fn test_inverse_property_expression() {
     let df = DF::new();
     let inv_p = ObjectPropertyExpression::InverseObjectProperty(ObjectProperty {
         iri: IRI::new(&ex("P")),
     });
-    let b = df.class_ce(&ex("B"));
+    let b = df.class_ce(ex("B"));
 
     // ∃P⁻.B
     let expr = ClassExpression::ObjectSomeValuesFrom {
@@ -339,7 +339,7 @@ fn test_inverse_property_expression() {
     }
 
     // Build a subclass axiom using inverse property
-    let a = df.class_ce(&ex("A"));
+    let a = df.class_ce(ex("A"));
     let ax = Axiom::SubClassOf(SubClassOfAxiom {
         id: df.next_id(),
         subclass: a,
@@ -367,7 +367,7 @@ fn test_inverse_property_expression() {
     ));
 }
 
-/// test_multi_arity_property_chain: 3+ properties in PropertyChain
+/// `test_multi_arity_property_chain`: 3+ properties in `PropertyChain`
 #[test]
 fn test_multi_arity_property_chain() {
     let df = DF::new();
@@ -383,7 +383,7 @@ fn test_multi_arity_property_chain() {
     let s = ObjectProperty {
         iri: IRI::new(&ex("S")),
     };
-    let t = df.obj_prop(&ex("T"));
+    let t = df.obj_prop(ex("T"));
 
     // P ∘ Q ∘ R ∘ S ⊑ T  — 4-arity chain
     let chain = ObjectPropertyExpression::PropertyChain(vec![
@@ -430,12 +430,12 @@ fn test_multi_arity_property_chain() {
 // 2.12 Data Property Tests
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// test_data_property_subsumption: SubDataPropertyOf(DP, DQ)
+/// `test_data_property_subsumption`: SubDataPropertyOf(DP, DQ)
 #[test]
 fn test_data_property_subsumption() {
     let df = DF::new();
-    let dp = df.data_prop(&ex("dp1"));
-    let dq = df.data_prop(&ex("dp2"));
+    let dp = df.data_prop(ex("dp1"));
+    let dq = df.data_prop(ex("dp2"));
 
     let ax = df.sub_data_property_of(dp.clone(), dq.clone());
 
@@ -454,11 +454,11 @@ fn test_data_property_subsumption() {
     assert!(matches!(&axioms[0], Axiom::SubDataPropertyOf(_)));
 }
 
-/// test_data_property_functional: FunctionalDataProperty(DP)
+/// `test_data_property_functional`: FunctionalDataProperty(DP)
 #[test]
 fn test_data_property_functional() {
     let df = DF::new();
-    let dp = df.data_prop(&ex("dp"));
+    let dp = df.data_prop(ex("dp"));
 
     let ax = df.functional_data_property(dp.clone());
 
@@ -471,12 +471,12 @@ fn test_data_property_functional() {
     assert!(matches!(ax, Axiom::FunctionalDataProperty(_)));
 }
 
-/// test_data_property_domain_range: DataPropertyDomain(DP, C), DataPropertyRange(DP, Integer)
+/// `test_data_property_domain_range`: DataPropertyDomain(DP, C), DataPropertyRange(DP, Integer)
 #[test]
 fn test_data_property_domain_range() {
     let df = DF::new();
-    let dp = df.data_prop(&ex("dp"));
-    let c = df.class_ce(&ex("C"));
+    let dp = df.data_prop(ex("dp"));
+    let c = df.class_ce(ex("C"));
     let int_range = df.data_range_integer();
 
     let domain_ax = df.data_property_domain(dp.clone(), c.clone());
@@ -514,12 +514,12 @@ fn test_data_property_domain_range() {
     assert!(range_found);
 }
 
-/// test_equivalent_data_properties: EquivalentDataProperties(DP, DQ)
+/// `test_equivalent_data_properties`: EquivalentDataProperties(DP, DQ)
 #[test]
 fn test_equivalent_data_properties() {
     let df = DF::new();
-    let dp = df.data_prop(&ex("dp1"));
-    let dq = df.data_prop(&ex("dp2"));
+    let dp = df.data_prop(ex("dp1"));
+    let dq = df.data_prop(ex("dp2"));
 
     let ax = df.equivalent_data_properties(vec![dp.clone(), dq.clone()]);
 
@@ -539,12 +539,12 @@ fn test_equivalent_data_properties() {
     assert!(matches!(&axioms[0], Axiom::EquivalentDataProperties(_)));
 }
 
-/// test_disjoint_data_properties: DisjointDataProperties(DP, DQ)
+/// `test_disjoint_data_properties`: DisjointDataProperties(DP, DQ)
 #[test]
 fn test_disjoint_data_properties() {
     let df = DF::new();
-    let dp = df.data_prop(&ex("dp1"));
-    let dq = df.data_prop(&ex("dp2"));
+    let dp = df.data_prop(ex("dp1"));
+    let dq = df.data_prop(ex("dp2"));
 
     let ax = df.disjoint_data_properties(vec![dp.clone(), dq.clone()]);
 
@@ -564,12 +564,12 @@ fn test_disjoint_data_properties() {
     assert!(matches!(&axioms[0], Axiom::DisjointDataProperties(_)));
 }
 
-/// test_data_property_assertion_values: DataPropertyAssertion(DP, i, "value"), verify retrieval
+/// `test_data_property_assertion_values`: DataPropertyAssertion(DP, i, "value"), verify retrieval
 #[test]
 fn test_data_property_assertion_values() {
     let df = DF::new();
-    let dp = df.data_prop(&ex("hasName"));
-    let individual = df.named(&ex("john"));
+    let dp = df.data_prop(ex("hasName"));
+    let individual = df.named(ex("john"));
     let value = df.literal("John Doe");
 
     let ax = df.data_property_assertion(dp.clone(), individual.clone(), value.clone());
@@ -617,7 +617,7 @@ fn test_data_property_assertion_values() {
     }
 }
 
-/// test_annotated_property_chain_roundtrip: Property chain with axiom annotations
+/// `test_annotated_property_chain_roundtrip`: Property chain with axiom annotations
 #[test]
 fn test_annotated_property_chain_roundtrip() {
     let df = DF::new();
@@ -629,7 +629,7 @@ fn test_annotated_property_chain_roundtrip() {
     let s = ObjectProperty {
         iri: IRI::new(&ex("S")),
     };
-    let t = df.obj_prop(&ex("T"));
+    let t = df.obj_prop(ex("T"));
 
     let chain = ObjectPropertyExpression::PropertyChain(vec![
         ObjectPropertyExpression::ObjectProperty(r),

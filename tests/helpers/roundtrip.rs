@@ -5,21 +5,14 @@ use oxidowl::parsers::*;
 ///
 /// Models the approach from OWL API v5's `AbstractRoundTrippingTestCase`
 /// and `RoundtripHarness`.
+#[derive(Default)]
 pub struct RoundtripHarness {
     pub strict_mode: bool,
     pub normalize_iris: bool,
 }
 
-impl Default for RoundtripHarness {
-    fn default() -> Self {
-        RoundtripHarness {
-            strict_mode: false,
-            normalize_iris: false,
-        }
-    }
-}
-
 impl RoundtripHarness {
+    #[must_use]
     pub fn new(strict: bool) -> Self {
         RoundtripHarness {
             strict_mode: strict,
@@ -27,6 +20,7 @@ impl RoundtripHarness {
         }
     }
 
+    #[must_use]
     pub fn with_iri_normalization(mut self) -> Self {
         self.normalize_iris = true;
         self
@@ -100,7 +94,7 @@ impl RoundtripHarness {
         let orig_count = orig.axioms().len();
 
         let serialized =
-            save_to_string(&orig, to).map_err(|e| format!("Serialize to {:?} error: {e}", to))?;
+            save_to_string(&orig, to).map_err(|e| format!("Serialize to {to:?} error: {e}"))?;
 
         let reparsed = self.parse(&serialized, to)?;
         let reparsed_count = reparsed.axioms().len();
@@ -124,7 +118,7 @@ impl RoundtripHarness {
             OntologyFormat::RdfXml => parse_rdf_xml(content)?,
             OntologyFormat::Turtle => parse_turtle(content)?,
             OntologyFormat::NTriples => parse_ntriples(content)?,
-            _ => return Err(format!("Parsing for {:?} not implemented in harness", format).into()),
+            _ => return Err(format!("Parsing for {format:?} not implemented in harness").into()),
         };
         Ok(ont)
     }

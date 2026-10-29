@@ -1,6 +1,6 @@
-//! RDFa 1.1 parser core tests (B5 Slice 4 — DOM-based RDFa, docs/PLAN.md).
+//! `RDFa` 1.1 parser core tests (B5 Slice 4 — DOM-based `RDFa`, docs/PLAN.md).
 //!
-//! Locks `src/parsers/rio/rdfa.rs` (html5ever DOM + RDFa Core 1.1 sequence
+//! Locks `src/parsers/rio/rdfa.rs` (html5ever DOM + `RDFa` Core 1.1 sequence
 //! §7.5 + shared RDF→OWL mapping) over exactly the implemented subset:
 //!
 //! 1. **Default prefixes** — `rdf` / `rdfs` / `xsd` / `owl` / `foaf` are in
@@ -56,12 +56,12 @@ use helpers::assertions::assert_ontologies_axiom_equal;
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Parse an RDFa document, panicking with context on failure.
+/// Parse an `RDFa` document, panicking with context on failure.
 fn parse(html: &str) -> Ontology {
     rdfa::parse(html).unwrap_or_else(|e| panic!("RDFa parse failed: {e}\n---\n{html}"))
 }
 
-/// Parse an RDFa document against a supplied base IRI.
+/// Parse an `RDFa` document against a supplied base IRI.
 fn parse_with_base(html: &str, base: &str) -> Ontology {
     rdfa::parse_with_base(html, Some(base))
         .unwrap_or_else(|e| panic!("RDFa parse failed (base {base}): {e}\n---\n{html}"))
@@ -253,12 +253,12 @@ fn prefix_attribute_and_xmlns_declare_scoped_curies() {
 
     // Declared prefixes are recorded on the ontology.
     assert_eq!(
-        o.prefixes.get("ex").map(|iri| iri.as_str()),
+        o.prefixes.get("ex").map(oxidowl::IRI::as_str),
         Some("http://example.org/vocab/"),
         "discovered @prefix must land in Ontology::prefixes"
     );
     assert_eq!(
-        o.prefixes.get("ex2").map(|iri| iri.as_str()),
+        o.prefixes.get("ex2").map(oxidowl::IRI::as_str),
         Some("http://example2.org/"),
         "discovered @xmlns prefix must land in Ontology::prefixes"
     );
@@ -1369,7 +1369,7 @@ fn oversized_document_rejected_by_byte_budget() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Twin of `n3_rule_and_iri_less_annotation_survive_{jsonld,hdt,binary_rdf}_roundtrip`
-/// for RDFa: the `RdfaRenderer` emits the shared preservation triples
+/// for `RDFa`: the `RdfaRenderer` emits the shared preservation triples
 /// (`urn:oxidowl:swrlRule` rule text + `urn:oxidowl:ontology` annotations)
 /// as markup and `rdfa::parse` decodes them back through `map_rdf_triples`.
 #[test]

@@ -13,7 +13,7 @@ use oxidowl::config::ReasonerConfig;
 use oxidowl::core::reasoner::Reasoner;
 use oxidowl::ontology::*;
 
-/// Test that EquivalentClasses + DisjointClasses makes classes unsatisfiable
+/// Test that `EquivalentClasses` + `DisjointClasses` makes classes unsatisfiable
 /// but the ontology remains consistent
 #[test]
 fn test_equivalent_and_disjoint_classes_consistent_but_incoherent() -> Result<()> {
@@ -67,14 +67,14 @@ fn test_equivalent_and_disjoint_classes_consistent_but_incoherent() -> Result<()
     );
 
     println!("✅ Ontology is consistent but incoherent (has unsatisfiable classes)");
-    println!("   - Ontology consistent: {}", is_consistent);
-    println!("   - Class A satisfiable: {}", class_a_satisfiable);
-    println!("   - Class B satisfiable: {}", class_b_satisfiable);
+    println!("   - Ontology consistent: {is_consistent}");
+    println!("   - Class A satisfiable: {class_a_satisfiable}");
+    println!("   - Class B satisfiable: {class_b_satisfiable}");
 
     Ok(())
 }
 
-/// Test Campaign 6 pattern: Healthy ≡ MoistStrategy AND Healthy ⊥ MoistStrategy
+/// Test Campaign 6 pattern: Healthy ≡ `MoistStrategy` AND Healthy ⊥ `MoistStrategy`
 #[test]
 fn test_campaign_6_pattern_consistent_incoherent() -> Result<()> {
     let mut ontology = Ontology::new();
@@ -121,7 +121,7 @@ fn test_campaign_6_pattern_consistent_incoherent() -> Result<()> {
     Ok(())
 }
 
-/// Test Campaign 7/8 pattern: DataTransformation ≡ BinaryScale AND DataTransformation ⊥ BinaryScale
+/// Test Campaign 7/8 pattern: `DataTransformation` ≡ `BinaryScale` AND `DataTransformation` ⊥ `BinaryScale`
 #[test]
 fn test_campaign_7_8_pattern_consistent_incoherent() -> Result<()> {
     let mut ontology = Ontology::new();
