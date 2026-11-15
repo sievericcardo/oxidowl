@@ -1067,12 +1067,19 @@ impl FunctionalParser {
                     // Store base IRI for resolving relative IRIs
                     *base_iri = Some(iri_str.to_string());
                     // Add default prefix (empty string) for relative IRIs starting with ":"
-                    let default_base = if iri_str.ends_with('#') || iri_str.ends_with('/') {
-                        iri_str.to_string()
-                    } else {
-                        format!("{iri_str}#")
-                    };
-                    prefixes.insert(String::new(), default_base);
+                    // — but only when the document did **not** declare one itself:
+                    // `Prefix(:=<http://example.org/default#>)` + an ontology IRI of
+                    // `http://example.org/onto` must keep resolving `:A` to
+                    // `http://example.org/default#A` (B3: the ontology IRI used to
+                    // silently overwrite the explicit `""` prefix).
+                    if !prefixes.contains_key("") {
+                        let default_base = if iri_str.ends_with('#') || iri_str.ends_with('/') {
+                            iri_str.to_string()
+                        } else {
+                            format!("{iri_str}#")
+                        };
+                        prefixes.insert(String::new(), default_base);
+                    }
                 }
                 position += 1;
             }

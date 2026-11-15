@@ -345,9 +345,9 @@ Ontology(<http://example.org/defsub>
     let mut reasoner = Reasoner::new(ReasonerConfig::default())?;
     reasoner.load_ontology(onto)?;
 
-    let c = cls("http://example.org/defsub#C");
-    let i = named("http://example.org/defsub#i");
-    let j = named("http://example.org/defsub#j");
+    let c = cls("http://example.org/C");
+    let i = named("http://example.org/i");
+    let j = named("http://example.org/j");
 
     // Positive: i satisfies D's complex definition, D ⊑ C ⇒ i ∈ C.
     assert!(
@@ -356,7 +356,7 @@ Ontology(<http://example.org/defsub>
     );
     assert_eq!(
         iris_of(&reasoner.get_instances(&c, false)?),
-        vec!["http://example.org/defsub#i".to_string()],
+        vec!["http://example.org/i".to_string()],
         "get_instances(C) must contain exactly i (defined-subclass upward inference)"
     );
 
@@ -368,13 +368,13 @@ Ontology(<http://example.org/defsub>
     assert!(
         iris_of(&reasoner.get_instances(&c, false)?)
             .iter()
-            .all(|x| x != "http://example.org/defsub#j"),
+            .all(|x| x != "http://example.org/j"),
         "get_instances(C) must not contain j"
     );
 
     // The defined class itself stays reachable, and the superclass closure
     // surfaces C through get_types (defined candidate + get_superclasses).
-    let d = cls("http://example.org/defsub#D");
+    let d = cls("http://example.org/D");
     assert!(
         reasoner.is_instance_of(&i, &d)?,
         "is_instance_of(i, D) must be true (D's own complex definition)"
@@ -385,11 +385,11 @@ Ontology(<http://example.org/defsub>
         .filter_map(|t| t.iri().map(|i| i.to_string()))
         .collect();
     assert!(
-        types.iter().any(|t| t == "http://example.org/defsub#D"),
+        types.iter().any(|t| t == "http://example.org/D"),
         "get_types(i) must contain D, got {types:?}"
     );
     assert!(
-        types.iter().any(|t| t == "http://example.org/defsub#C"),
+        types.iter().any(|t| t == "http://example.org/C"),
         "get_types(i) must contain C via the superclass closure, got {types:?}"
     );
 
@@ -420,7 +420,7 @@ Ontology(<http://example.org/defsubneg>
     reasoner.load_ontology(onto)?;
 
     assert_eq!(
-        iris_of(&reasoner.get_instances(&cls("http://example.org/defsubneg#C"), false)?),
+        iris_of(&reasoner.get_instances(&cls("http://example.org/C"), false)?),
         Vec::<String>::new(),
         "no individual satisfies D's definition ⇒ get_instances(C) must be empty"
     );
@@ -597,9 +597,9 @@ Ontology(<http://example.org/minor>
     let mut reasoner = Reasoner::new(ReasonerConfig::default())?;
     reasoner.load_ontology(onto)?;
 
-    let minor = cls("http://example.org/minor#Minor");
-    let i = named("http://example.org/minor#i");
-    let j = named("http://example.org/minor#j");
+    let minor = cls("http://example.org/Minor");
+    let i = named("http://example.org/i");
+    let j = named("http://example.org/j");
 
     assert!(
         reasoner.is_instance_of(&i, &minor)?,
@@ -607,7 +607,7 @@ Ontology(<http://example.org/minor>
     );
     assert_eq!(
         iris_of(&reasoner.get_instances(&minor, false)?),
-        vec!["http://example.org/minor#i".to_string()],
+        vec!["http://example.org/i".to_string()],
         "get_instances(Minor) must contain exactly i"
     );
     assert!(
@@ -786,23 +786,23 @@ Ontology(<http://example.org/eqint>
     let mut reasoner = Reasoner::new(ReasonerConfig::default())?;
     reasoner.load_ontology(onto)?;
 
-    let c = cls("http://example.org/eqint#C");
-    let x = named("http://example.org/eqint#x");
+    let c = cls("http://example.org/C");
+    let x = named("http://example.org/x");
     assert!(
         reasoner.is_instance_of(&x, &c)?,
         "is_instance_of(x, C) must be true: A(x), B(x), A ⊓ B ⊑ D, D ≡ E ⊓ F, E ⊑ C"
     );
     assert_eq!(
         iris_of(&reasoner.get_instances(&c, false)?),
-        vec!["http://example.org/eqint#x".to_string()],
+        vec!["http://example.org/x".to_string()],
         "get_instances(C) must contain exactly x"
     );
     assert!(
-        !reasoner.is_instance_of(&named("http://example.org/eqint#p"), &c)?,
+        !reasoner.is_instance_of(&named("http://example.org/p"), &c)?,
         "is_instance_of(p, C) must be false: A(p) alone does not satisfy A ⊓ B"
     );
     assert!(
-        !reasoner.is_instance_of(&named("http://example.org/eqint#q"), &c)?,
+        !reasoner.is_instance_of(&named("http://example.org/q"), &c)?,
         "is_instance_of(q, C) must be false: B(q) alone does not satisfy A ⊓ B"
     );
 
@@ -821,14 +821,14 @@ Ontology(<http://example.org/eqintrev>
     let mut reasoner_rev = Reasoner::new(ReasonerConfig::default())?;
     reasoner_rev.load_ontology(onto_rev)?;
 
-    let c_rev = cls("http://example.org/eqintrev#C");
+    let c_rev = cls("http://example.org/C");
     assert!(
-        !reasoner_rev.is_instance_of(&named("http://example.org/eqintrev#r"), &c_rev)?,
+        !reasoner_rev.is_instance_of(&named("http://example.org/r"), &c_rev)?,
         "is_instance_of(r, C) must be false: E(r) alone does not entail E⊓F(r), \
          so r ∉ D and D ⊑ C does not apply"
     );
     assert!(
-        !reasoner_rev.is_instance_of(&named("http://example.org/eqintrev#s"), &c_rev)?,
+        !reasoner_rev.is_instance_of(&named("http://example.org/s"), &c_rev)?,
         "is_instance_of(s, C) must be false: F(s) alone does not entail E⊓F(s), \
          so s ∉ D and D ⊑ C does not apply"
     );
@@ -877,10 +877,10 @@ Ontology(<http://example.org/cyc>
     let mut reasoner = Reasoner::new(ReasonerConfig::default())?;
     reasoner.load_ontology(onto)?;
 
-    let a_class = cls("http://example.org/cyc#A");
-    let b_class = cls("http://example.org/cyc#B");
-    let a_ind = named("http://example.org/cyc#a");
-    let b_ind = named("http://example.org/cyc#b");
+    let a_class = cls("http://example.org/A");
+    let b_class = cls("http://example.org/B");
+    let a_ind = named("http://example.org/a");
+    let b_ind = named("http://example.org/b");
 
     let instances_a = reasoner.get_instances(&a_class, false)?;
     let instances_b = reasoner.get_instances(&b_class, false)?;
@@ -951,8 +951,8 @@ Ontology(<http://example.org/selfext>
 )"#;
 
     for (fs, ns) in [
-        (fs_intersect, "http://example.org/selfint#"),
-        (fs_existential, "http://example.org/selfext#"),
+        (fs_intersect, "http://example.org/"),
+        (fs_existential, "http://example.org/"),
     ] {
         let onto = parse_functional(fs).expect("ontology must parse");
         let start = std::time::Instant::now();
@@ -1011,8 +1011,8 @@ Ontology(<http://example.org/cycdata>
     let mut reasoner = Reasoner::new(ReasonerConfig::default())?;
     reasoner.load_ontology(onto)?;
 
-    let c = cls("http://example.org/cycdata#C");
-    let x = named("http://example.org/cycdata#x");
+    let c = cls("http://example.org/C");
+    let x = named("http://example.org/x");
 
     let instances = reasoner.get_instances(&c, false)?;
     assert!(

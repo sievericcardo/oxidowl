@@ -742,7 +742,11 @@ impl fmt::Display for QueryResult {
         if let Some(ref instances) = self.instances {
             writeln!(f, "\nInstances ({}):", instances.len())?;
             for instance in instances {
-                writeln!(f, "  - {instance:?}")?;
+                // `Display` renders named individuals as their IRI (and
+                // anonymous ones as `_:id`) — the `Debug` form leaked the
+                // internal `Named(NamedIndividual { … })` shape into the CLI's
+                // text output.
+                writeln!(f, "  - {instance}")?;
             }
         }
 
@@ -842,5 +846,61 @@ mod tests {
         // Note: This is a simplified test - the actual parsing is more complex
         let result = parser.parse_class_expression("Person");
         assert!(result.is_ok());
+    }
+
+    /// The text renderer must list instances as IRIs (B2 text-output half) —
+    /// the `Debug` form used to leak `Named(NamedIndividual { … })`.
+    #[test]
+    fn display_lists_instances_as_iris() {
+        let result = QueryResult {
+            query: DLQuery {
+                class_expression: ClassExpression::Class(Class::new(IRI::new(
+                    "http://example.org/Person",
+                ))),
+                query_type: QueryType::Instances,
+                direct: false,
+            },
+            instances: Some(
+                [Individual::named(IRI::new("http://example.org/alice"))]
+                    .into_iter()
+                    .collect(),
+            ),
+            classes: None,
+            satisfiable: None,
+            execution_time: std::time::Duration::from_millis(2),
+        };
+
+        let text = format!("{result}");
+        assert!(text.contains("Instances (1):"), "{text}");
+        assert!(
+            text.contains("http://example.org/alice"),
+            "the instance IRI must appear in the text output: {text}"
+        );
+        assert!(
+            !text.contains("NamedIndividual"),
+            "the text output must not leak the Debug shape: {text}"
+        );
+    }
+
+    /// A satisfiability answer is rendered even though no classes/instances
+    /// are present.
+    #[test]
+    fn display_reports_satisfiability_answer() {
+        let result = QueryResult {
+            query: DLQuery {
+                class_expression: ClassExpression::Class(Class::new(IRI::new(
+                    "http://example.org/A",
+                ))),
+                query_type: QueryType::Satisfiable,
+                direct: false,
+            },
+            instances: None,
+            classes: None,
+            satisfiable: Some(false),
+            execution_time: std::time::Duration::ZERO,
+        };
+
+        let text = format!("{result}");
+        assert!(text.contains("Satisfiable: false"), "{text}");
     }
 }

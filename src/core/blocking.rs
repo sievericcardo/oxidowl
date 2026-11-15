@@ -998,10 +998,9 @@ impl OptimalBlocking {
         // behaviour without risking non-termination.
         if self.statistics.blocking_checks > 1000
             && self.statistics.nodes_blocked < self.statistics.blocking_checks / 10
+            && !self.is_core_blocking()
         {
-            if !self.is_core_blocking() {
-                self.current_strategy = Box::new(CoreBlocking::new());
-            }
+            self.current_strategy = Box::new(CoreBlocking::new());
         }
     }
 

@@ -1,65 +1,102 @@
 # Dockerfile for Oxidowl - A High-Performance OWL 2 DL Reasoner
-# 
-# Build: docker build -t oxidowl:latest .
-# 
-# Usage examples:
-# 1. With volume mount (recommended):
-#    docker run -v /path/to/ontologies:/ontologies oxidowl:latest -k /ontologies/myonto.owl
 #
-# 2. Copy file into container:
-#    docker run -i oxidowl:latest -k - < myontology.owl
+# Build:  docker build -t oxidowl:latest .
+# Usage:  docker run -v /path/to/ontologies:/ontologies oxidowl:latest -k /ontologies/myonto.owl
 #
-# 3. Interactive shell:
-#    docker run -it -v /path/to/ontologies:/ontologies --entrypoint /bin/sh oxidowl:latest
+# Multi-stage, glibc (Debian bookworm) build:
+#   - The previous Alpine/musl image failed to compile: RocksDB (pulled in
+#     transitively via Oxigraph's `sparql-store` default feature) needs a C++
+#     toolchain and only finds `c++`/`g++` reliably on glibc images.
+#   - Builder is rust:1.88 (the MSRV). Verified on 2026-11-15:
+#     `cargo +1.88 check --workspace` and
+#     `cargo +1.88 check --workspace --features server,sparql` both exit 0,
+#     so 1.88 is the MSRV for default features AND for `server`+`sparql`.
+#     Only the `ml` feature / `--all-features` need a newer stable toolchain
+#     because candle-core uses a post-1.88 NEON intrinsic
+#     (`stdarch_neon_f16`). The CI `msrv` job verifies default features plus
+#     `server,sparql` on 1.88 (and deliberately not `--all-features`).
+#
+# Feature choice (`--features server,sparql`):
+#   - `server`  enables the warp-based OWLlink/REST/SPARQL HTTP servers.
+#     WITHOUT this feature the binary still runs every CLI reasoning task,
+#     but `--enable-server` exits with "Server mode requires the 'server'
+#     feature" (see src/bin/main.rs). The image therefore always ships the
+#     server-enabled binary so `docker run ... --enable-server` works.
+#   - `sparql`  enables the SPARQL endpoint module (server/sparql.rs).
+#   - Default features stay ON (they include `sparql-store` -> Oxigraph with
+#     RocksDB, which is why the build deps below are required).
 
-# Use multi-stage build for smaller final image
-FROM rust:1.88-alpine AS builder
+# ---------------------------------------------------------------------------
+# Builder stage
+# ---------------------------------------------------------------------------
+# See header: 1.88 is the MSRV for default features AND `server,sparql`
+# (both verified on 2026-11-15); only `ml`/`--all-features` need newer.
+FROM rust:1.88-bookworm AS builder
 
-# Install build dependencies
-RUN apk add --no-cache musl-dev
+# Build dependencies for RocksDB (compiled from source via Oxigraph):
+#   build-essential  - gcc/g++/make
+#   cmake            - RocksDB build system driver
+#   clang/libclang   - bindgen (used by oxrocksdb-sys/librocksdb-sys)
+#   pkg-config       - probe dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      build-essential \
+      cmake \
+      clang \
+      libclang-dev \
+      pkg-config && \
+    rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /build
 
-# Copy manifests
+# Copy manifests first for better layer caching.
 COPY Cargo.toml Cargo.lock ./
 
-# Copy source code (only src/ is needed for the binary)
+# Source inputs required to build the binary targets declared in Cargo.toml
+# ([[bin]] oxidowl + performance_tests, [[bench]]/[[example]] paths).
 COPY src ./src
 COPY benches ./benches
 COPY examples ./examples
 
-# Build the release binary with optimizations
-RUN cargo build --release --bin oxidowl
+# Release build with the server features enabled (see header comment).
+# --locked guarantees the exact Cargo.lock dependency graph.
+RUN cargo build --release --locked --bin oxidowl --features server,sparql
 
-# Runtime stage - use minimal Alpine Linux image
-FROM alpine:latest
+# ---------------------------------------------------------------------------
+# Runtime stage
+# ---------------------------------------------------------------------------
+FROM debian:bookworm-slim
 
-# Install runtime dependencies (minimal)
-RUN apk add --no-cache libgcc
+# ca-certificates: HTTPS ontology imports (http-imports/reqwest)
+# libstdc++6:      Rust C++ runtime + RocksDB
+# libgcc-s1:       GCC runtime (explicit; normally pulled in transitively)
+# curl:            used by the docker-compose healthcheck against /api/v1/health
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      ca-certificates \
+      libstdc++6 \
+      libgcc-s1 \
+      curl && \
+    rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user for security
-RUN addgroup -g 1000 oxidowl && \
-    adduser -D -u 1000 -G oxidowl oxidowl
+# Non-root user (uid/gid 1000).
+RUN groupadd --system --gid 1000 oxidowl && \
+    useradd --system --uid 1000 --gid oxidowl --home-dir /ontologies \
+            --shell /usr/sbin/nologin oxidowl
 
-# Create directory for ontologies
-RUN mkdir -p /ontologies && \
-    chown -R oxidowl:oxidowl /ontologies
+# Working directory for mounted ontologies.
+RUN mkdir -p /ontologies && chown -R oxidowl:oxidowl /ontologies
 
-# Copy the binary from builder stage
 COPY --from=builder /build/target/release/oxidowl /usr/local/bin/oxidowl
+RUN chown oxidowl:oxidowl /usr/local/bin/oxidowl && chmod 755 /usr/local/bin/oxidowl
 
-# Set ownership
-RUN chown oxidowl:oxidowl /usr/local/bin/oxidowl
-
-# Switch to non-root user
 USER oxidowl
-
-# Set working directory
 WORKDIR /ontologies
 
-# Set the entrypoint to the oxidowl binary
-ENTRYPOINT ["oxidowl"]
+# REST (default), OWLlink and SPARQL ports (server feature).
+# Only reachable when started with --enable-server / --enable-owllink /
+# --enable-sparql; EXPOSE is documentation only.
+EXPOSE 8080 8081 8082
 
-# Default command shows help
+ENTRYPOINT ["oxidowl"]
 CMD ["--help"]

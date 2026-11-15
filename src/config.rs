@@ -682,7 +682,7 @@ impl Default for ReasonerConfig {
             cache: CacheConfig {
                 features: cache_features,
                 max_cache_size_mb: 1024, // 1 GB
-                cache_ttl: Some(Duration::from_hours(1)),
+                cache_ttl: Some(Duration::from_secs(3600)),
                 eviction_strategy: CacheEvictionStrategy::LRU,
                 persistence: false,
             },
@@ -808,7 +808,7 @@ impl ReasonerConfig {
         config.reasoning.max_memory_mb = Some(8192); // 8 GB
         config.cache.max_cache_size_mb = 2048; // 2 GB
         config.performance.memory_pool_size_mb = 1024; // 1 GB
-        config.reasoning.timeout = Some(Duration::from_mins(30)); // 30 minutes
+        config.reasoning.timeout = Some(Duration::from_secs(1800)); // 30 minutes
         config.reasoning.max_expansion_depth = 200; // Increase depth for large ontologies
         config.reasoning.enable(ReasoningFeature::Optimizations); // Enable optimisations
         config
@@ -819,8 +819,8 @@ impl ReasonerConfig {
     pub fn web_service_config() -> Self {
         let mut config = Self::default();
         config.server.max_connections = 500; // Increase for web service
-        config.server.request_timeout = Duration::from_mins(1); // 1 minute timeout
-        config.reasoning.timeout = Some(Duration::from_mins(2)); // 2 minutes
+        config.server.request_timeout = Duration::from_secs(60); // 1 minute timeout
+        config.reasoning.timeout = Some(Duration::from_secs(120)); // 2 minutes
         config.cache.persistence = true; // Enable cache persistence
         config
     }

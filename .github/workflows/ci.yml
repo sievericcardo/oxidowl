@@ -1,0 +1,171 @@
+# Continuous integration for Oxidowl.
+#
+# Runs on pushes to main/master/dev/develop, on pull requests, and on manual
+# dispatch. Tag pushes are intentionally excluded — releases are handled by
+# release.yml.
+#
+# All jobs are read-only (contents: read) and need no secrets: only the
+# default GITHUB_TOKEN is used.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master, dev, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    # Cold cache must compile RocksDB (via Oxigraph), so allow more than 30m.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies (RocksDB/oxigraph build-from-source)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake clang libclang-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: clippy (lib + bins, warnings are errors)
+        run: cargo clippy --lib --bins -- -D warnings
+      - name: clippy (test targets, correctness lints)
+        run: cargo clippy --tests -- -W clippy::correctness
+
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake clang libclang-dev
+      - name: Install native dependencies (macOS)
+        if: runner.os == 'macOS'
+        # clang/Xcode CLT are preinstalled on macOS runners; only CMake is needed.
+        run: brew install cmake
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run workspace tests
+        env:
+          RUST_BACKTRACE: "1"
+        run: cargo test --workspace --no-fail-fast
+
+  windows-check:
+    name: windows check
+    runs-on: windows-latest
+    timeout-minutes: 60
+    # best-effort, RocksDB/MSVC: native RocksDB compilation under MSVC can be
+    # slow or flaky on hosted runners. Keep the job visible but non-blocking.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      # VS Build Tools (MSVC) and CMake are preinstalled on windows-latest.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo check (workspace)
+        run: cargo check --workspace
+
+  conformance:
+    name: conformance suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies (RocksDB/oxigraph build-from-source)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake clang libclang-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run conformance / parity / imports / SWRL suites
+        run: >
+          cargo test
+          --test owl2_conformance_suite
+          --test owl2_conformance_extended_tests
+          --test differential_parity_tests
+          --test parity_tests
+          --test imports_closure_tests
+          --test swrl_reasoning_tests
+
+  features:
+    name: feature matrix
+    runs-on: ubuntu-latest
+    # Six check invocations + docs on a cold cache; allow extra headroom.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies (RocksDB/oxigraph build-from-source)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake clang libclang-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # NOTE: `--no-default-features` is known-broken and intentionally absent.
+      - name: check (default features)
+        run: cargo check --workspace
+      - name: check (server + sparql)
+        run: cargo check --workspace --features server,sparql
+      - name: check (ml)
+        run: cargo check --workspace --features ml
+      - name: check (profiling)
+        run: cargo check --workspace --features profiling
+      - name: check (all features)
+        run: cargo check --workspace --all-features
+      - name: rustdoc
+        run: cargo doc --no-deps
+
+  msrv:
+    name: MSRV (1.88)
+    runs-on: ubuntu-latest
+    # Cold cache must compile RocksDB, so allow more than 30m.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies (RocksDB/oxigraph build-from-source)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake clang libclang-dev
+      - uses: dtolnay/rust-toolchain@1.88
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo check (workspace) on MSRV
+        run: cargo check --workspace
+      # server+sparql also compile on the 1.88 MSRV (verified 2026-11-15).
+      # NOT --all-features: candle-core (via `ml`) uses a post-1.88 NEON
+      # intrinsic (`stdarch_neon_f16`) and is known-incompatible with 1.88.
+      - name: cargo check (server + sparql) on MSRV
+        run: cargo +1.88 check --workspace --features server,sparql

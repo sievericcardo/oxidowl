@@ -1448,13 +1448,13 @@ impl TableauExecutor {
             // labels the choice point saw (undoes OR-rule disjunct additions, etc.).
             let mut restored_labels = false;
             for (i, concepts) in backtrack_point.saved_state.node_concepts.iter().enumerate() {
-                if let Some(node) = tableau.nodes.get_mut(i) {
-                    if node.concepts != *concepts {
-                        node.concepts.clone_from(concepts);
-                        // Restored label set → invalidate cached blocking signatures.
-                        node.touch_labels();
-                        restored_labels = true;
-                    }
+                if let Some(node) = tableau.nodes.get_mut(i)
+                    && node.concepts != *concepts
+                {
+                    node.concepts.clone_from(concepts);
+                    // Restored label set → invalidate cached blocking signatures.
+                    node.touch_labels();
+                    restored_labels = true;
                 }
             }
             if restored_labels {

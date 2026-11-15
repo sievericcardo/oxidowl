@@ -890,7 +890,7 @@ impl Reasoner {
     /// individual can be reachable both through the signature and through
     /// nominal merging).
     fn sort_and_dedup_individuals(mut individuals: Vec<Individual>) -> Vec<Individual> {
-        individuals.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+        individuals.sort_by_key(|a| a.to_string());
         individuals.dedup_by(|a, b| a.to_string() == b.to_string());
         individuals
     }
@@ -1737,8 +1737,10 @@ impl Reasoner {
     /// `ELReasoner` is used automatically, giving up to 100× speedup over the
     /// full tableau algorithm.  Falls back to the general classification
     /// service when the profile is not EL, when an explicit `DL`/`QL`/`RL`
-    /// target profile is configured, or whenever the EL fast path fails for
-    /// any reason (never propagates an EL-only error).
+    /// target profile is configured, whenever the EL fast path fails for any
+    /// reason (never propagates an EL-only error), and whenever the EL result
+    /// is incomplete — i.e. does not key the hierarchy by every signature
+    /// class plus `owl:Thing` (B1).
     ///
     /// The classification result is memoised: a call served from the
     /// classification cache returns without re-running anything and is not
@@ -1831,16 +1833,37 @@ impl Reasoner {
                 let el_elapsed = el_start.elapsed();
 
                 match el_attempt {
-                    Ok((el_reasoner, result)) => {
+                    Ok((el_reasoner, mut result)) => {
                         statistics.add_reasoning_time(el_elapsed);
-                        // Store for future use, cache the result, and make the
-                        // query fast-paths reuse it.
-                        self.el_reasoner = Some(Box::new(el_reasoner));
-                        self.classification_service
-                            .store_classification(result.clone());
-                        self.cache_manager
-                            .store_classification_result(&ontology, result.clone());
-                        return Ok(result);
+                        // Completeness guard + metadata parity (B1): an EL
+                        // result that does not cover the ontology's signature
+                        // (or `owl:Thing`) is incomplete — never cache or
+                        // serve it, fall through to the general classification
+                        // below instead.  When it *is* complete, the metadata
+                        // the general path always sets (`ontology_iri`, the
+                        // object/data property lists used by the HermiT-style
+                        // writer) is filled in here, so an Auto run produces
+                        // the same document as a DL run.  With the EL
+                        // hierarchy writer covering every signature class the
+                        // completeness check never fires; it is the safety net
+                        // that keeps the fast path from ever returning a
+                        // partial hierarchy.
+                        if !finalise_el_result(&ontology, &mut result) {
+                            log::warn!(
+                                "EL classification is incomplete (missing signature classes); \
+                                 falling back to general classification"
+                            );
+                            self.el_reasoner = None;
+                        } else {
+                            // Store for future use, cache the result, and make
+                            // the query fast-paths reuse it.
+                            self.el_reasoner = Some(Box::new(el_reasoner));
+                            self.classification_service
+                                .store_classification(result.clone());
+                            self.cache_manager
+                                .store_classification_result(&ontology, result.clone());
+                            return Ok(result);
+                        }
                     }
                     Err(err) => {
                         statistics.add_reasoning_time(el_elapsed);
@@ -2404,6 +2427,22 @@ impl Reasoner {
         };
 
         let file_path = path.as_ref();
+
+        // `Auto` delegates to the *shared* auto-detecting loader
+        // (`parsers::parse_file_auto`), so the CLI matches library detection
+        // exactly (B5): the unambiguous extension table (`.rdf` → RDF/XML,
+        // `.jsonld`, `.n3`, `.html` → RDFa, `.hdt`/`.brdf` → binary), content
+        // sniffing for the ambiguous extensions, and a byte-oriented read for
+        // the binary formats.  The previous inline extension switch
+        // misrouted `.rdf`/`.jsonld`/`.n3`/`.html` to OWL/XML and died in
+        // `read_to_string` on `.hdt`/`.brdf` (not valid UTF-8).
+        if matches!(format, crate::ontology::OntologyFormat::Auto) {
+            let ontology = crate::parsers::parse_file_auto(file_path)?;
+            let source_dir = file_path.parent().map(std::path::Path::to_path_buf);
+            let config = Self::default_import_config();
+            return self.load_ontology_with_import_config(ontology, config, source_dir);
+        }
+
         let content = std::fs::read_to_string(file_path).map_err(|e| crate::Error::Io {
             message: format!("Failed to read file: {e}"),
         })?;
@@ -2476,101 +2515,15 @@ impl Reasoner {
                 let parser = ntriples::NTriplesParser::new();
                 parser.parse(&parsed_content)?
             }
+            // Handled by the early return above: `Auto` never reaches this
+            // point (it is delegated to `parsers::parse_file_auto`, which
+            // resolves the format from the shared extension table / content
+            // sniffing / binary magic before any read).  Kept so the match
+            // stays exhaustive.
             crate::ontology::OntologyFormat::Auto => {
-                // Try to determine format from file extension
-                let extension = file_path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .unwrap_or("");
-
-                match extension.to_lowercase().as_str() {
-                    "owl" | "owx" => {
-                        // Content-based detection for .owl files
-                        // Some files like "*_functional.owl" are actually in Functional Syntax
-                        // but have .owl extension, so we need to check the content
-                        let trimmed = parsed_content.trim_start();
-                        if trimmed.starts_with("Prefix(") || trimmed.starts_with("Ontology(") {
-                            // This is Functional Syntax
-                            let parser = functional::FunctionalParser::new();
-                            parser.parse(&parsed_content)?
-                        } else if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
-                            // This is OWL/XML
-                            let parser = owl_xml::OwlXmlParser::new();
-                            parser.parse(&parsed_content)?
-                        } else {
-                            // Default to OWL/XML for .owl files
-                            let parser = owl_xml::OwlXmlParser::new();
-                            parser.parse(&parsed_content)?
-                        }
-                    }
-                    "xml" | "rdf" => {
-                        // Try to detect XML type from content
-                        if parsed_content.trim_start().starts_with("<?xml")
-                            || parsed_content.contains("owl:Ontology")
-                            || parsed_content.contains("<Ontology")
-                        {
-                            let parser = owl_xml::OwlXmlParser::new();
-                            parser.parse(&parsed_content)?
-                        } else {
-                            let parser = rdf_xml::RdfXmlParser::new();
-                            parser.parse(&parsed_content)?
-                        }
-                    }
-                    "ttl" => {
-                        let parser = turtle::TurtleParser::new();
-                        parser.parse(&parsed_content)?
-                    }
-                    "ofn" => {
-                        let parser = functional::FunctionalParser::new();
-                        parser.parse(&parsed_content)?
-                    }
-                    "omn" | "man" => {
-                        let parser = manchester::ManchesterParser::new(
-                            manchester::ManchesterParserConfig::default(),
-                        );
-                        parser.parse(&parsed_content)?
-                    }
-                    "swrl" => {
-                        // SWRL uses functional-like syntax
-                        let parser = functional::FunctionalParser::new();
-                        parser.parse(&parsed_content)?
-                    }
-                    "nt" => {
-                        let parser = ntriples::NTriplesParser::new();
-                        parser.parse(&parsed_content)?
-                    }
-                    "txt" => {
-                        // Content-based detection for .txt files
-                        let trimmed = parsed_content.trim();
-                        if trimmed.starts_with("Ontology(") || trimmed.starts_with("Prefix(") {
-                            let parser = functional::FunctionalParser::new();
-                            parser.parse(&parsed_content)?
-                        } else if trimmed.starts_with("Prefix:")
-                            || trimmed.starts_with("Ontology:")
-                            || trimmed.starts_with("Class:")
-                        {
-                            let parser = manchester::ManchesterParser::new(
-                                manchester::ManchesterParserConfig::default(),
-                            );
-                            parser.parse(&parsed_content)?
-                        } else if trimmed.starts_with("@prefix") || trimmed.starts_with("@base") {
-                            let parser = turtle::TurtleParser::new();
-                            parser.parse(&parsed_content)?
-                        } else if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
-                            let parser = owl_xml::OwlXmlParser::new();
-                            parser.parse(&parsed_content)?
-                        } else {
-                            // Default to functional
-                            let parser = functional::FunctionalParser::new();
-                            parser.parse(&parsed_content)?
-                        }
-                    }
-                    _ => {
-                        // Default to OWL/XML
-                        let parser = owl_xml::OwlXmlParser::new();
-                        parser.parse(&parsed_content)?
-                    }
-                }
+                return Err(crate::Error::ontology_parsing(
+                    "Auto format must be resolved before parsing",
+                ));
             }
         };
 
@@ -4166,6 +4119,64 @@ impl Reasoner {
 
         guard.as_ref().unwrap().execute_update(sparql)
     }
+}
+
+/// B1 completeness guard + metadata parity for the EL fast path.
+///
+/// Returns `false` when the EL result does not key the hierarchy by **every**
+/// named class of the ontology signature plus `owl:Thing` — exactly what the
+/// general classification produces (`signature() + owl:Thing`, see
+/// `ClassificationService::classify`) — in which case the caller must fall
+/// back to the general path.  (It also returns `false` when the signature
+/// cannot be read.)
+///
+/// On success it fills in the metadata the general classification always
+/// sets, so an `Auto` run writes the same document as a `DL` run: the
+/// ontology IRI (HermiT-style header) and the sorted object/data property
+/// lists consumed by `ClassificationResult::write_object_properties` /
+/// `write_data_properties`.
+fn finalise_el_result(ontology: &OntologyRef, result: &mut ClassificationResult) -> bool {
+    let Ok(guard) = read_lock(ontology, "classify: EL result finalisation") else {
+        return false;
+    };
+    let Ok(signature) = guard.signature() else {
+        return false;
+    };
+
+    let owl_thing = ClassExpression::Class(crate::ontology::Class::new(
+        crate::ontology::IRI::owl_thing(),
+    ));
+    let covers_signature = signature.classes.iter().all(|class| {
+        result
+            .hierarchy
+            .contains_key(&ClassExpression::Class(class.clone()))
+    }) && result.hierarchy.contains_key(&owl_thing);
+
+    if !covers_signature {
+        return false;
+    }
+
+    result.ontology_iri = guard.id.ontology_iri.as_ref().map(ToString::to_string);
+
+    let mut object_properties: Vec<String> = signature
+        .object_properties
+        .iter()
+        .map(|p| p.iri.to_string())
+        .collect();
+    object_properties.sort();
+    object_properties.dedup();
+    result.object_properties = object_properties;
+
+    let mut data_properties: Vec<String> = signature
+        .data_properties
+        .iter()
+        .map(|p| p.iri.to_string())
+        .collect();
+    data_properties.sort();
+    data_properties.dedup();
+    result.data_properties = data_properties;
+
+    true
 }
 
 /// Returns `true` when an (EL-conforming) ontology is fully covered by the

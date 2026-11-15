@@ -1344,6 +1344,64 @@ fn extract_class_names_from_expression(expr: &oxidowl::ontology::ClassExpression
     }
 }
 
+/// Serialise a [`oxidowl::query::QueryResult`] as the CLI's JSON document.
+///
+/// Emits **every** field the query actually produced — `classes`, `instances`
+/// and/or `satisfiable` — so instance queries (and satisfiability queries) no
+/// longer fall into the `"No results"` branch (B2: `execute_dl_query` used to
+/// look at `result.classes` only).  `classes` keeps its historical shape (an
+/// array of readable class names), instances are emitted as
+/// `[{"iri": …}, …]`.  `"result": "No results"` is only produced when none of
+/// the three result fields is present.
+fn format_dl_query_json(query: &str, result: &oxidowl::query::QueryResult) -> String {
+    use serde_json::Value;
+
+    // Fields are emitted in the documented order (`query`, result fields,
+    // `execution_time`); every value goes through `serde_json::Value` so the
+    // document is always correctly escaped.
+    let mut fields: Vec<String> = Vec::with_capacity(4);
+    fields.push(format!("\"query\":{}", Value::String(query.to_string())));
+
+    if let Some(classes) = &result.classes {
+        let names: Vec<Value> = classes
+            .iter()
+            .map(|class| Value::String(extract_class_names_from_expression(class)))
+            .collect();
+        fields.push(format!("\"classes\":{}", Value::Array(names)));
+    }
+
+    if let Some(instances) = &result.instances {
+        let entries: Vec<Value> = instances
+            .iter()
+            .map(|individual| {
+                let mut entry = serde_json::Map::new();
+                entry.insert("iri".to_string(), Value::String(individual.to_string()));
+                Value::Object(entry)
+            })
+            .collect();
+        fields.push(format!("\"instances\":{}", Value::Array(entries)));
+    }
+
+    if let Some(satisfiable) = result.satisfiable {
+        fields.push(format!("\"satisfiable\":{satisfiable}"));
+    }
+
+    if fields.len() == 1 {
+        // Nothing but `query` — the engine produced no answer at all.
+        fields.push(format!(
+            "\"result\":{}",
+            Value::String("No results".to_string())
+        ));
+    }
+
+    fields.push(format!(
+        "\"execution_time\":{}",
+        Value::String(format!("{:?}", result.execution_time))
+    ));
+
+    format!("{{{}}}", fields.join(","))
+}
+
 async fn execute_command(command: Commands, config: ReasonerConfig) -> Result<()> {
     match command {
         Commands::Load {
@@ -1866,29 +1924,10 @@ async fn execute_dl_query(
 
     // Format and output the result
     let output = match format {
-        "json" => {
-            // Extract readable class names for JSON output
-            let classes_vec: Vec<String> = if let Some(ref classes) = result.classes {
-                classes
-                    .iter()
-                    .map(extract_class_names_from_expression)
-                    .collect()
-            } else {
-                Vec::new()
-            };
-
-            if result.classes.is_some() {
-                format!(
-                    "{{\"query\": \"{}\", \"classes\": {:?}, \"execution_time\": \"{:?}\"}}",
-                    query, classes_vec, result.execution_time
-                )
-            } else {
-                format!(
-                    "{{\"query\": \"{}\", \"result\": \"No results\", \"execution_time\": \"{:?}\"}}",
-                    query, result.execution_time
-                )
-            }
-        }
+        // JSON: emit whichever result fields the query produced (`classes`,
+        // `instances`, `satisfiable`) — never drop instance/satisfiability
+        // answers into the "No results" branch (B2).
+        "json" => format_dl_query_json(query, &result),
         "text" => format!("{result}"), // Use Display format instead of Debug
         _ => {
             return Err(oxidowl::Error::io(
@@ -2441,16 +2480,21 @@ fn execute_dump_clauses(
 fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationResult) {
     use std::collections::{BTreeSet, HashMap, HashSet};
 
-    // Helper function to print tree with box-drawing characters
+    /// Print one node and its subtree.
+    ///
+    /// `path` holds the ancestors of the current branch (a revisit is a real
+    /// cycle and keeps the `[cycle detected]` marker), `printed` every node
+    /// already shown (a diamond — a class with two direct superclasses — is
+    /// printed once, silently, instead of being reported as a cycle).
     fn print_tree(
         node: &str,
         children_map: &HashMap<String, BTreeSet<String>>,
         prefix: &str,
         is_last: bool,
-        visited: &mut HashSet<String>,
+        path: &mut HashSet<String>,
+        printed: &mut HashSet<String>,
     ) {
-        // Prevent infinite loops in case of cycles
-        if visited.contains(node) {
+        if path.contains(node) {
             println!(
                 "{}{}  {} [cycle detected]",
                 prefix,
@@ -2459,7 +2503,11 @@ fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationRes
             );
             return;
         }
-        visited.insert(node.to_string());
+        if !printed.insert(node.to_string()) {
+            // Already rendered under another (direct) superclass.
+            return;
+        }
+        path.insert(node.to_string());
 
         // Print current node
         println!(
@@ -2475,13 +2523,24 @@ fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationRes
             for (idx, child) in children.iter().enumerate() {
                 let is_last_child = idx == child_count - 1;
                 let new_prefix = format!("{}{}   ", prefix, if is_last { " " } else { "│" });
-                print_tree(child, children_map, &new_prefix, is_last_child, visited);
+                print_tree(
+                    child,
+                    children_map,
+                    &new_prefix,
+                    is_last_child,
+                    path,
+                    printed,
+                );
             }
         }
+
+        path.remove(node);
     }
-    // Build a tree structure for better visualization
-    let mut children_map: HashMap<String, BTreeSet<String>> = HashMap::new();
+
     let mut all_classes: HashSet<String> = HashSet::new();
+    // parent → direct children (Hasse diagram of the stored closure)
+    let mut children_map: HashMap<String, BTreeSet<String>> = HashMap::new();
+    // classes that have at least one *direct* superclass
     let mut has_superclass: HashSet<String> = HashSet::new();
 
     // Populate the hierarchy structure
@@ -2489,11 +2548,32 @@ fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationRes
         let class_str = format_class_expression(class);
         all_classes.insert(class_str.clone());
 
+        // `hierarchy` stores the full transitive closure, so an edge
+        // `class → superclass` is *direct* only when no other superclass of
+        // `class` already reaches it.  Without this Hasse reduction a class
+        // with `A ⊑ B`, `A ⊑ C` (and `B ⊑ C`) is rendered twice — once per
+        // path — which the old output reported as `[cycle detected]`.
+        let mut indirect: HashSet<String> = HashSet::new();
+        for intermediate in superclasses {
+            let intermediate_str = format_class_expression(intermediate);
+            if intermediate_str == class_str {
+                continue;
+            }
+            if let Some(intermediate_supers) = hierarchy.hierarchy.get(intermediate) {
+                indirect.extend(intermediate_supers.iter().map(format_class_expression));
+            }
+        }
+
         for superclass in superclasses {
             let super_str = format_class_expression(superclass);
             all_classes.insert(super_str.clone());
 
-            // Map parent -> children
+            // Skip reflexive and transitive edges.
+            if super_str == class_str || indirect.contains(&super_str) {
+                continue;
+            }
+
+            // Map parent -> child
             children_map
                 .entry(super_str.clone())
                 .or_default()
@@ -2502,17 +2582,48 @@ fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationRes
         }
     }
 
-    // Find root classes (those without superclasses, or only having owl:Thing)
+    // Root classes: no *direct* superclass.
     let mut roots: BTreeSet<String> = all_classes
         .iter()
-        .filter(|c| !has_superclass.contains(*c) || *c == "Thing")
+        .filter(|c| !has_superclass.contains(*c))
         .cloned()
         .collect();
 
-    // If we have owl:Thing, make it the single root
-    if roots.contains("Thing") {
+    // The hierarchy stores *strict* superclasses only — a root never lists
+    // `owl:Thing` unless it was told — so when `owl:Thing` is part of the
+    // hierarchy every other root is hung under it.  Otherwise the print stops
+    // at a childless `Thing` and the whole hierarchy looks empty (B1 CLI
+    // symptom).
+    if all_classes.contains("Thing") {
+        let thing_children = children_map.entry("Thing".to_string()).or_default();
+        for root in &roots {
+            if root != "Thing" {
+                thing_children.insert(root.clone());
+            }
+        }
         roots.clear();
         roots.insert("Thing".to_string());
+    }
+
+    // Safety net: a strongly-connected component with no edge towards a root
+    // is unreachable from the forest above — surface it as an extra root so
+    // every class is printed exactly once.
+    {
+        let mut reachable: HashSet<String> = HashSet::new();
+        let mut stack: Vec<&str> = roots.iter().map(String::as_str).collect();
+        while let Some(node) = stack.pop() {
+            if !reachable.insert(node.to_string()) {
+                continue;
+            }
+            if let Some(children) = children_map.get(node) {
+                stack.extend(children.iter().map(String::as_str));
+            }
+        }
+        for class in &all_classes {
+            if !reachable.contains(class) {
+                roots.insert(class.clone());
+            }
+        }
     }
 
     // Statistics
@@ -2521,9 +2632,18 @@ fn print_hierarchy_pretty(hierarchy: &oxidowl::core::reasoner::ClassificationRes
     println!("Root classes: {}", roots.len());
     println!();
 
-    // Print the tree starting from roots
+    // Print the tree starting from roots (one shared `printed` set so a class
+    // shown under one root is never repeated under another).
+    let mut printed = HashSet::new();
     for root in &roots {
-        print_tree(root, &children_map, "", true, &mut HashSet::new());
+        print_tree(
+            root,
+            &children_map,
+            "",
+            true,
+            &mut HashSet::new(),
+            &mut printed,
+        );
     }
 }
 
@@ -2777,3 +2897,131 @@ async fn execute_sparql_server(
 }
 */
 */
+
+#[cfg(test)]
+mod dl_query_json_tests {
+    use super::format_dl_query_json;
+    use oxidowl::ontology::{Class, ClassExpression, IRI, Individual};
+    use oxidowl::query::{DLQuery, QueryResult, QueryType};
+    use std::time::Duration;
+
+    fn class_expr(iri: &str) -> ClassExpression {
+        ClassExpression::Class(Class::new(IRI::new(iri)))
+    }
+
+    fn result_for(
+        query_type: QueryType,
+        instances: Option<Vec<Individual>>,
+        classes: Option<Vec<ClassExpression>>,
+        satisfiable: Option<bool>,
+    ) -> QueryResult {
+        QueryResult {
+            query: DLQuery {
+                class_expression: class_expr("http://example.org/Person"),
+                query_type,
+                direct: false,
+            },
+            instances: instances.map(|v| v.into_iter().collect()),
+            classes: classes.map(|v| v.into_iter().collect()),
+            satisfiable,
+            execution_time: Duration::from_millis(1),
+        }
+    }
+
+    #[test]
+    fn instance_query_json_carries_the_individuals() {
+        let result = result_for(
+            QueryType::Instances,
+            Some(vec![Individual::named(IRI::new(
+                "http://example.org/alice",
+            ))]),
+            None,
+            None,
+        );
+        let json: serde_json::Value =
+            serde_json::from_str(&format_dl_query_json("instances:Person", &result))
+                .expect("JSON output must be well-formed");
+        assert_eq!(json["query"], "instances:Person");
+        assert_eq!(json["instances"][0]["iri"], "http://example.org/alice");
+        assert!(
+            json.get("result").is_none(),
+            "an instance answer must not be reported as 'No results': {json}"
+        );
+        assert!(json.get("execution_time").is_some());
+    }
+
+    #[test]
+    fn class_query_json_keeps_the_classes_shape() {
+        let result = result_for(
+            QueryType::Subclasses,
+            None,
+            Some(vec![
+                class_expr("http://example.org/onto#A"),
+                class_expr("http://example.org/onto#B"),
+                // No `#` fragment: `extract_class_names_from_expression`
+                // keeps the whole IRI (historical shape, preserved).
+                class_expr("http://example.org/Bare"),
+            ]),
+            None,
+        );
+        let json: serde_json::Value =
+            serde_json::from_str(&format_dl_query_json("subclasses:C", &result))
+                .expect("JSON output must be well-formed");
+        let mut names: Vec<String> = json["classes"]
+            .as_array()
+            .expect("classes must be an array")
+            .iter()
+            .map(|v| v.as_str().expect("class name").to_string())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            vec![
+                "A".to_string(),
+                "B".to_string(),
+                "http://example.org/Bare".to_string()
+            ]
+        );
+        assert!(json.get("instances").is_none());
+    }
+
+    #[test]
+    fn satisfiability_query_json_carries_the_boolean() {
+        let result = result_for(QueryType::Satisfiable, None, None, Some(false));
+        let json: serde_json::Value =
+            serde_json::from_str(&format_dl_query_json("satisfiable:A", &result))
+                .expect("JSON output must be well-formed");
+        assert_eq!(json["satisfiable"], serde_json::json!(false));
+        assert!(json.get("result").is_none());
+    }
+
+    #[test]
+    fn empty_result_still_reports_no_results() {
+        let result = result_for(QueryType::Instances, Some(Vec::new()), None, None);
+        let json: serde_json::Value =
+            serde_json::from_str(&format_dl_query_json("instances:Nobody", &result))
+                .expect("JSON output must be well-formed");
+        assert_eq!(json["instances"].as_array().expect("array").len(), 0);
+        assert!(
+            json.get("result").is_none(),
+            "an empty instance answer is still an answer: {json}"
+        );
+
+        // A result with no fields at all keeps the historical marker.
+        let result = QueryResult {
+            query: DLQuery {
+                class_expression: class_expr("http://example.org/Person"),
+                query_type: QueryType::Instances,
+                direct: false,
+            },
+            instances: None,
+            classes: None,
+            satisfiable: None,
+            execution_time: Duration::default(),
+        };
+        let json: serde_json::Value =
+            serde_json::from_str(&format_dl_query_json("instances:Ghost", &result))
+                .expect("JSON output must be well-formed");
+        assert_eq!(json["result"], "No results");
+    }
+}

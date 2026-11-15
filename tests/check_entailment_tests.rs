@@ -223,3 +223,89 @@ fn cli_flag_check_entailment_exit_codes() {
         "summary missing{stdout}"
     );
 }
+
+// ── 4. B3: cross-file entailment with prefixed fixtures ──────────────────────
+
+/// Write a prefixed functional-syntax fixture: an explicit
+/// `Prefix(:=<http://example.org/default#>)` **plus** a *different* ontology
+/// IRI.  Before B3 the `Ontology(<…>)` declaration overwrote the `""`
+/// prefix, so each file expanded `:A` against its own ontology IRI and the
+/// premise/conclusion IRIs never matched across files.
+fn write_prefixed_ofn(
+    dir: &Path,
+    name: &str,
+    ontology_iri: &str,
+    body: &str,
+) -> std::path::PathBuf {
+    let path = dir.join(name);
+    let content =
+        format!("Prefix(:=<http://example.org/default#>)\nOntology(<{ontology_iri}>\n{body})\n");
+    std::fs::write(&path, content).expect("prefixed fixture write");
+    path
+}
+
+const PREF_CLASS_A: &str = ":A";
+const PREF_CLASS_B: &str = ":B";
+
+#[test]
+fn cli_check_entailment_with_prefixed_cross_file_fixtures() {
+    let dir = tempfile::tempdir().expect("tempdir");
+
+    let premise = write_prefixed_ofn(
+        dir.path(),
+        "prefixed_premise.ofn",
+        "http://example.org/prefixed-premise",
+        &format!(
+            "  Declaration(Class({PREF_CLASS_A}))\n  Declaration(Class({PREF_CLASS_B}))\n  \
+             SubClassOf({PREF_CLASS_A} {PREF_CLASS_B})\n"
+        ),
+    );
+    // Same prefixed axioms, different ontology IRI → must be entailed.
+    let entailed = write_prefixed_ofn(
+        dir.path(),
+        "prefixed_entailed.ofn",
+        "http://example.org/prefixed-conclusion-entailed",
+        &format!(
+            "  Declaration(Class({PREF_CLASS_A}))\n  Declaration(Class({PREF_CLASS_B}))\n  \
+             SubClassOf({PREF_CLASS_A} {PREF_CLASS_B})\n"
+        ),
+    );
+    // Reversed subclass axiom under the same prefixes → must NOT be entailed.
+    let not_entailed = write_prefixed_ofn(
+        dir.path(),
+        "prefixed_not_entailed.ofn",
+        "http://example.org/prefixed-conclusion-not-entailed",
+        &format!(
+            "  Declaration(Class({PREF_CLASS_A}))\n  Declaration(Class({PREF_CLASS_B}))\n  \
+             SubClassOf({PREF_CLASS_B} {PREF_CLASS_A})\n"
+        ),
+    );
+
+    let out = run_cli(&[
+        "check-entailment",
+        "--premise",
+        premise.to_str().expect("utf8"),
+        "--conclusion",
+        entailed.to_str().expect("utf8"),
+    ]);
+    assert!(
+        out.status.success(),
+        "identical prefixed conclusion must be entailed (B3: the explicit \
+         default prefix must survive `Ontology(<…>)` across files){}",
+        describe(&out)
+    );
+
+    let out = run_cli(&[
+        "check-entailment",
+        "--premise",
+        premise.to_str().expect("utf8"),
+        "--conclusion",
+        not_entailed.to_str().expect("utf8"),
+    ]);
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "reversed prefixed conclusion must NOT be entailed{}",
+        describe(&out)
+    );
+}

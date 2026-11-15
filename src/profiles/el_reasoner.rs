@@ -10,7 +10,9 @@ use crate::{
     config::ReasonerConfig,
     core::reasoner::ClassificationResult,
     explanation::{Explanation, ExplanationService},
-    ontology::{Axiom, ClassExpression, Individual, ObjectPropertyExpression, Ontology},
+    ontology::{
+        Axiom, Class, ClassExpression, IRI, Individual, ObjectPropertyExpression, Ontology,
+    },
 };
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -38,6 +40,9 @@ pub struct ELReasoner {
     explanation_service: Option<Arc<ExplanationService>>,
     /// Statistics
     statistics: ELStatistics,
+    /// Every named class of the ontology signature (B1: the classification
+    /// result must cover all of them, even when no subsumption mentions them).
+    signature_classes: Vec<Class>,
 }
 
 impl ELReasoner {
@@ -66,12 +71,18 @@ impl ELReasoner {
             config,
             explanation_service,
             statistics: ELStatistics::default(),
+            signature_classes: Vec::new(),
         }
     }
 
     /// Initialize with an ontology
     pub fn initialize(&mut self, ontology: &Ontology) -> Result<()> {
         let start = Instant::now();
+
+        // Step 0: remember every named class of the signature — the
+        // classification result must cover all of them (B1), even when the
+        // completion engine never derives a subsumption involving them.
+        self.signature_classes = ontology.signature()?.classes;
 
         // Step 1: Normalize ontology to EL normal form
         self.normalize_ontology(ontology)?;
@@ -151,7 +162,16 @@ impl ELReasoner {
         Ok(())
     }
 
-    /// Convert EL concept hierarchy to `ClassExpression` hierarchy
+    /// Convert EL concept hierarchy to `ClassExpression` hierarchy.
+    ///
+    /// **Completeness (B1):** the completion engine only ever records a class
+    /// that appears in some subsumption *pair*, so a signature class that is
+    /// never the subclass of anything (e.g. the topmost `C` of `A ⊑ B ⊑ C`)
+    /// — and `owl:Thing`, which no axiom mentions — used to be missing from
+    /// the result.  Every signature class and `owl:Thing` are therefore seeded
+    /// as keys (with an empty super-set when nothing was derived), matching
+    /// the general DL classification, which keys the hierarchy by
+    /// `signature() + owl:Thing`.
     fn convert_to_class_expression_hierarchy(
         &self,
     ) -> HashMap<ClassExpression, HashSet<ClassExpression>> {
@@ -162,6 +182,15 @@ impl ELReasoner {
             let sup_exprs: HashSet<_> = sups.iter().map(ELConcept::to_class_expression).collect();
             result.insert(sub_expr, sup_exprs);
         }
+
+        for class in &self.signature_classes {
+            result
+                .entry(ClassExpression::Class(class.clone()))
+                .or_default();
+        }
+        result
+            .entry(ClassExpression::Class(Class::new(IRI::owl_thing())))
+            .or_default();
 
         result
     }

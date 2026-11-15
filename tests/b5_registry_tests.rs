@@ -24,6 +24,8 @@
 use std::collections::BTreeSet;
 use std::sync::{Arc, RwLock};
 
+use oxidowl::config::ReasonerConfig;
+use oxidowl::core::reasoner::Reasoner;
 use oxidowl::ontology::axioms::{Axiom, DeclarationAxiom};
 use oxidowl::ontology::{Entity, IRI, Ontology, OntologyFormat};
 use oxidowl::parsers::{
@@ -595,5 +597,109 @@ fn loader_uses_extension_for_html_fragment() {
     assert!(
         !guard.axioms().is_empty(),
         "the .html fragment must produce axioms (F-3: no silent 0-axiom parse)"
+    );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 5. `Reasoner::load_ontology_from_file(…, OntologyFormat::Auto)` — the CLI
+//    auto path (B5): it must match `parse_file_auto` / `OntologyLoader`.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Load a file through the reasoner's `Auto` branch — the code path every CLI
+/// subcommand uses when `--format` is not given — and return the ontology.
+fn reasoner_auto_load(path: &std::path::Path) -> Ontology {
+    let mut reasoner = Reasoner::new(ReasonerConfig::default()).expect("reasoner");
+    reasoner
+        .load_ontology_from_file(path, OntologyFormat::Auto)
+        .unwrap_or_else(|e| {
+            panic!(
+                "OntologyFormat::Auto load of {} failed: {e}",
+                path.display()
+            )
+        });
+    let onto_ref = reasoner.get_ontology().expect("ontology loaded").clone();
+    onto_ref.read().expect("ontology lock").clone()
+}
+
+/// B5: the reasoner's inline Auto branch used to misroute `.rdf` (any file
+/// starting with `<?xml` went to OWL/XML), `.jsonld`, `.n3` and `.html` (all
+/// fell through to the OWL/XML default) and could not read the binary `.hdt`
+/// / `.brdf` formats at all (`read_to_string` runs before detection).
+#[test]
+fn reasoner_auto_load_routes_every_format_family() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let ont = ontology_with_class_declarations(4);
+    let original = declaration_iris(&ont);
+
+    // One *text* format per family the old switch misrouted.
+    for (format, ext) in [
+        (OntologyFormat::RdfXml, "rdf"),
+        (OntologyFormat::JsonLd, "jsonld"),
+        (OntologyFormat::N3, "n3"),
+        (OntologyFormat::Rdfa, "html"),
+    ] {
+        let path = dir.path().join(format!("auto.{ext}"));
+        std::fs::write(&path, save_to_string(&ont, format).expect("text save"))
+            .expect("write text file");
+        let loaded = reasoner_auto_load(&path);
+        assert_eq!(
+            declaration_iris(&loaded),
+            original,
+            "{format:?} (.{ext}) must load through OntologyFormat::Auto"
+        );
+    }
+
+    // Binary families — never decodable with `read_to_string`.
+    let hdt_path = dir.path().join("auto.hdt");
+    std::fs::write(
+        &hdt_path,
+        save_to_bytes(&ont, OntologyFormat::Hdt).expect("hdt bytes"),
+    )
+    .expect("write hdt");
+    assert_eq!(
+        declaration_iris(&reasoner_auto_load(&hdt_path)),
+        original,
+        "Hdt (.hdt) must load through OntologyFormat::Auto"
+    );
+
+    // 130 declarations ⇒ varint ids ≥ 128 ⇒ genuinely non-UTF-8 payload.
+    let brdf_source = ontology_with_class_declarations(130);
+    let brdf_bytes = save_to_bytes(&brdf_source, OntologyFormat::BinaryRdf).expect("brdf bytes");
+    assert!(
+        std::str::from_utf8(&brdf_bytes).is_err(),
+        "fixture must be genuinely non-UTF-8"
+    );
+    let brdf_path = dir.path().join("auto.brdf");
+    std::fs::write(&brdf_path, &brdf_bytes).expect("write brdf");
+    assert_eq!(
+        declaration_iris(&reasoner_auto_load(&brdf_path)),
+        declaration_iris(&brdf_source),
+        "BinaryRdf (.brdf) must load through OntologyFormat::Auto"
+    );
+}
+
+/// An explicit format keeps its dedicated parser — the Auto delegation must
+/// not swallow `OntologyFormat::Functional`.
+#[test]
+fn reasoner_explicit_format_still_parses_functional() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("explicit.ofn");
+    std::fs::write(
+        &path,
+        "Prefix(:=<http://example.org/>)\nOntology(<http://example.org/explicit>)\n  \
+         Declaration(Class(:Thing1))\n",
+    )
+    .expect("write ofn");
+
+    let mut reasoner = Reasoner::new(ReasonerConfig::default()).expect("reasoner");
+    reasoner
+        .load_ontology_from_file(&path, OntologyFormat::Functional)
+        .expect("explicit Functional load");
+    let onto_ref = reasoner.get_ontology().expect("loaded").clone();
+    let loaded = onto_ref.read().expect("lock").clone();
+    assert!(
+        declaration_iris(&loaded).contains("http://example.org/Thing1"),
+        "explicit Functional load must expand `:Thing1`; axioms: {:?}",
+        loaded.axioms()
     );
 }
