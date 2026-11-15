@@ -16,6 +16,7 @@ pub mod extended_builtins;
 pub mod integration;
 pub mod interpreter;
 pub mod list_builtins;
+pub mod materializer;
 pub mod math_builtins;
 pub mod parser;
 pub mod regex_builtins;
@@ -37,6 +38,7 @@ pub use datetime_constructor_builtins::DateTimeConstructorRegistry;
 pub use engine::SWRLRuleEngine;
 pub use integration::{SWRLFeatureRegistry, SWRLFeatureStatistics, ValidationResult};
 pub use interpreter::SWRLInterpreter;
+pub use materializer::{SwrlMaterialization, SwrlMaterializer};
 pub use parser::{NamespaceManager, ParseError, SWRLParser};
 pub use unification::{Bindings, UnificationEngine, UnificationResult};
 pub use validation::{

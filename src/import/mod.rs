@@ -442,6 +442,165 @@ impl ImportManager {
         Ok(results)
     }
 
+    /// Resolve the ontology's `owl:imports` closure **recursively** and merge
+    /// every reachable ontology into `ontology` (HermiT `Imports.INCLUDED`
+    /// parity).
+    ///
+    /// Compared to the flat [`Self::resolve_imports`]:
+    /// - each imported ontology's *own* imports are resolved — and merged into
+    ///   it — **before** it is merged into the target, so the target receives
+    ///   the full transitive closure;
+    /// - IRIs are marked visited *before* resolution, so import cycles and
+    ///   diamond-shaped dependency graphs terminate (a repeated IRI is recorded
+    ///   as a warning, not an error);
+    /// - `config.max_import_depth` bounds the recursion — every declared import
+    ///   at a level deeper than the cap is reported as
+    ///   [`ImportError::DepthExceeded`] and the already-merged prefix of the
+    ///   closure is kept;
+    /// - axioms are deduplicated on merge (see [`Self::merge_ontology`]).
+    ///
+    /// Unresolvable imports are recorded as [`ImportError::ResolutionFailed`]
+    /// entries in the returned results and never fail the call — unless
+    /// `config.resolution_strategy` is [`ImportResolutionStrategy::Strict`],
+    /// in which case the first recorded failure is returned as `Err`. Hard
+    /// failures (an existing file that cannot be read or parsed) always
+    /// propagate as `Err`.
+    pub fn resolve_imports_recursive(
+        &self,
+        ontology: &mut Ontology,
+    ) -> Result<Vec<ImportResolutionResult>, OxidowlError> {
+        let mut visited = HashSet::new();
+        // The importing ontology itself counts as visited, so an ontology
+        // importing its own IRI does not re-resolve itself.
+        if let Some(iri) = ontology.get_iri() {
+            visited.insert(iri.clone());
+        }
+        let mut results = Vec::new();
+        self.resolve_imports_recursive_inner(ontology, 0, &mut visited, &mut results)?;
+        Ok(results)
+    }
+
+    /// Depth-first worker behind [`Self::resolve_imports_recursive`].
+    ///
+    /// Resolves every import declared by `ontology`, recursively closes each
+    /// imported ontology's own imports, then merges it into `ontology` when
+    /// `config.merge_imports` is set.
+    fn resolve_imports_recursive_inner(
+        &self,
+        ontology: &mut Ontology,
+        depth: usize,
+        visited: &mut HashSet<IRI>,
+        results: &mut Vec<ImportResolutionResult>,
+    ) -> Result<(), OxidowlError> {
+        let declarations = self.extract_import_declarations(ontology);
+        if declarations.is_empty() {
+            return Ok(());
+        }
+        let ontology_iri = ontology
+            .get_iri()
+            .cloned()
+            .unwrap_or_else(|| IRI::new("urn:unknown"));
+
+        for import_decl in declarations {
+            let import_iri = import_decl.imported_ontology_iri.clone();
+
+            // Depth guard: stop descending, report, and keep everything
+            // merged so far (best effort — never fatal by default).
+            if depth > self.config.max_import_depth {
+                results.push(ImportResolutionResult {
+                    ontology: None,
+                    import_iri,
+                    resolved_source: None,
+                    errors: vec![ImportError::DepthExceeded {
+                        max_depth: self.config.max_import_depth,
+                        current_depth: depth,
+                    }],
+                    warnings: Vec::new(),
+                });
+                continue;
+            }
+
+            // Cycle / diamond guard: the IRI was inserted by the caller (or is
+            // inserted here before resolution), so any import edge back to an
+            // already-visited IRI is dropped and the recursion terminates.
+            if !visited.insert(import_iri.clone()) {
+                results.push(ImportResolutionResult {
+                    ontology: None,
+                    resolved_source: Some("already-visited".to_string()),
+                    import_iri: import_iri.clone(),
+                    errors: Vec::new(),
+                    warnings: vec![format!(
+                        "Skipping import {import_iri}: already visited (import cycle or shared dependency)"
+                    )],
+                });
+                continue;
+            }
+
+            let mut result = match self.resolve_single_import(&ontology_iri, &import_decl, depth) {
+                Ok(result) => result,
+                Err(err) => {
+                    // Hard failure: the file was found but could not be read
+                    // or parsed.  Warn and continue in best-effort mode.
+                    warn!("Failed to resolve import {import_iri}: {err}");
+                    results.push(ImportResolutionResult {
+                        ontology: None,
+                        import_iri: import_iri.clone(),
+                        resolved_source: None,
+                        errors: vec![ImportError::ResolutionFailed {
+                            import_iri,
+                            reason: err.to_string(),
+                        }],
+                        warnings: Vec::new(),
+                    });
+                    continue;
+                }
+            };
+
+            // Recorded failures (unresolvable IRI, validation errors): keep
+            // loading the rest of the closure unless strict mode is enabled.
+            if !result.errors.is_empty() {
+                if matches!(
+                    self.config.resolution_strategy,
+                    ImportResolutionStrategy::Strict
+                ) {
+                    let first = result.errors[0].to_string();
+                    return Err(OxidowlError::ImportError {
+                        message: format!(
+                            "Strict import resolution failed for {import_iri}: {first}"
+                        ),
+                    });
+                }
+                for error in &result.errors {
+                    warn!("Import {import_iri} not merged: {error}");
+                }
+                results.push(result);
+                continue;
+            }
+
+            if let Some(mut imported) = result.ontology.take() {
+                // Close the imported ontology's own imports first so the merge
+                // below carries the full transitive closure.
+                self.resolve_imports_recursive_inner(&mut imported, depth + 1, visited, results)?;
+
+                if self.config.merge_imports {
+                    self.merge_ontology(ontology, &imported)?;
+                }
+
+                // Cache the *closed* ontology so flat `resolve_imports` calls
+                // and sibling branches reuse it.
+                if let Ok(mut cache) = self.ontology_cache.write() {
+                    cache.insert(import_iri, Arc::new(imported.clone()));
+                }
+
+                result.ontology = Some(imported);
+            }
+
+            results.push(result);
+        }
+
+        Ok(())
+    }
+
     /// Extract import declarations from ontology annotations and the structured
     /// `imports` field (populated by the functional-syntax parser for `Import(...)`).
     fn extract_import_declarations(&self, ontology: &Ontology) -> Vec<ImportDeclaration> {
@@ -560,15 +719,20 @@ impl ImportManager {
 
     /// Try to resolve import as a file path
     fn try_resolve_as_file(&self, path_str: &str) -> Result<Option<Ontology>, OxidowlError> {
+        // `file://` URIs denote local documents (e.g.
+        // `Import(<file:///abs/child.owl>)`) — strip the scheme so they
+        // resolve as paths instead of being attempted as HTTP fetches.
+        let local_str = file_uri_to_path(path_str);
+
         // First try the path as-is
-        let path = Path::new(path_str);
+        let path = Path::new(local_str.as_ref());
         if path.exists() {
             return Ok(Some(self.load_ontology_from_file(path)?));
         }
 
         // Try with base directories
         for base_dir in &self.config.base_directories {
-            let full_path = base_dir.join(path);
+            let full_path = base_dir.join(local_str.as_ref());
             if full_path.exists() {
                 return Ok(Some(self.load_ontology_from_file(&full_path)?));
             }
@@ -789,16 +953,30 @@ impl ImportManager {
         Ok(())
     }
 
-    /// Merge an imported ontology into the main ontology
+    /// Merge an imported ontology into the main ontology.
+    ///
+    /// Axioms and annotations already present in `target` are skipped:
+    /// deduplication compares axiom *content* (parser-minted ids are ignored —
+    /// see [`crate::ontology::axioms::Axiom::content_key`]), so the same axiom
+    /// arriving from two branches of the import graph, or from an import cycle,
+    /// is merged exactly once.
     fn merge_ontology(&self, target: &mut Ontology, source: &Ontology) -> Result<(), OxidowlError> {
-        // Merge axioms from source into target
+        // Merge axioms from source into target, skipping content duplicates.
+        let mut seen: HashSet<String> = HashSet::with_capacity(target.axioms.len());
+        for axiom in target.axioms() {
+            seen.insert(axiom.content_key());
+        }
         for axiom in source.axioms() {
-            target.add_axiom(axiom.clone());
+            if seen.insert(axiom.content_key()) {
+                target.add_axiom(axiom.clone());
+            }
         }
 
-        // Merge annotations from source
+        // Merge annotations from source (annotations are id-free: exact equality)
         for annotation in &source.annotations {
-            target.annotations.push(annotation.clone());
+            if !target.annotations.contains(annotation) {
+                target.annotations.push(annotation.clone());
+            }
         }
 
         // Implement basic prefix handling for imports
@@ -848,6 +1026,21 @@ impl ImportManager {
         graph
             .topological_sort()
             .map_err(|e| OxidowlError::invalid_input(e.to_string()))
+    }
+}
+
+/// Map a `file://` URI to a local path string; any other IRI is returned
+/// unchanged.  `file:///abs/path` → `/abs/path` and
+/// `file://localhost/abs/path` → `/abs/path`.  Percent-escapes are left as-is
+/// (ontology IRI paths with escapes are rare; a non-existent path simply fails
+/// to resolve and is reported as a missing import).
+fn file_uri_to_path(uri: &str) -> std::borrow::Cow<'_, str> {
+    match uri.strip_prefix("file://") {
+        None => std::borrow::Cow::Borrowed(uri),
+        Some(rest) => {
+            let rest = rest.strip_prefix("localhost").unwrap_or(rest);
+            std::borrow::Cow::Owned(rest.to_string())
+        }
     }
 }
 

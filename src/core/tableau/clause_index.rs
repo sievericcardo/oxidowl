@@ -59,6 +59,15 @@ pub struct ClauseIndex {
     /// IDs of negative clauses (body → ⊥) in `deterministic_clauses`
     negative_clause_ids: Vec<usize>,
 
+    /// Positions (== unified ids) of the deterministic clauses whose body is
+    /// empty — they apply to *every* node.
+    ///
+    /// Phase C: precomputed once so the per-node check no longer scans all
+    /// deterministic clauses and re-tests `body.is_empty()` (plus the
+    /// `candidates.iter().any(|c| c.id == …)` dedup scan) for every node of
+    /// every expansion iteration.
+    empty_body_clause_ids: Vec<usize>,
+
     /// Index statistics
     stats: IndexStatistics,
 }
@@ -83,6 +92,7 @@ impl ClauseIndex {
         let mut body_index: HashMap<String, HashSet<usize>> = HashMap::with_capacity(total_clauses);
         let mut head_index: HashMap<String, HashSet<usize>> = HashMap::with_capacity(total_clauses);
         let mut negative_clause_ids = Vec::with_capacity(total_clauses / 4); // Estimate
+        let mut empty_body_clause_ids = Vec::new();
 
         let deterministic_clauses = clause_set.deterministic_clauses.clone();
         let disjunctive_clauses = clause_set.disjunctive_clauses.clone();
@@ -93,6 +103,11 @@ impl ClauseIndex {
             for atom in &clause.body {
                 let predicate = Self::extract_predicate(atom);
                 body_index.entry(predicate).or_default().insert(id);
+            }
+
+            // Empty-body clauses always apply — record their position once.
+            if clause.body.is_empty() {
+                empty_body_clause_ids.push(id);
             }
 
             // Index head predicates
@@ -172,6 +187,7 @@ impl ClauseIndex {
             deterministic_clauses,
             disjunctive_clauses,
             negative_clause_ids,
+            empty_body_clause_ids,
             stats,
         }
     }
@@ -196,8 +212,11 @@ impl ClauseIndex {
     /// 2. Return unique clause IDs
     ///
     /// Time: O(p × k) where p = input predicates, k = avg clauses per predicate
+    ///
+    /// Phase C: the predicates are borrowed (`&str`, `String`, …) — callers no
+    /// longer build a `Vec<String>` per node per iteration.
     #[must_use]
-    pub fn get_candidate_clauses(&self, predicates: &[String]) -> Vec<usize> {
+    pub fn get_candidate_clauses(&self, predicates: &[impl AsRef<str>]) -> Vec<usize> {
         if predicates.is_empty() {
             return Vec::new();
         }
@@ -205,7 +224,7 @@ impl ClauseIndex {
         let mut candidates = HashSet::new();
 
         for predicate in predicates {
-            if let Some(clause_ids) = self.body_index.get(predicate) {
+            if let Some(clause_ids) = self.body_index.get(predicate.as_ref()) {
                 candidates.extend(clause_ids);
             }
         }
@@ -218,19 +237,41 @@ impl ClauseIndex {
     /// This is a convenience method that returns actual clause references
     /// instead of just IDs.
     #[must_use]
-    pub fn get_candidate_clause_refs(&self, predicates: &[String]) -> Vec<&DLClause> {
+    pub fn get_candidate_clause_refs(&self, predicates: &[impl AsRef<str>]) -> Vec<&DLClause> {
+        self.get_candidate_clause_id_refs(predicates)
+            .into_iter()
+            .map(|(_, clause)| clause)
+            .collect()
+    }
+
+    /// Like [`Self::get_candidate_clause_refs`], but pairs every clause with
+    /// its **stable integer key**: the clause's position in the unified id
+    /// space (deterministic clauses `0..deterministic_clauses.len()`,
+    /// disjunctive clauses after them) — the same numbering
+    /// [`Self::get_clause`] uses.
+    ///
+    /// Phase C: the clause checker keys its incremental LRU cache with this
+    /// number instead of `hash(DLClause::id)`, which used to run a
+    /// `DefaultHasher` over a `String` **per candidate clause per node per
+    /// expansion iteration**.
+    #[must_use]
+    pub fn get_candidate_clause_id_refs(
+        &self,
+        predicates: &[impl AsRef<str>],
+    ) -> Vec<(usize, &DLClause)> {
         let ids = self.get_candidate_clauses(predicates);
 
         ids.into_iter()
-            .filter_map(|id| {
-                if id < self.deterministic_clauses.len() {
-                    Some(&self.deterministic_clauses[id])
-                } else {
-                    let offset = id - self.deterministic_clauses.len();
-                    self.disjunctive_clauses.get(offset)
-                }
-            })
+            .filter_map(|id| self.get_clause(id).map(|clause| (id, clause)))
             .collect()
+    }
+
+    /// Positions (== unified ids) of the deterministic clauses whose body is
+    /// empty, ascending. Such clauses apply to every node and must always be
+    /// considered alongside the predicate-filtered candidates.
+    #[must_use]
+    pub fn empty_body_clause_ids(&self) -> &[usize] {
+        &self.empty_body_clause_ids
     }
 
     /// Get IDs of all negative clauses (body → ⊥)
@@ -296,11 +337,11 @@ impl ClauseIndex {
     ///
     /// Useful for finding clauses that could derive a given concept
     #[must_use]
-    pub fn get_clauses_deriving(&self, predicates: &[String]) -> Vec<&DLClause> {
+    pub fn get_clauses_deriving(&self, predicates: &[impl AsRef<str>]) -> Vec<&DLClause> {
         let mut candidates = HashSet::new();
 
         for predicate in predicates {
-            if let Some(clause_ids) = self.head_index.get(predicate) {
+            if let Some(clause_ids) = self.head_index.get(predicate.as_ref()) {
                 candidates.extend(clause_ids);
             }
         }
@@ -529,5 +570,40 @@ mod tests {
         let clause_refs = index.get_candidate_clause_refs(&["B".to_string()]);
         assert!(!clause_refs.is_empty());
         assert!(clause_refs.iter().any(|c| c.id == "c2"));
+    }
+
+    /// Phase C: borrowed `&str` predicates and the stable `(key, clause)` pairs
+    /// used by the clause checker's LRU cache.
+    #[test]
+    fn test_borrowed_predicates_and_stable_clause_keys() {
+        let mut clause_set = create_test_clause_set();
+        // A body-less clause (always applies to every node).
+        clause_set.deterministic_clauses.push(DLClause {
+            id: "c5".to_string(),
+            body: vec![],
+            head: vec![create_test_atom("H", vec!["x"])],
+            variables: ["x".to_string()].into_iter().collect(),
+        });
+        let index = ClauseIndex::from_clause_set(&clause_set);
+
+        // `&str` predicates — no `String` allocation required by the API.
+        let candidates = index.get_candidate_clauses(&["A"]);
+        assert_eq!(candidates, vec![0]);
+
+        let id_refs = index.get_candidate_clause_id_refs(&["B"]);
+        let mut keys: Vec<usize> = id_refs.iter().map(|&(id, _)| id).collect();
+        keys.sort_unstable();
+        // Candidates come from the *body* index: only clause 1 (B ∧ C → D)
+        // has B in its body (clause 0 mentions B in its head only).
+        assert_eq!(keys, vec![1]);
+        // The key is the unified id: `get_clause(key)` yields the same clause.
+        for (key, clause) in id_refs {
+            assert_eq!(index.get_clause(key).unwrap().id, clause.id);
+        }
+
+        // Empty-body clauses are precomputed once (the pushed `c5` at index 4).
+        assert_eq!(index.empty_body_clause_ids(), &[4]);
+        // …and they are *not* index candidates (no body predicates to index).
+        assert!(!index.get_candidate_clauses(&["H"]).contains(&4));
     }
 }

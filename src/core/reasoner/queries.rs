@@ -867,9 +867,11 @@ impl QueryProcessor {
             TableauState::Satisfiable => Ok(true),
             TableauState::Unsatisfiable => Ok(false),
             TableauState::Unknown => {
-                // If unknown, be conservative and assume satisfiable
-                log::warn!("Tableau reasoning returned Unknown state for {class_expr:?}");
-                Ok(true)
+                // Phase A: an interrupted tableau proves nothing — surface an
+                // error instead of silently claiming satisfiability. (This
+                // helper builds its tableau with `ReasoningConfig::default()`,
+                // which has no timeout, so this branch is defensive.)
+                Err(Error::reasoning("Tableau returned unknown result"))
             }
         }
     }

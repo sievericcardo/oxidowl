@@ -8,6 +8,7 @@ pub mod completion;
 pub mod completion_cache;
 pub mod dependency;
 pub mod expansion;
+pub mod fast_hash;
 pub mod fast_hashing;
 pub mod hypergraph;
 pub mod incremental;

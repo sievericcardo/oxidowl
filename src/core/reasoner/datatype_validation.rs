@@ -629,74 +629,107 @@ impl DatatypeValidator {
     // Date/Time validators using XSD dateTime pattern matching.
     // Covers the most common ISO 8601 formats: date with time, timezone,
     // fractional seconds, and date-only forms.
+    //
+    // The patterns below are compile-once `LazyLock` statics: the tableau's
+    // per-iteration datatype sweeps (`apply_role_rules` range checks, clause
+    // checking) validate every data literal against every candidate range on
+    // every expansion iteration, so compiling these *fixed* patterns per call
+    // dominated whole consumer runs (measured: ~19 000 compilations / ~6.6 s
+    // per tableau snapshot build on one workload). The patterns are identical
+    // to the previous per-call ones — only the compilation is hoisted; user
+    // facet patterns (`Regex::new(facet_value)`) stay dynamic.
     fn validate_datetime(value: &str) -> Result<bool> {
         // Basic format: YYYY-MM-DDTHH:MM:SS(.sss)?(Z|[+-]HH:MM)?
-        let datetime_pattern = regex::Regex::new(
-            r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$",
-        )
-        .expect("Valid hardcoded regex pattern for datetime");
-        Ok(datetime_pattern.is_match(value))
+        static DATETIME_PATTERN: std::sync::LazyLock<regex::Regex> =
+            std::sync::LazyLock::new(|| {
+                regex::Regex::new(
+                    r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$",
+                )
+                .expect("Valid hardcoded regex pattern for datetime")
+            });
+        Ok(DATETIME_PATTERN.is_match(value))
     }
 
     fn validate_datetime_stamp(value: &str) -> Result<bool> {
         // Like dateTime but timezone is required
-        let datetime_pattern = regex::Regex::new(
-            r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$",
-        )
-        .expect("Valid hardcoded regex pattern for datetime stamp");
-        Ok(datetime_pattern.is_match(value))
+        static DATETIME_STAMP_PATTERN: std::sync::LazyLock<regex::Regex> =
+            std::sync::LazyLock::new(|| {
+                regex::Regex::new(
+                    r"^-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$",
+                )
+                .expect("Valid hardcoded regex pattern for datetime stamp")
+            });
+        Ok(DATETIME_STAMP_PATTERN.is_match(value))
     }
 
     fn validate_date(value: &str) -> Result<bool> {
         // Format: YYYY-MM-DD(Z|[+-]HH:MM)?
-        let date_pattern = regex::Regex::new(r"^-?\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
-            .expect("Valid hardcoded regex pattern for date");
-        Ok(date_pattern.is_match(value))
+        static DATE_PATTERN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+            regex::Regex::new(r"^-?\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
+                .expect("Valid hardcoded regex pattern for date")
+        });
+        Ok(DATE_PATTERN.is_match(value))
     }
 
     fn validate_time(value: &str) -> Result<bool> {
         // Format: HH:MM:SS(.sss)?(Z|[+-]HH:MM)?
-        let time_pattern = regex::Regex::new(r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$")
-            .expect("Valid hardcoded regex pattern for time");
-        Ok(time_pattern.is_match(value))
+        static TIME_PATTERN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+            regex::Regex::new(r"^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$")
+                .expect("Valid hardcoded regex pattern for time")
+        });
+        Ok(TIME_PATTERN.is_match(value))
     }
 
     fn validate_gyear(value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^-?\d{4}(Z|[+-]\d{2}:\d{2})?$")
-            .expect("Valid hardcoded regex pattern for gYear");
-        Ok(pattern.is_match(value))
+        static GYEAR_PATTERN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+            regex::Regex::new(r"^-?\d{4}(Z|[+-]\d{2}:\d{2})?$")
+                .expect("Valid hardcoded regex pattern for gYear")
+        });
+        Ok(GYEAR_PATTERN.is_match(value))
     }
 
     fn validate_gyear_month(value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^-?\d{4}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
-            .expect("Valid hardcoded regex pattern for gYearMonth");
-        Ok(pattern.is_match(value))
+        static GYEAR_MONTH_PATTERN: std::sync::LazyLock<regex::Regex> =
+            std::sync::LazyLock::new(|| {
+                regex::Regex::new(r"^-?\d{4}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
+                    .expect("Valid hardcoded regex pattern for gYearMonth")
+            });
+        Ok(GYEAR_MONTH_PATTERN.is_match(value))
     }
 
     fn validate_gmonth(value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^--\d{2}(Z|[+-]\d{2}:\d{2})?$")
-            .expect("Valid hardcoded regex pattern for gMonth");
-        Ok(pattern.is_match(value))
+        static GMONTH_PATTERN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+            regex::Regex::new(r"^--\d{2}(Z|[+-]\d{2}:\d{2})?$")
+                .expect("Valid hardcoded regex pattern for gMonth")
+        });
+        Ok(GMONTH_PATTERN.is_match(value))
     }
 
     fn validate_gmonth_day(value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
-            .expect("Valid hardcoded regex pattern for gMonthDay");
-        Ok(pattern.is_match(value))
+        static GMONTH_DAY_PATTERN: std::sync::LazyLock<regex::Regex> =
+            std::sync::LazyLock::new(|| {
+                regex::Regex::new(r"^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$")
+                    .expect("Valid hardcoded regex pattern for gMonthDay")
+            });
+        Ok(GMONTH_DAY_PATTERN.is_match(value))
     }
 
     fn validate_gday(value: &str) -> Result<bool> {
-        let pattern = regex::Regex::new(r"^---\d{2}(Z|[+-]\d{2}:\d{2})?$")
-            .expect("Valid hardcoded regex pattern for gDay");
-        Ok(pattern.is_match(value))
+        static GDAY_PATTERN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+            regex::Regex::new(r"^---\d{2}(Z|[+-]\d{2}:\d{2})?$")
+                .expect("Valid hardcoded regex pattern for gDay")
+        });
+        Ok(GDAY_PATTERN.is_match(value))
     }
 
     fn validate_duration(value: &str) -> Result<bool> {
         // Format: P(nY)?(nM)?(nD)?(T(nH)?(nM)?(nS)?)?
-        let pattern =
-            regex::Regex::new(r"^-?P(\d+Y)?(\d+M)?(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$")
-                .expect("Valid hardcoded regex pattern for duration");
-        Ok(pattern.is_match(value))
+        static DURATION_PATTERN: std::sync::LazyLock<regex::Regex> =
+            std::sync::LazyLock::new(|| {
+                regex::Regex::new(r"^-?P(\d+Y)?(\d+M)?(\d+D)?(T(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$")
+                    .expect("Valid hardcoded regex pattern for duration")
+            });
+        Ok(DURATION_PATTERN.is_match(value))
     }
 
     // Binary validators

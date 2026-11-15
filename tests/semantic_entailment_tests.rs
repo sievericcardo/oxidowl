@@ -974,7 +974,117 @@ fn semantic_entailment_entailment_checking_supported_coverage() {
         );
     }
 
-    // Non-logical types remain unsupported.
-    assert!(!reasoner.is_entailment_checking_supported(&AxiomType::AnnotationAssertion));
-    assert!(!reasoner.is_entailment_checking_supported(&AxiomType::Rule));
+    // The presence-answered non-logical types are advertised as supported
+    // (`is_entailed` answers them from `Axiom::content_key`).
+    assert!(reasoner.is_entailment_checking_supported(&AxiomType::Declaration));
+    assert!(reasoner.is_entailment_checking_supported(&AxiomType::AnnotationAssertion));
+    assert!(reasoner.is_entailment_checking_supported(&AxiomType::Rule));
+
+    // Annotation axioms that are not assertion-bearing stay unsupported.
+    assert!(!reasoner.is_entailment_checking_supported(&AxiomType::SubAnnotationPropertyOf));
+    assert!(!reasoner.is_entailment_checking_supported(&AxiomType::AnnotationPropertyDomain));
+    assert!(!reasoner.is_entailment_checking_supported(&AxiomType::AnnotationPropertyRange));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Non-logical axioms: Declaration / AnnotationAssertion / Rule / HasKey
+// (presence-answered — final wave D)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `is_entailed` answers the presence-answered axiom types by *content*
+/// (ignoring the parser-minted id): an equal `Declaration`,
+/// `AnnotationAssertion`, `Rule` or `HasKey` in the ontology is entailed, an
+/// absent one is not.
+#[test]
+fn semantic_entailment_non_logical_axioms_are_presence_answered() {
+    use oxidowl::ontology::IRI;
+    use oxidowl::ontology::axioms::{
+        Entity, SWRLAtom, SWRLIArgument, SWRLRule, SWRLRuleAxiom, SWRLVariable,
+    };
+
+    let df = DF::new();
+    let a = df.class_ce(format!("{EX}A"));
+    let b = df.class_ce(format!("{EX}B"));
+    let ap = df.annotation_property(format!("{EX}note"));
+    let subject = IRI::new(&format!("{EX}thing"));
+
+    // One SWRL rule; two *different-id* copies model the "re-parsed from its
+    // own file" case (`Axiom::content_key` ignores ids).
+    let var_x = SWRLVariable::new(IRI::new("urn:var#x"));
+    let rule = SWRLRule::new(
+        vec![SWRLAtom::ClassAtom {
+            predicate: a.clone(),
+            argument: SWRLIArgument::Variable(var_x.clone()),
+        }],
+        vec![SWRLAtom::ClassAtom {
+            predicate: b.clone(),
+            argument: SWRLIArgument::Variable(var_x),
+        }],
+    );
+    let rule_in_ontology = Axiom::Rule(SWRLRuleAxiom::new(df.next_id(), rule.clone()));
+    let rule_same_content_other_id = Axiom::Rule(SWRLRuleAxiom::new(df.next_id(), rule));
+
+    let declaration_in_ontology = df.declaration_axiom(Entity::Class(IRI::new(&format!("{EX}Z"))));
+    let declaration_same_content_other_id =
+        df.declaration_axiom(Entity::Class(IRI::new(&format!("{EX}Z"))));
+    let declaration_absent = df.declaration_axiom(Entity::Class(IRI::new(&format!("{EX}absent"))));
+
+    let annotation_in_ontology = df.annotation_assertion(ap.clone(), subject.clone(), "hello");
+    let annotation_same_content_other_id = df.annotation_assertion(ap.clone(), subject, "hello");
+    let annotation_absent = df.annotation_assertion(ap, IRI::new(&format!("{EX}other")), "hello");
+
+    let has_key = df.has_key(a.clone(), vec![df.obj_prop(format!("{EX}R"))], vec![]);
+
+    let mut onto = df.build_ontology(vec![
+        declaration_in_ontology.clone(),
+        annotation_in_ontology.clone(),
+        rule_in_ontology.clone(),
+        has_key.clone(),
+    ]);
+    df.auto_declare(&mut onto);
+    let reasoner = semantic_entailment_api_reasoner(onto);
+
+    // Present (content-equal, id-different) ⇒ entailed.
+    for (axiom, what) in [
+        (declaration_same_content_other_id, "Declaration"),
+        (annotation_same_content_other_id, "AnnotationAssertion"),
+        (rule_same_content_other_id, "Rule"),
+        (has_key.clone(), "HasKey (presence)"),
+    ] {
+        assert!(
+            reasoner.is_entailed(&axiom).expect("is_entailed"),
+            "an equal {what} asserted in the ontology must be entailed"
+        );
+    }
+
+    // Absent ⇒ not entailed (never a false positive).
+    for (axiom, what) in [
+        (declaration_absent, "Declaration"),
+        (annotation_absent, "AnnotationAssertion"),
+        (
+            Axiom::Rule(SWRLRuleAxiom::new(
+                df.next_id(),
+                SWRLRule::new(
+                    vec![SWRLAtom::ClassAtom {
+                        predicate: a.clone(),
+                        argument: SWRLIArgument::Variable(SWRLVariable::new(IRI::new("urn:var#y"))),
+                    }],
+                    vec![SWRLAtom::ClassAtom {
+                        predicate: b.clone(),
+                        argument: SWRLIArgument::Variable(SWRLVariable::new(IRI::new("urn:var#y"))),
+                    }],
+                ),
+            )),
+            "Rule",
+        ),
+        (
+            df.has_key(b.clone(), vec![df.obj_prop(format!("{EX}R"))], vec![]),
+            "HasKey",
+        ),
+    ] {
+        assert!(
+            !reasoner.is_entailed(&axiom).expect("is_entailed"),
+            "an absent {what} must not be reported as entailed"
+        );
+    }
 }

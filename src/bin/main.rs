@@ -49,7 +49,7 @@ struct FullReasoningOptions {
     skip_consistency: bool,
     skip_pretty_print: bool,
 }
-use tracing::{Level, error, info, warn};
+use tracing::{Level, error, info};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Parser)]
@@ -140,7 +140,10 @@ struct Cli {
     #[arg(short = 'U', long)]
     unsatisfiable_classes: bool,
 
-    /// Check entailment (similar to `HermiT`'s --checkEntailment)
+    /// Check entailment (similar to `HermiT`'s --checkEntailment): the value
+    /// is the *premise* file, the positional input file is the *conclusion*.
+    /// Prints a per-axiom verdict and exits 0 iff every conclusion axiom is
+    /// entailed by the premise, 1 otherwise.
     #[arg(long, value_name = "PREMISE_FILE")]
     check_entailment: Option<PathBuf>,
 
@@ -440,7 +443,10 @@ enum Commands {
         format: Option<InputFormat>,
     },
 
-    /// Check entailment between premise and conclusion ontologies (similar to `HermiT`'s --checkEntailment)
+    /// Check entailment between premise and conclusion ontologies (similar to `HermiT`'s --checkEntailment):
+    /// premise ⊨ conclusion holds iff *every* axiom of the conclusion is
+    /// entailed by the premise. Prints a per-axiom verdict; exits 0 iff all
+    /// axioms are entailed, 1 otherwise.
     CheckEntailment {
         /// Premise ontology file (similar to `HermiT`'s --premise)
         #[arg(long, value_name = "FILE")]
@@ -1182,12 +1188,18 @@ fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
         }
         let conclusion_file = &cli.input[0];
 
-        // Load conclusion ontology and check entailment
         println!(
             "Checking entailment of {} against {}...",
             conclusion_file.display(),
             premise_file.display()
         );
+
+        // HermiT semantics: the `--checkEntailment` value is the *premise*,
+        // the positional input file is the *conclusion*. Load the premise
+        // into the reasoner (resolving its owl:imports closure) …
+        reasoner.load_ontology_from_file(&premise_file, ontology_format)?;
+
+        // … and check every axiom of the conclusion against it.
         let conclusion = match oxidowl::ontology::Ontology::from_file(conclusion_file, None) {
             Ok(o) => o,
             Err(e) => {
@@ -1197,13 +1209,15 @@ fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
         };
         let Some(onto_ref) = reasoner.get_ontology().cloned() else {
             println!("No ontology loaded in reasoner for entailment checking");
-            return Ok(());
+            return Err(oxidowl::Error::io(
+                "Premise ontology could not be loaded for entailment checking".to_string(),
+            ));
         };
         let mut stats = oxidowl::core::reasoner::statistics::ReasoningStatistics::new();
         let mut all_entailed = true;
         for axiom in conclusion.axioms() {
             match reasoner.check_entailment(axiom, &onto_ref, &mut stats) {
-                Ok(true) => {}
+                Ok(true) => println!("  Entailed: {axiom:?}"),
                 Ok(false) => {
                     println!("  Not entailed: {axiom:?}");
                     all_entailed = false;
@@ -1226,6 +1240,9 @@ fn execute_hermit_style_flags(cli: Cli, config: ReasonerConfig) -> Result<()> {
                 premise_file.display(),
                 conclusion_file.display()
             );
+            // HermiT parity: exit code 1 when not every conclusion axiom is
+            // entailed (0 iff all are entailed).
+            std::process::exit(1);
         }
     }
 
@@ -2276,7 +2293,8 @@ fn execute_entailment_check(
     let mut reasoner = Reasoner::new(config.clone())?;
     let ontology_format = format.map_or(OntologyFormat::Auto, Into::into);
 
-    // Load both premise and conclusion ontologies
+    // Load the premise ontology into the reasoner (resolving its
+    // owl:imports closure) and the conclusion ontology to check against it.
     info!("Loading premise ontology from: {}", premise.display());
     reasoner.load_ontology_from_file(premise, ontology_format)?;
 
@@ -2285,52 +2303,34 @@ fn execute_entailment_check(
         conclusion, None, // Auto-detect format based on file extension
     )?;
 
-    // Perform entailment check using the reasoner
-    // Entailment check: premise |= conclusion means adding conclusion to premise doesn't
-    // introduce new inconsistencies (if both are consistent separately)
-    let entails = match reasoner.is_consistent() {
-        Ok(premise_consistent) => {
-            if premise_consistent {
-                // Check if adding conclusion axioms maintains consistency
-                // Clone the premise ontology and add conclusion axioms
-                info!("Premise ontology is consistent - checking entailment");
-
-                // Get the premise ontology by reloading it (since reasoner doesn't expose ontology)
-                let mut test_ontology = oxidowl::ontology::Ontology::from_file(
-                    premise, None, // Auto-detect format
-                )?;
-
-                // Add conclusion axioms directly and check consistency
-                // For proper entailment: premise |= conclusion iff premise + ¬conclusion is inconsistent
-                // For now, add conclusion axioms directly - this checks compatibility
-                // In a complete implementation, we would negate the conclusions
-                for axiom in conclusion_ontology.axioms() {
-                    test_ontology.add_axiom(axiom.clone());
-                }
-
-                // Create a new reasoner to check consistency of augmented ontology
-                let mut test_reasoner = Reasoner::new(config.clone())?;
-                test_reasoner.load_ontology(test_ontology)?;
-
-                // Check consistency of augmented ontology
-
-                // If augmented ontology is consistent, conclusions are compatible with premises
-                // Since we're adding conclusions directly, consistent means they're compatible
-                test_reasoner.is_consistent()?
-            } else {
-                // Inconsistent premise entails everything (principle of explosion)
-                true
-            }
-        }
-        Err(e) => {
-            warn!("Entailment check failed: {}", e);
-            false
-        }
+    let Some(onto_ref) = reasoner.get_ontology().cloned() else {
+        return Err(oxidowl::Error::io(
+            "Premise ontology could not be loaded for entailment checking".to_string(),
+        ));
     };
 
-    info!("Entailment result: {}", entails);
+    // HermiT `--premise/--conclusion` semantics: premise ⊨ conclusion holds
+    // iff *every* axiom of the conclusion is entailed by the premise. Print a
+    // per-axiom verdict; the process exits 0 iff all axioms are entailed.
+    let mut stats = oxidowl::core::reasoner::statistics::ReasoningStatistics::new();
+    let mut all_entailed = true;
+    for axiom in conclusion_ontology.axioms() {
+        match reasoner.check_entailment(axiom, &onto_ref, &mut stats) {
+            Ok(true) => println!("Entailed: {axiom:?}"),
+            Ok(false) => {
+                println!("Not entailed: {axiom:?}");
+                all_entailed = false;
+            }
+            Err(e) => {
+                println!("Error checking entailment for {axiom:?}: {e}");
+                all_entailed = false;
+            }
+        }
+    }
 
-    let result = if entails {
+    info!("Entailment result: {}", all_entailed);
+
+    let result = if all_entailed {
         "entails"
     } else {
         "does not entail"
@@ -2338,13 +2338,17 @@ fn execute_entailment_check(
 
     if let Some(output_path) = output {
         fs::write(output_path, result)?;
-    } else {
-        println!(
-            "Result: {} {} {}",
-            premise.display(),
-            result,
-            conclusion.display()
-        );
+    }
+    println!(
+        "Result: {} {} {}",
+        premise.display(),
+        result,
+        conclusion.display()
+    );
+
+    if !all_entailed {
+        // HermiT parity: exit code 1 when the conclusion is not entailed.
+        std::process::exit(1);
     }
 
     Ok(())

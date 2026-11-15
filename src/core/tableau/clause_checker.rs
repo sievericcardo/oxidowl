@@ -65,6 +65,16 @@ pub struct ClauseChecker {
     /// Change tracker for cache invalidation (optional optimization)
     change_tracker: Option<ChangeTracker>,
 
+    /// Positions (in `clauses.deterministic_clauses`) of the role-level
+    /// *constraint* clauses — empty head plus at least one binary (role) atom.
+    ///
+    /// Phase C: precomputed at construction because
+    /// [`TableauExecutor`](super::executor::TableauExecutor) asks for these on
+    /// **every** expansion iteration; the previous implementation re-scanned
+    /// every deterministic clause (and allocated a `Vec`) per iteration even
+    /// when the answer was "none".
+    role_constraint_ids: Vec<usize>,
+
     /// Configuration for optimizations
     config: ClauseCheckerConfig,
 }
@@ -137,6 +147,9 @@ impl ClauseChecker {
             None
         };
 
+        // Phase C: precompute the role-constraint clause positions once.
+        let role_constraint_ids = Self::compute_role_constraint_ids(&working_clauses);
+
         Self {
             clauses: working_clauses,
             absorber,
@@ -145,6 +158,7 @@ impl ClauseChecker {
             clause_index,
             check_cache,
             change_tracker,
+            role_constraint_ids,
             config,
         }
     }
@@ -200,6 +214,9 @@ impl ClauseChecker {
             None
         };
 
+        // Phase C: precompute the role-constraint clause positions once.
+        let role_constraint_ids = Self::compute_role_constraint_ids(&working_clauses);
+
         Self {
             clauses: working_clauses,
             absorber,
@@ -208,6 +225,7 @@ impl ClauseChecker {
             clause_index,
             check_cache,
             change_tracker,
+            role_constraint_ids,
             config,
         }
     }
@@ -262,6 +280,9 @@ impl ClauseChecker {
             None
         };
 
+        // Phase C: precompute the role-constraint clause positions once.
+        let role_constraint_ids = Self::compute_role_constraint_ids(&working_clauses);
+
         Self {
             clauses: working_clauses,
             absorber,
@@ -270,6 +291,7 @@ impl ClauseChecker {
             clause_index,
             check_cache,
             change_tracker,
+            role_constraint_ids,
             config,
         }
     }
@@ -341,49 +363,78 @@ impl ClauseChecker {
         None
     }
 
+    /// The deterministic clauses that must be evaluated at `node`, as
+    /// `(cache_key, clause)` pairs.
+    ///
+    /// Phase C — shared by the immutable and the cached checker:
+    /// * the clauses are **references** into `self.clauses` /
+    ///   `self.clause_index` (the cached path used to deep-clone every
+    ///   candidate `DLClause` — `String` ids, `String` atom predicates and
+    ///   argument vectors — for *every node of every expansion iteration*,
+    ///   which the consumer profile attributed ≈25% of the run to);
+    /// * the node's predicates are borrowed `&str`s (no `Vec<String>` clones);
+    /// * the always-applicable empty-body clauses come from the index's
+    ///   precomputed list instead of a fresh scan of all deterministic clauses
+    ///   plus a `candidates.iter().any(|c| c.id == …)` dedup pass.
+    ///
+    /// `cache_key` is the clause's stable position in the unified id space
+    /// (deterministic `0..n`, disjunctive clauses after them) — the same
+    /// numbering with or without the index, so the incremental cache sees a
+    /// single key space and no per-clause `String` hashing.
+    fn candidate_deterministic_clauses(&self, node: &TableauNode) -> Vec<(usize, &DLClause)> {
+        let Some(index) = &self.clause_index else {
+            // No index - check all clauses (O(n) approach), keyed by position.
+            return self
+                .clauses
+                .deterministic_clauses
+                .iter()
+                .enumerate()
+                .collect();
+        };
+
+        // Borrowed concept names — the historical code cloned a `String` per
+        // atomic concept per node per iteration.
+        let predicates: Vec<&str> = node
+            .concepts
+            .iter()
+            .filter_map(ConceptLabel::atomic_name)
+            .collect();
+
+        if predicates.is_empty() {
+            // No atomic concepts, but still check clauses with empty bodies
+            return index
+                .empty_body_clause_ids()
+                .iter()
+                .map(|&id| (id, &index.deterministic_clauses()[id]))
+                .collect();
+        }
+
+        let mut candidates = index.get_candidate_clause_id_refs(&predicates);
+
+        // IMPORTANT: Also include clauses with empty bodies (they always
+        // apply!). An empty body has no predicates, so such a clause can never
+        // be an index candidate — no dedup pass is needed (the historical
+        // `candidates.iter().any(|c| c.id == clause.id)` scan only fired on
+        // duplicate `DLClause::id` strings).
+        for &id in index.empty_body_clause_ids() {
+            let clause = &index.deterministic_clauses()[id];
+            if clause.head.is_empty() {
+                continue; // negative clauses are checked separately
+            }
+            candidates.push((id, clause));
+        }
+
+        candidates
+    }
+
     /// Check deterministic clauses (single head)
     ///
     /// For clauses like: C(x) ← A1(x), A2(x), ..., An(x)
     /// If all body atoms are satisfied, head should be derivable
     fn check_deterministic_clauses(&self, node: &TableauNode) -> Option<ClauseViolation> {
-        // Get the clauses to check (either from index or all clauses)
-        let clauses_to_check: Vec<&DLClause> = if let Some(index) = &self.clause_index {
-            // Use index to get candidate clauses based on node's atomic concepts
-            let predicates: Vec<String> = node
-                .concepts
-                .iter()
-                .filter_map(|c| match c {
-                    ConceptLabel::Atomic(name) => Some(name.clone()),
-                    _ => None,
-                })
-                .collect();
-
-            if predicates.is_empty() {
-                // No atomic concepts, but still check clauses with empty bodies
-                index
-                    .deterministic_clauses()
-                    .iter()
-                    .filter(|c| c.body.is_empty())
-                    .collect()
-            } else {
-                let mut candidates = index.get_candidate_clause_refs(&predicates);
-
-                // IMPORTANT: Also include clauses with empty bodies (they always apply!)
-                for clause in index.deterministic_clauses() {
-                    if clause.body.is_empty()
-                        && !clause.head.is_empty()
-                        && !candidates.iter().any(|c| c.id == clause.id)
-                    {
-                        candidates.push(clause);
-                    }
-                }
-
-                candidates
-            }
-        } else {
-            // No index - check all clauses (O(n) approach)
-            self.clauses.deterministic_clauses.iter().collect()
-        };
+        // Get the clauses to check (either from index or all clauses) —
+        // borrowed references, no per-call deep clones (Phase C).
+        let clauses_to_check = self.candidate_deterministic_clauses(node);
 
         log::trace!(
             "Checking {} deterministic clauses (out of {} total) for node {}",
@@ -392,7 +443,7 @@ impl ClauseChecker {
             node.id
         );
 
-        for clause in clauses_to_check {
+        for (_clause_key, clause) in clauses_to_check {
             // Skip if empty head (handled by negative clause checking)
             if clause.head.is_empty() {
                 continue;
@@ -517,14 +568,16 @@ impl ClauseChecker {
     ///
     /// This is the cached version of `check_deterministic_clauses` that uses
     /// the incremental cache to avoid redundant checks.
+    ///
+    /// Phase C: the candidate clauses are borrowed (never deep-cloned) and the
+    /// cache is temporarily taken out of `self` so the immutable clause
+    /// references can coexist with cache updates; it is put back before this
+    /// method returns on **every** path.
     fn check_deterministic_clauses_cached(
         &mut self,
         node: &TableauNode,
         fingerprint: Option<NodeFingerprint>,
     ) -> Option<ClauseViolation> {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
         // If no cache or no fingerprint, fall back to regular checking
         if self.check_cache.is_none() || fingerprint.is_none() {
             return self.check_deterministic_clauses(node);
@@ -534,49 +587,28 @@ impl ClauseChecker {
             .ok_or_else(|| Error::internal("Clause checker: fingerprint is None despite check"))
             .ok()?;
 
-        // Get clauses to check
-        let clauses_to_check: Vec<DLClause> = if let Some(index) = &self.clause_index {
-            let predicates: Vec<String> = node
-                .concepts
-                .iter()
-                .filter_map(|c| match c {
-                    ConceptLabel::Atomic(name) => Some(name.clone()),
-                    _ => None,
-                })
-                .collect();
-
-            if predicates.is_empty() {
-                index
-                    .deterministic_clauses()
-                    .iter()
-                    .filter(|c| c.body.is_empty())
-                    .cloned()
-                    .collect()
-            } else {
-                let mut candidates = index
-                    .get_candidate_clause_refs(&predicates)
-                    .into_iter()
-                    .cloned()
-                    .collect::<Vec<_>>();
-
-                // Include clauses with empty bodies
-                for clause in index.deterministic_clauses() {
-                    if clause.body.is_empty()
-                        && !clause.head.is_empty()
-                        && !candidates.iter().any(|c| c.id == clause.id)
-                    {
-                        candidates.push(clause.clone());
-                    }
-                }
-
-                candidates
-            }
-        } else {
-            self.clauses.deterministic_clauses.clone()
+        // Take the cache out of `self` (split borrow): the check below needs
+        // `&self` for the clause references while mutating the cache.
+        let Some(mut cache) = self.check_cache.take() else {
+            return self.check_deterministic_clauses(node);
         };
+        let outcome = self.check_deterministic_clauses_with_cache(node, fp, &mut cache);
+        self.check_cache = Some(cache);
+        outcome
+    }
 
-        // Get clause ID to usize mapping (use hash of clause id string)
-        for clause in &clauses_to_check {
+    /// The body of [`Self::check_deterministic_clauses_cached`] with the LRU
+    /// cache passed separately from `&self` (no borrow conflict, no clones).
+    fn check_deterministic_clauses_with_cache(
+        &self,
+        node: &TableauNode,
+        fp: NodeFingerprint,
+        cache: &mut CheckResultCache,
+    ) -> Option<ClauseViolation> {
+        // Borrowed candidate clauses + stable integer cache keys (Phase C).
+        let clauses_to_check = self.candidate_deterministic_clauses(node);
+
+        for (clause_key, clause) in clauses_to_check {
             // Skip empty heads
             if clause.head.is_empty() {
                 continue;
@@ -587,17 +619,8 @@ impl ClauseChecker {
                 continue;
             }
 
-            // Compute clause ID hash
-            let mut hasher = DefaultHasher::new();
-            clause.id.hash(&mut hasher);
-            let clause_id_hash = hasher.finish() as usize;
-
-            // Check cache first (separate scope to release borrow)
-            let cached_result = if let Some(cache) = &mut self.check_cache {
-                cache.get(fp, clause_id_hash).cloned()
-            } else {
-                None
-            };
+            // Check cache first (stable integer key — no `String` hashing).
+            let cached_result = cache.get(fp, clause_key).cloned();
 
             if let Some(cached_result) = cached_result {
                 // Cache hit!
@@ -626,7 +649,7 @@ impl ClauseChecker {
                         return Some(ClauseViolation {
                             clause: clause.clone(),
                             violating_concepts,
-                            explanation: description.clone(),
+                            explanation: description,
                             node_id: node.id,
                         });
                     }
@@ -640,9 +663,7 @@ impl ClauseChecker {
             // Cache miss - do actual check
             if !self.matches_body(node, &clause.body) {
                 // Body not satisfied - cache and continue
-                if let Some(cache) = &mut self.check_cache {
-                    cache.put(fp, clause_id_hash, CachedCheckResult::NoViolation);
-                }
+                cache.put(fp, clause_key, CachedCheckResult::NoViolation);
                 continue;
             }
 
@@ -658,16 +679,14 @@ impl ClauseChecker {
                     clause.id
                 );
 
-                if let Some(cache) = &mut self.check_cache {
-                    cache.put(
-                        fp,
-                        clause_id_hash,
-                        CachedCheckResult::Violation {
-                            clause_id: clause_id_hash,
-                            description: description.clone(),
-                        },
-                    );
-                }
+                cache.put(
+                    fp,
+                    clause_key,
+                    CachedCheckResult::Violation {
+                        clause_id: clause_key,
+                        description: description.clone(),
+                    },
+                );
 
                 let violating_concepts: Vec<String> = clause
                     .body
@@ -683,23 +702,23 @@ impl ClauseChecker {
                 });
             }
             // No violation - cache this
-            if let Some(cache) = &mut self.check_cache {
-                cache.put(fp, clause_id_hash, CachedCheckResult::NoViolation);
-            }
+            cache.put(fp, clause_key, CachedCheckResult::NoViolation);
         }
 
         None
     }
 
     /// Check negative clauses with caching
+    ///
+    /// Phase C: the negative clauses are borrowed (the historical version
+    /// deep-cloned every one of them per node per iteration) and the LRU cache
+    /// is taken out of `self` for the duration of the check, then restored on
+    /// every return path.
     fn check_negative_clauses_cached(
         &mut self,
         node: &TableauNode,
         fingerprint: Option<NodeFingerprint>,
     ) -> Option<ClauseViolation> {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
         // If no cache or no fingerprint, fall back to regular checking
         if self.check_cache.is_none() || fingerprint.is_none() {
             return self.check_negative_clauses(node);
@@ -709,35 +728,47 @@ impl ClauseChecker {
             .ok_or_else(|| Error::internal("Clause checker: fingerprint is None despite check"))
             .ok()?;
 
-        // Get negative clauses (clone to avoid borrow issues)
-        let negative_clauses: Vec<DLClause> = if let Some(index) = &self.clause_index {
-            index.get_negative_clauses().into_iter().cloned().collect()
+        // Split borrow: `&self` for the clause references, the cache locally.
+        let Some(mut cache) = self.check_cache.take() else {
+            return self.check_negative_clauses(node);
+        };
+        let outcome = self.check_negative_clauses_with_cache(node, fp, &mut cache);
+        self.check_cache = Some(cache);
+        outcome
+    }
+
+    /// The body of [`Self::check_negative_clauses_cached`] with the LRU cache
+    /// passed separately from `&self`.
+    fn check_negative_clauses_with_cache(
+        &self,
+        node: &TableauNode,
+        fp: NodeFingerprint,
+        cache: &mut CheckResultCache,
+    ) -> Option<ClauseViolation> {
+        // (stable cache key, clause reference) — no deep clones.
+        let negative_clauses: Vec<(usize, &DLClause)> = if let Some(index) = &self.clause_index {
+            index
+                .get_negative_clause_ids()
+                .iter()
+                .map(|&id| (id, &index.deterministic_clauses()[id]))
+                .collect()
         } else {
             self.clauses
                 .deterministic_clauses
                 .iter()
-                .filter(|c| c.head.is_empty())
-                .cloned()
+                .enumerate()
+                .filter(|(_, c)| c.head.is_empty())
                 .collect()
         };
 
-        for clause in &negative_clauses {
+        for (clause_key, clause) in negative_clauses {
             // Workstream A5: role-atom constraint clauses are checked at the tableau level.
             if Self::clause_has_binary_atom_anywhere(clause) {
                 continue;
             }
 
-            // Compute clause ID hash
-            let mut hasher = DefaultHasher::new();
-            clause.id.hash(&mut hasher);
-            let clause_id_hash = hasher.finish() as usize;
-
-            // Check cache (separate scope)
-            let cached_result = if let Some(cache) = &mut self.check_cache {
-                cache.get(fp, clause_id_hash).cloned()
-            } else {
-                None
-            };
+            // Check cache first (stable integer key — no `String` hashing).
+            let cached_result = cache.get(fp, clause_key).cloned();
 
             if let Some(cached_result) = cached_result {
                 match cached_result {
@@ -763,7 +794,7 @@ impl ClauseChecker {
                         return Some(ClauseViolation {
                             clause: clause.clone(),
                             violating_concepts,
-                            explanation: description.clone(),
+                            explanation: description,
                             node_id: node.id,
                         });
                     }
@@ -775,9 +806,7 @@ impl ClauseChecker {
 
             // Cache miss - do actual check
             if !self.matches_body(node, &clause.body) {
-                if let Some(cache) = &mut self.check_cache {
-                    cache.put(fp, clause_id_hash, CachedCheckResult::NoViolation);
-                }
+                cache.put(fp, clause_key, CachedCheckResult::NoViolation);
                 continue;
             }
 
@@ -792,16 +821,14 @@ impl ClauseChecker {
                     .join(", ")
             );
 
-            if let Some(cache) = &mut self.check_cache {
-                cache.put(
-                    fp,
-                    clause_id_hash,
-                    CachedCheckResult::Violation {
-                        clause_id: clause_id_hash,
-                        description: description.clone(),
-                    },
-                );
-            }
+            cache.put(
+                fp,
+                clause_key,
+                CachedCheckResult::Violation {
+                    clause_id: clause_key,
+                    description: description.clone(),
+                },
+            );
 
             let violating_concepts: Vec<String> = clause
                 .body
@@ -934,14 +961,26 @@ impl ClauseChecker {
         })
     }
 
+    /// Positions of the role-level *constraint* clauses — empty head (a
+    /// contradiction) and a body containing at least one binary (role) atom —
+    /// precomputed at construction (Phase C).
+    fn compute_role_constraint_ids(clauses: &DLClauseSet) -> Vec<usize> {
+        clauses
+            .deterministic_clauses
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.head.is_empty() && Self::clause_has_binary_atom(c))
+            .map(|(id, _)| id)
+            .collect()
+    }
+
     /// The deterministic clauses that act as role-level constraints: empty head (a
     /// contradiction) and a body containing at least one binary (role) atom.
     #[must_use]
     pub fn role_constraint_clauses(&self) -> Vec<&DLClause> {
-        self.clauses
-            .deterministic_clauses
+        self.role_constraint_ids
             .iter()
-            .filter(|c| c.head.is_empty() && Self::clause_has_binary_atom(c))
+            .map(|&id| &self.clauses.deterministic_clauses[id])
             .collect()
     }
 
@@ -971,15 +1010,27 @@ impl ClauseChecker {
     /// Returns the first violation found (a body satisfied with an empty head ⇒ ⊥), or
     /// `None`. Head-bearing role clauses are *not* checked here: they derive new facts and
     /// are applied by the executor's `RBox` rule pass.
+    ///
+    /// **Phase E — deliberately NOT label-version-gated.** Unlike the per-node
+    /// [`Self::check_node`] path (gated via `Tableau::clause_check_versions`),
+    /// this tableau-level check depends on the **edge set** as well as on node
+    /// labels, and edge mutations do not bump `Tableau::label_version` — gating
+    /// it on label versions alone could miss a violation that appears with a
+    /// new edge and no label change. The Phase C early bail (`role_constraint_ids`
+    /// empty ⇒ `None` before allocating anything) already makes the common case
+    /// free.
     #[must_use]
     pub fn check_role_constraint_clauses(
         &self,
         tableau: &super::Tableau,
     ) -> Option<ClauseViolation> {
-        let clauses = self.role_constraint_clauses();
-        if clauses.is_empty() {
+        // Phase C: the executor calls this on **every** expansion iteration;
+        // bail out before allocating anything when there is nothing to check
+        // (the common case — most ontologies have no role-constraint clause).
+        if self.role_constraint_ids.is_empty() {
             return None;
         }
+        let clauses = self.role_constraint_clauses();
 
         // Lightweight role fact base over the current tableau.
         let edges: Vec<(NodeId, NodeId, String)> = tableau

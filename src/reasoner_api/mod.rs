@@ -91,11 +91,15 @@ fn is_top_or_bottom_class(ce: &ClassExpression) -> bool {
 
 /// Reconstruct an [`Individual`] from its Display form (the key used by the
 /// tableau's nominal labels / `individual_map`). Named individuals display as
-/// their IRI; anonymous individuals display as `_:id` and are not reconstructible
-/// here (they carry no semantics for `get_same_individuals`).
+/// their IRI; anonymous individuals display as their stable `_:id` key, which
+/// round-trips through [`crate::ontology::AnonymousIndividual`]'s `id` field
+/// (no ids are minted here), so `get_same_individuals` / `get_different_individuals`
+/// can return anonymous members of a merged node.
 fn individual_from_display(display: &str) -> Option<Individual> {
-    if display.starts_with("_:") {
-        return None;
+    if let Some(id) = display.strip_prefix("_:") {
+        return Some(Individual::Anonymous(
+            crate::ontology::AnonymousIndividual { id: id.to_string() },
+        ));
     }
     Some(Individual::named(crate::ontology::IRI::new(display)))
 }
@@ -955,6 +959,129 @@ pub trait OWLReasoner: Send + Sync {
         Ok(NodeSet::empty())
     }
 
+    // ── OWLAPI / HermiT parity helpers ───────────────────────────────────────
+
+    /// Whether `individual` is an instance of `class` (entailed by the
+    /// ontology) — the OWL API's `hasType`.
+    ///
+    /// Default: `class` is among [`OWLReasoner::get_types`] of the individual,
+    /// or a *superclass* of one of them (computed through
+    /// [`OWLReasoner::get_super_classes`], so upward inference works even for
+    /// implementors whose `get_types` only reports asserted memberships).
+    /// Implementors with a dedicated instance check override this with the
+    /// semantically complete answer (the tableau reasoner routes it through
+    /// `Reasoner::is_instance_of`, which also covers derived memberships).
+    fn has_type(&self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
+        let types = self.get_types(individual, false)?;
+        if types.contains_entity(class) {
+            return Ok(true);
+        }
+        for type_expression in types.get_flattened() {
+            if self
+                .get_super_classes(&type_expression, false)?
+                .contains_entity(class)
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Whether `a` and `b` are the same individual (entailed by the ontology)
+    /// — the OWL API's `isSameIndividual`.
+    ///
+    /// Default: membership in [`OWLReasoner::get_same_individuals`], which
+    /// merges explicit `SameIndividual` axioms with any equality the reasoner
+    /// materialises.
+    fn is_same_individual(&self, a: &Individual, b: &Individual) -> Result<bool> {
+        Ok(self.get_same_individuals(a)?.contains(b))
+    }
+
+    /// Whether `subject --property--> object` is entailed — the OWL API's
+    /// `hasObjectPropertyRelationship`.
+    ///
+    /// Default: membership in [`OWLReasoner::get_object_property_values`].
+    fn has_object_property_relationship(
+        &self,
+        subject: &crate::ontology::NamedIndividual,
+        property: &ObjectPropertyExpression,
+        object: &crate::ontology::NamedIndividual,
+    ) -> Result<bool> {
+        Ok(self
+            .get_object_property_values(subject, property)?
+            .contains_entity(object))
+    }
+
+    /// Whether `subject --property--> value` is entailed — the OWL API's
+    /// `hasDataPropertyRelationship`.
+    ///
+    /// Default: membership in [`OWLReasoner::get_data_property_values`].
+    fn has_data_property_relationship(
+        &self,
+        subject: &crate::ontology::NamedIndividual,
+        property: &DataPropertyExpression,
+        value: &crate::ontology::Literal,
+    ) -> Result<bool> {
+        Ok(self
+            .get_data_property_values(subject, property)?
+            .contains_entity(value))
+    }
+
+    /// Every materialised `(source, target)` pair for `property`, including
+    /// pairs that only follow from an inverse-labelled edge
+    /// (`b --inv(R)--> a` yields `(a, b)` for `R`). Only named individuals are
+    /// returned. Output is sorted by `(source, target)` and deduplicated, so it
+    /// is deterministic across runs.
+    ///
+    /// Default: derive from [`OWLReasoner::get_object_property_values`] over
+    /// every named individual in the signature.
+    fn get_object_property_instances(
+        &self,
+        property: &ObjectPropertyExpression,
+    ) -> Result<
+        Vec<(
+            crate::ontology::NamedIndividual,
+            crate::ontology::NamedIndividual,
+        )>,
+    > {
+        let ontology = self.get_root_ontology();
+        let sources: Vec<crate::ontology::NamedIndividual> = {
+            let guard = ontology.read().map_err(|e| crate::Error::Internal {
+                message: format!("Lock poisoned: {e}"),
+            })?;
+            guard
+                .signature()?
+                .individuals
+                .iter()
+                .filter_map(|individual| match individual {
+                    Individual::Named(named) => Some(named.clone()),
+                    Individual::Anonymous(_) => None,
+                })
+                .collect()
+        };
+
+        let mut pairs: Vec<(
+            crate::ontology::NamedIndividual,
+            crate::ontology::NamedIndividual,
+        )> = Vec::new();
+        for source in sources {
+            for target in self
+                .get_object_property_values(&source, property)?
+                .get_flattened()
+            {
+                pairs.push((source.clone(), target));
+            }
+        }
+        pairs.sort_by(|a, b| {
+            a.0.iri
+                .to_string()
+                .cmp(&b.0.iri.to_string())
+                .then_with(|| a.1.iri.to_string().cmp(&b.1.iri.to_string()))
+        });
+        pairs.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
+        Ok(pairs)
+    }
+
     // ── Top / Bottom Nodes ────────────────────────────────────────────────
 
     /// Get the TOP class node (owl:Thing equivalence class).
@@ -1134,6 +1261,13 @@ pub struct TableauOWLReasoner {
     cached_property_hierarchy: Mutex<Option<PropertyHierarchyCache>>,
     /// Cached `SameAs` / `DifferentAs` components (lazily computed).
     cached_individual_equality: Mutex<Option<IndividualEquality>>,
+    /// Inference types explicitly warmed by [`OWLReasoner::precompute_inferences`].
+    ///
+    /// Separate from the caches above because `is_precomputed` must report
+    /// *what was asked for*, not merely "some cache happens to be warm"; the
+    /// lazy caches are additionally consulted so an inference computed lazily
+    /// still reports as computed.
+    precomputed: Mutex<HashSet<InferenceType>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1148,21 +1282,199 @@ struct ClassificationCache {
 
 #[derive(Debug, Clone, Default)]
 struct PropertyHierarchyCache {
-    sub_object_properties: HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
-    super_object_properties: HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
+    /// Property → its full **strict** super set: the transitive closure of
+    /// `SubObjectPropertyOf` / `EquivalentObjectProperties` (reachability
+    /// only) / `InverseObjectProperties`, plus `owl:topObjectProperty`.
+    /// Equivalents are excluded — see `core::reasoner::property_hierarchy`.
+    object_supers: HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
+    /// Property → its full **strict** sub set (plus `owl:bottomObjectProperty`).
+    object_subs: HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
     equivalent_object_properties:
         HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
     disjoint_object_properties:
         HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
     inverse_object_properties: HashMap<ObjectPropertyExpression, HashSet<ObjectPropertyExpression>>,
+    /// Property → its domains, including the domains **inherited from its
+    /// super properties** (and equivalents).
     object_property_domains: HashMap<ObjectPropertyExpression, HashSet<ClassExpression>>,
+    /// Property → its ranges, including ranges inherited from super properties.
     object_property_ranges: HashMap<ObjectPropertyExpression, HashSet<ClassExpression>>,
-    sub_data_properties: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
-    super_data_properties: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
+    /// Data property → its full **strict** super set (plus `owl:topDataProperty`).
+    data_supers: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
+    /// Data property → its full **strict** sub set (plus `owl:bottomDataProperty`).
+    data_subs: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
     equivalent_data_properties: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
     disjoint_data_properties: HashMap<DataPropertyExpression, HashSet<DataPropertyExpression>>,
+    /// Data property → its domains, super-property inheritance included.
     data_property_domains: HashMap<DataPropertyExpression, HashSet<ClassExpression>>,
+    /// Data property → its ranges, super-property inheritance included.
     data_property_ranges: HashMap<DataPropertyExpression, HashSet<DataRange>>,
+}
+
+impl PropertyHierarchyCache {
+    /// `higher` is a strict super of `lower` in this cache's closure.
+    fn object_strictly_above(
+        &self,
+        higher: &ObjectPropertyExpression,
+        lower: &ObjectPropertyExpression,
+    ) -> bool {
+        self.object_supers
+            .get(lower)
+            .is_some_and(|up| up.contains(higher))
+            && !self
+                .object_supers
+                .get(higher)
+                .is_some_and(|down| down.contains(lower))
+    }
+
+    /// `higher` is a strict super of `lower` (data side).
+    fn data_strictly_above(
+        &self,
+        higher: &DataPropertyExpression,
+        lower: &DataPropertyExpression,
+    ) -> bool {
+        self.data_supers
+            .get(lower)
+            .is_some_and(|up| up.contains(higher))
+            && !self
+                .data_supers
+                .get(higher)
+                .is_some_and(|down| down.contains(lower))
+    }
+
+    /// OWL API `DirectSubObjectPropertyOf` filter over a transitive super set:
+    /// drop `s` when a named property `t` of the set sits strictly between the
+    /// queried property and `s`.
+    fn direct_object_supers(
+        &self,
+        supers: &HashSet<ObjectPropertyExpression>,
+    ) -> HashSet<ObjectPropertyExpression> {
+        supers
+            .iter()
+            .filter(|s| {
+                !supers.iter().any(|t| {
+                    t != *s
+                        && matches!(t, ObjectPropertyExpression::ObjectProperty(_))
+                        && self.object_strictly_above(s, t)
+                })
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Mirror of [`Self::direct_object_supers`] for the sub direction.
+    fn direct_object_subs(
+        &self,
+        subs: &HashSet<ObjectPropertyExpression>,
+    ) -> HashSet<ObjectPropertyExpression> {
+        subs.iter()
+            .filter(|s| {
+                !subs.iter().any(|t| {
+                    t != *s
+                        && matches!(t, ObjectPropertyExpression::ObjectProperty(_))
+                        && self.object_strictly_above(t, s)
+                })
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// [`Self::direct_object_supers`] for data properties (every data
+    /// property expression is a name, so no `is_named` check is needed).
+    fn direct_data_supers(
+        &self,
+        supers: &HashSet<DataPropertyExpression>,
+    ) -> HashSet<DataPropertyExpression> {
+        supers
+            .iter()
+            .filter(|s| {
+                !supers
+                    .iter()
+                    .any(|t| t != *s && self.data_strictly_above(s, t))
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Mirror of [`Self::direct_data_supers`].
+    fn direct_data_subs(
+        &self,
+        subs: &HashSet<DataPropertyExpression>,
+    ) -> HashSet<DataPropertyExpression> {
+        subs.iter()
+            .filter(|s| {
+                !subs
+                    .iter()
+                    .any(|t| t != *s && self.data_strictly_above(t, s))
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Group a flat member set into OWL API equivalence [`Node`]s (a `Node`
+    /// contains exactly the pairwise-equivalent members of the set).
+    fn group_object_nodes(
+        &self,
+        members: HashSet<ObjectPropertyExpression>,
+    ) -> HashSet<Node<ObjectPropertyExpression>> {
+        let mut remaining: Vec<ObjectPropertyExpression> = members.into_iter().collect();
+        let mut nodes: HashSet<Node<ObjectPropertyExpression>> = HashSet::new();
+        while let Some(first) = remaining.pop() {
+            let mut component: HashSet<ObjectPropertyExpression> = HashSet::new();
+            component.insert(first.clone());
+            let mut i = 0;
+            while i < remaining.len() {
+                let candidate = &remaining[i];
+                let equivalent = self
+                    .equivalent_object_properties
+                    .get(&first)
+                    .is_some_and(|eq| eq.contains(candidate))
+                    || self
+                        .equivalent_object_properties
+                        .get(candidate)
+                        .is_some_and(|eq| eq.contains(&first));
+                if equivalent {
+                    component.insert(remaining.remove(i));
+                } else {
+                    i += 1;
+                }
+            }
+            nodes.insert(Node::new(component));
+        }
+        nodes
+    }
+
+    /// [`Self::group_object_nodes`] for data properties.
+    fn group_data_nodes(
+        &self,
+        members: HashSet<DataPropertyExpression>,
+    ) -> HashSet<Node<DataPropertyExpression>> {
+        let mut remaining: Vec<DataPropertyExpression> = members.into_iter().collect();
+        let mut nodes: HashSet<Node<DataPropertyExpression>> = HashSet::new();
+        while let Some(first) = remaining.pop() {
+            let mut component: HashSet<DataPropertyExpression> = HashSet::new();
+            component.insert(first.clone());
+            let mut i = 0;
+            while i < remaining.len() {
+                let candidate = &remaining[i];
+                let equivalent = self
+                    .equivalent_data_properties
+                    .get(&first)
+                    .is_some_and(|eq| eq.contains(candidate))
+                    || self
+                        .equivalent_data_properties
+                        .get(candidate)
+                        .is_some_and(|eq| eq.contains(&first));
+                if equivalent {
+                    component.insert(remaining.remove(i));
+                } else {
+                    i += 1;
+                }
+            }
+            nodes.insert(Node::new(component));
+        }
+        nodes
+    }
 }
 
 impl TableauOWLReasoner {
@@ -1185,7 +1497,34 @@ impl TableauOWLReasoner {
             cached_hierarchy: Mutex::new(None),
             cached_property_hierarchy: Mutex::new(None),
             cached_individual_equality: Mutex::new(None),
+            precomputed: Mutex::new(HashSet::new()),
         })
+    }
+
+    /// Group a set of instances into result [`Node`]s honouring the
+    /// configured [`IndividualNodeSetPolicy`] — shared by the `owl:Thing`
+    /// fast path and the realisation-backed answer of
+    /// [`OWLReasoner::get_instances`].
+    fn instance_nodes(&self, instances: HashSet<Individual>) -> Result<HashSet<Node<Individual>>> {
+        if matches!(
+            self.config.individual_node_set_policy,
+            IndividualNodeSetPolicy::BySameAs
+        ) {
+            let equality = self.ensure_individual_equality()?;
+            let mut nodes: HashSet<Node<Individual>> = HashSet::new();
+            let mut covered: HashSet<Individual> = HashSet::new();
+            for ind in &instances {
+                if !covered.insert(ind.clone()) {
+                    continue;
+                }
+                let node = equality.same_as(ind);
+                covered.extend(node.get_entities().iter().cloned());
+                nodes.insert(node);
+            }
+            Ok(nodes)
+        } else {
+            Ok(instances.into_iter().map(Node::singleton).collect())
+        }
     }
 
     /// Ensure the `SameAs` / `DifferentAs` components have been computed, populating
@@ -1207,6 +1546,24 @@ impl TableauOWLReasoner {
         drop(guard);
         *cache = Some(equality.clone());
         Ok(equality)
+    }
+
+    /// Warm the one-shot realisation snapshot (`TableauSnapshot`) that the
+    /// property-value, same-as and instance queries merge their answers from.
+    ///
+    /// Uses the core reasoner's own ontology ref so the snapshot cache stays
+    /// single-source (see `Reasoner::tableau_individual_components`). Returns
+    /// `Err` when the tableau ends `Unknown` — an interrupted run proves
+    /// nothing, so the caller must not report the inference as precomputed.
+    fn warm_realization_snapshot(&self) -> Result<()> {
+        let reasoner = self.reasoner.lock().map_err(|e| crate::Error::Internal {
+            message: format!("Lock poisoned: {e}"),
+        })?;
+        let Some(ontology) = reasoner.get_ontology().cloned() else {
+            return Ok(());
+        };
+        reasoner.realization_snapshot(&ontology)?;
+        Ok(())
     }
 
     /// Compute the transitive closure of the subclass relation for `class` from
@@ -1348,31 +1705,11 @@ impl TableauOWLReasoner {
         })?;
         let mut phc = PropertyHierarchyCache::default();
 
-        // Index all property axioms
+        // Index the non-hierarchy property axioms (disjointness, declared
+        // inverses, domains/ranges). The sub/super/equivalence maps are
+        // filled from the shared closure below.
         for axiom in guard.axioms() {
             match axiom {
-                Axiom::SubObjectPropertyOf(a) => {
-                    phc.sub_object_properties
-                        .entry(a.sub_property.clone())
-                        .or_default()
-                        .insert(a.super_property.clone());
-                    phc.super_object_properties
-                        .entry(a.super_property.clone())
-                        .or_default()
-                        .insert(a.sub_property.clone());
-                }
-                Axiom::EquivalentObjectProperties(a) => {
-                    for p1 in &a.properties {
-                        for p2 in &a.properties {
-                            if p1 != p2 {
-                                phc.equivalent_object_properties
-                                    .entry(p1.clone())
-                                    .or_default()
-                                    .insert(p2.clone());
-                            }
-                        }
-                    }
-                }
                 Axiom::DisjointObjectProperties(a) => {
                     for p1 in &a.properties {
                         for p2 in &a.properties {
@@ -1407,28 +1744,6 @@ impl TableauOWLReasoner {
                         .or_default()
                         .insert(a.range.clone());
                 }
-                Axiom::SubDataPropertyOf(a) => {
-                    phc.sub_data_properties
-                        .entry(a.sub_property.clone())
-                        .or_default()
-                        .insert(a.super_property.clone());
-                    phc.super_data_properties
-                        .entry(a.super_property.clone())
-                        .or_default()
-                        .insert(a.sub_property.clone());
-                }
-                Axiom::EquivalentDataProperties(a) => {
-                    for p1 in &a.properties {
-                        for p2 in &a.properties {
-                            if p1 != p2 {
-                                phc.equivalent_data_properties
-                                    .entry(p1.clone())
-                                    .or_default()
-                                    .insert(p2.clone());
-                            }
-                        }
-                    }
-                }
                 Axiom::DisjointDataProperties(a) => {
                     for p1 in &a.properties {
                         for p2 in &a.properties {
@@ -1457,101 +1772,90 @@ impl TableauOWLReasoner {
             }
         }
 
-        // Compute transitive closure for sub-property hierarchies
-        // Object properties
-        {
-            let op_keys: Vec<_> = phc.sub_object_properties.keys().cloned().collect();
-            for k in &op_keys {
-                let mut to_add = Vec::new();
-                if let Some(direct) = phc.sub_object_properties.get(k).cloned() {
-                    for target in &direct {
-                        if let Some(transitive) = phc.sub_object_properties.get(target) {
-                            for t in transitive {
-                                to_add.push(t.clone());
-                            }
-                        }
-                    }
-                }
-                for t in to_add {
-                    phc.sub_object_properties
-                        .entry(k.clone())
+        // ── Inferred hierarchies (OWL API / HermiT parity) ─────────────────
+        // The shared closure computes the transitive strict super/sub sets,
+        // the equivalence classes, the inverse-expression nodes and the
+        // `top`/`bottom` edges in one place
+        // (`core::reasoner::property_hierarchy`).
+        let object_hierarchy =
+            crate::core::reasoner::property_hierarchy::ObjectPropertyHierarchy::compute(&guard);
+        for node in object_hierarchy.nodes() {
+            phc.object_supers
+                .insert(node.clone(), object_hierarchy.supers(node));
+            phc.object_subs
+                .insert(node.clone(), object_hierarchy.subs(node));
+            phc.equivalent_object_properties
+                .insert(node.clone(), object_hierarchy.equivalents(node));
+        }
+
+        // Domain/range inheritance: a property inherits the domains/ranges
+        // asserted for its super properties *and* equivalents — the OWL API
+        // `getObjectPropertyDomains(pe, direct = false)` semantics.
+        let asserted_domains = std::mem::take(&mut phc.object_property_domains);
+        for (property, domains) in &asserted_domains {
+            for node in object_hierarchy.nodes() {
+                if node == property
+                    || object_hierarchy.supers(node).contains(property)
+                    || object_hierarchy.equivalents(node).contains(property)
+                {
+                    phc.object_property_domains
+                        .entry(node.clone())
                         .or_default()
-                        .insert(t);
+                        .extend(domains.iter().cloned());
                 }
             }
-            let op_keys2: Vec<_> = phc.super_object_properties.keys().cloned().collect();
-            for k in &op_keys2 {
-                let mut to_add = Vec::new();
-                if let Some(direct) = phc.super_object_properties.get(k).cloned() {
-                    for target in &direct {
-                        if let Some(transitive) = phc.super_object_properties.get(target) {
-                            for t in transitive {
-                                to_add.push(t.clone());
-                            }
-                        }
-                    }
-                }
-                for t in to_add {
-                    phc.super_object_properties
-                        .entry(k.clone())
+        }
+        let asserted_ranges = std::mem::take(&mut phc.object_property_ranges);
+        for (property, ranges) in &asserted_ranges {
+            for node in object_hierarchy.nodes() {
+                if node == property
+                    || object_hierarchy.supers(node).contains(property)
+                    || object_hierarchy.equivalents(node).contains(property)
+                {
+                    phc.object_property_ranges
+                        .entry(node.clone())
                         .or_default()
-                        .insert(t);
-                }
-            }
-            // Data properties
-            let dp_keys: Vec<_> = phc.sub_data_properties.keys().cloned().collect();
-            for k in &dp_keys {
-                let mut to_add = Vec::new();
-                if let Some(direct) = phc.sub_data_properties.get(k).cloned() {
-                    for target in &direct {
-                        if let Some(transitive) = phc.sub_data_properties.get(target) {
-                            for t in transitive {
-                                to_add.push(t.clone());
-                            }
-                        }
-                    }
-                }
-                for t in to_add {
-                    phc.sub_data_properties
-                        .entry(k.clone())
-                        .or_default()
-                        .insert(t);
-                }
-            }
-            let dp_keys2: Vec<_> = phc.super_data_properties.keys().cloned().collect();
-            for k in &dp_keys2 {
-                let mut to_add = Vec::new();
-                if let Some(direct) = phc.super_data_properties.get(k).cloned() {
-                    for target in &direct {
-                        if let Some(transitive) = phc.super_data_properties.get(target) {
-                            for t in transitive {
-                                to_add.push(t.clone());
-                            }
-                        }
-                    }
-                }
-                for t in to_add {
-                    phc.super_data_properties
-                        .entry(k.clone())
-                        .or_default()
-                        .insert(t);
+                        .extend(ranges.iter().cloned());
                 }
             }
         }
 
-        // Propagate inverses through sub-property chains
-        let op_keys: Vec<_> = phc.inverse_object_properties.keys().cloned().collect();
-        for prop in &op_keys {
-            if let Some(inverses) = phc.inverse_object_properties.get(prop).cloned() {
-                for inv in &inverses {
-                    if let Some(subs) = phc.sub_object_properties.get(prop).cloned() {
-                        for sub in &subs {
-                            phc.inverse_object_properties
-                                .entry(sub.clone())
-                                .or_default()
-                                .insert(inv.clone());
-                        }
-                    }
+        let data_hierarchy =
+            crate::core::reasoner::property_hierarchy::DataPropertyHierarchy::compute(&guard);
+        for node in data_hierarchy.nodes() {
+            phc.data_supers
+                .insert(node.clone(), data_hierarchy.supers(node));
+            phc.data_subs
+                .insert(node.clone(), data_hierarchy.subs(node));
+            phc.equivalent_data_properties
+                .insert(node.clone(), data_hierarchy.equivalents(node));
+        }
+
+        let asserted_data_domains = std::mem::take(&mut phc.data_property_domains);
+        for (property, domains) in &asserted_data_domains {
+            for node in data_hierarchy.nodes() {
+                if node == property
+                    || data_hierarchy.supers(node).contains(property)
+                    || data_hierarchy.equivalents(node).contains(property)
+                {
+                    phc.data_property_domains
+                        .entry(node.clone())
+                        .or_default()
+                        .extend(domains.iter().cloned());
+                }
+            }
+        }
+        let asserted_data_ranges = std::mem::take(&mut phc.data_property_ranges);
+        for (property, ranges) in &asserted_data_ranges {
+            for node in data_hierarchy.nodes() {
+                if node == property
+                    || data_hierarchy.supers(node).contains(property)
+                    || data_hierarchy.equivalents(node).contains(property)
+                {
+                    phc.data_property_ranges
+                        .entry(node.clone())
+                        .or_default()
+                        .extend(ranges.iter().cloned());
                 }
             }
         }
@@ -1785,6 +2089,51 @@ impl OWLReasoner for TableauOWLReasoner {
     }
 
     fn get_instances(&self, class: &ClassExpression, direct: bool) -> Result<NodeSet<Individual>> {
+        // ── owl:Thing / owl:Nothing fast paths (OWL API parity) ────────────
+        // Every individual of the signature — named **and** anonymous,
+        // including those that only occur in property assertions — is an
+        // instance of `owl:Thing`; nothing is an instance of `owl:Nothing`.
+        // The realisation never stores `owl:Thing` as a realised type, so
+        // without this fast path both answers came back empty.
+        if let ClassExpression::Class(cls) = class {
+            if cls.is_nothing() {
+                return Ok(NodeSet::empty());
+            }
+            if cls.is_thing() {
+                let individuals: HashSet<Individual> = {
+                    let guard = self.ontology.read().map_err(|e| crate::Error::Internal {
+                        message: format!("Lock poisoned: {e}"),
+                    })?;
+                    guard.signature()?.individuals.into_iter().collect()
+                };
+                let instances: HashSet<Individual> = if direct {
+                    // Direct instances of `owl:Thing` are the individuals with
+                    // no more specific realised type (`DirectClassAssertion`).
+                    self.ensure_classified()?;
+                    let cache =
+                        self.cached_hierarchy
+                            .lock()
+                            .map_err(|e| crate::Error::Internal {
+                                message: format!("Lock poisoned: {e}"),
+                            })?;
+                    let cache = cache.as_ref().unwrap();
+                    individuals
+                        .into_iter()
+                        .filter(|i| {
+                            cache.type_map.get(i).is_none_or(|types| {
+                                types
+                                    .iter()
+                                    .all(|t| matches!(t, ClassExpression::Class(c) if c.is_thing()))
+                            })
+                        })
+                        .collect()
+                } else {
+                    individuals
+                };
+                return Ok(NodeSet::new(self.instance_nodes(instances)?));
+            }
+        }
+
         self.ensure_classified()?;
         let cache = self
             .cached_hierarchy
@@ -1796,6 +2145,33 @@ impl OWLReasoner for TableauOWLReasoner {
 
         let mut instances: HashSet<Individual> =
             cache.instance_map.get(class).cloned().unwrap_or_default();
+
+        // ── Tableau fallback for classes the realisation never reached ──────
+        // `instance_map` covers the named-class hierarchy and *defined*
+        // classes; a named class that is only reachable through a complex GCI
+        // (`A ⊓ B ⊑ C` with `A(a)`, `B(a)`) never enters it, so an empty
+        // answer is re-checked against the completed tableau through
+        // `Reasoner::is_instance_of` — the OWL API contract is the *complete*
+        // instance set. Only runs when the answer would otherwise be empty,
+        // so classes with a realisation answer keep their O(1) lookup.
+        if instances.is_empty() {
+            let individuals: Vec<Individual> = {
+                let guard = self.ontology.read().map_err(|e| crate::Error::Internal {
+                    message: format!("Lock poisoned: {e}"),
+                })?;
+                guard.signature()?.individuals
+            };
+            if !individuals.is_empty() {
+                let reasoner = self.reasoner.lock().map_err(|e| crate::Error::Internal {
+                    message: format!("Lock poisoned: {e}"),
+                })?;
+                for individual in &individuals {
+                    if reasoner.is_instance_of(individual, class)? {
+                        instances.insert(individual.clone());
+                    }
+                }
+            }
+        }
 
         if direct {
             // Direct instances: individuals that are instances of `class` but not
@@ -1810,29 +2186,25 @@ impl OWLReasoner for TableauOWLReasoner {
             instances.retain(|i| !to_remove.contains(i));
         }
 
+        // Same-as expansion: `a ≡ _:x` and `a ∈ C` entail `_:x ∈ C`, but the
+        // realisation map keys the two individuals separately — HermiT returns
+        // the whole equivalence class from `getInstances`. Syntactic equality
+        // only (the same structure `getSameIndividuals` starts from), so an
+        // over-merge is impossible.
+        if !instances.is_empty() {
+            let equality = self.ensure_individual_equality()?;
+            let mut expanded: HashSet<Individual> = HashSet::with_capacity(instances.len());
+            for individual in &instances {
+                for member in equality.same_as(individual).get_entities() {
+                    expanded.insert(member.clone());
+                }
+            }
+            instances = expanded;
+        }
+
         // Group same-as individuals into a single node when the configured
         // policy requests it; otherwise each individual is its own node.
-        if matches!(
-            self.config.individual_node_set_policy,
-            IndividualNodeSetPolicy::BySameAs
-        ) {
-            let equality = self.ensure_individual_equality()?;
-            let mut nodes: HashSet<Node<Individual>> = HashSet::new();
-            let mut covered: HashSet<Individual> = HashSet::new();
-            for ind in &instances {
-                if !covered.insert(ind.clone()) {
-                    continue;
-                }
-                let node = equality.same_as(ind);
-                covered.extend(node.get_entities().iter().cloned());
-                nodes.insert(node);
-            }
-            Ok(NodeSet::new(nodes))
-        } else {
-            let nodes: HashSet<Node<Individual>> =
-                instances.into_iter().map(Node::singleton).collect();
-            Ok(NodeSet::new(nodes))
-        }
+        Ok(NodeSet::new(self.instance_nodes(instances)?))
     }
 
     fn get_types(&self, individual: &Individual, direct: bool) -> Result<NodeSet<ClassExpression>> {
@@ -1868,6 +2240,28 @@ impl OWLReasoner for TableauOWLReasoner {
                 result.insert(Node::singleton(t));
             }
         }
+
+        // ── owl:Thing is a type of every individual (OWL API parity) ───────
+        // For `direct = false` it is always present; for `direct = true` it
+        // only survives when the individual has no more specific type (a
+        // singleton `owl:Thing` node is then the whole answer).
+        let thing = ClassExpression::Class(crate::ontology::Class::thing());
+        let has_thing = result.iter().any(|n| n.contains(&thing));
+        if direct {
+            let has_other = result
+                .iter()
+                .any(|n| n.get_entities().iter().any(|c| *c != thing));
+            if has_other {
+                // Drop the pure `owl:Thing` node; a node that also carries an
+                // equivalent of `owl:Thing` keeps its other members.
+                result.retain(|n| !(n.contains(&thing) && n.get_entities().len() == 1));
+            } else if !has_thing {
+                result.insert(Node::singleton(thing));
+            }
+        } else if !has_thing {
+            result.insert(Node::singleton(thing));
+        }
+
         Ok(NodeSet::new(result))
     }
 
@@ -1876,34 +2270,186 @@ impl OWLReasoner for TableauOWLReasoner {
         let equality = self.ensure_individual_equality()?;
         let mut members: HashSet<Individual> = equality.same_as(individual).get_entities().clone();
 
-        // Back the result with the completed tableau's merge map when it is
-        // available: SameIndividual, functional/inverse-functional and HasKey
-        // equalities materialised by the tableau collapse two individuals onto
-        // the same node. Merge (not replace) so individuals the tableau never
-        // saw still come from the syntactic structure.
+        // Back the result with the completed tableau's merge map
+        // (`TableauSnapshot::individual_nodes`) when it is available:
+        // SameIndividual, functional/inverse-functional and HasKey equalities
+        // materialised by the tableau collapse two individuals onto the same
+        // node. Prefer the shared one-shot snapshot of the reasoner's own
+        // ontology (one tableau run for the whole query session) and fall back
+        // to a fresh run over the live ontology ref — merge (not replace) so
+        // individuals the tableau never saw still come from the syntactic
+        // structure. An inconsistent or interrupted tableau keeps the syntactic
+        // answer, as before.
         let reasoner = self.reasoner.lock().map_err(|e| crate::Error::Internal {
             message: format!("Lock poisoned: {e}"),
         })?;
-        if let Some(map) = reasoner.tableau_individual_components(&self.ontology)? {
-            let target_node = map.get(&individual.to_string()).copied();
-            if let Some(node) = target_node {
-                for (name, &nid) in &map {
-                    if nid == node
-                        && let Some(ind) = individual_from_display(name)
-                    {
-                        members.insert(ind);
-                    }
+        let merge_map = reasoner
+            .get_ontology()
+            .and_then(|own| reasoner.realization_snapshot(own).ok())
+            .filter(|snapshot| snapshot.satisfiable)
+            .map(|snapshot| snapshot.individual_nodes.clone())
+            .or_else(|| {
+                reasoner
+                    .tableau_individual_components(&self.ontology)
+                    .ok()
+                    .flatten()
+            });
+        drop(reasoner);
+
+        if let Some(map) = merge_map
+            && let Some(node) = map.get(&individual.to_string()).copied()
+        {
+            for (name, &nid) in &map {
+                if nid == node
+                    && let Some(ind) = individual_from_display(name)
+                {
+                    members.insert(ind);
                 }
             }
         }
-        drop(reasoner);
 
         Ok(Node::new(members))
     }
 
     fn get_different_individuals(&self, individual: &Individual) -> Result<NodeSet<Individual>> {
         let equality = self.ensure_individual_equality()?;
-        Ok(equality.different(individual))
+        let mut nodes: HashSet<Node<Individual>> =
+            equality.different(individual).get_nodes().clone();
+
+        // ── Disjoint-type entailment ─────────────────────────────────────────
+        // Two individuals are also different when their most-specific realised
+        // types contain a pair of disjoint classes, even without an explicit
+        // `DifferentIndividuals` axiom: `A ⊑ ¬B`, `A(a)`, `B(b)` ⇒ `a` ≠ `b`,
+        // because `A ⊓ B` is unsatisfiable.
+        //
+        // Bounded on purpose — every candidate is a fresh pair of type queries
+        // and every unseen type pair costs up to three decisions (two
+        // classification-backed subsumption tests and, only when both miss,
+        // one tableau satisfiability run): at most
+        // `MAX_DISJOINT_CANDIDATES` candidates and
+        // `MAX_DISJOINT_PAIR_CHECKS` type pairs per call, with a per-call memo
+        // on the type pairs. Reaching a cap only *limits recall* (the explicit
+        // `DifferentIndividuals` answer is always returned unchanged); it never
+        // invents a difference, so there are no false positives.
+        const MAX_DISJOINT_CANDIDATES: usize = 64;
+        const MAX_DISJOINT_PAIR_CHECKS: usize = 512;
+
+        // An individual is never different from itself or from its same-as
+        // component.
+        let same = equality.same_as(individual).get_entities().clone();
+
+        let mut candidates: Vec<Individual> = {
+            let guard = self.ontology.read().map_err(|e| crate::Error::Internal {
+                message: format!("Lock poisoned: {e}"),
+            })?;
+            // Named **and** anonymous individuals are candidates: the
+            // disjoint-type entailment is equally sound for `_:x` (its realised
+            // types come from the same realisation snapshot).
+            let mut individuals: Vec<Individual> = guard.signature()?.individuals.clone();
+            individuals.sort_by_key(|i| i.to_string());
+            individuals.truncate(MAX_DISJOINT_CANDIDATES);
+            individuals
+        };
+        candidates.retain(|other| !same.contains(other));
+
+        if candidates.is_empty() {
+            return Ok(NodeSet::new(nodes));
+        }
+
+        // Most-specific realised types of the queried individual.
+        let my_types = self.get_types(individual, true)?.get_flattened();
+        // Unsatisfiable classes can never be realised types of a consistent
+        // ontology's individual; treating them as "disjoint with everything"
+        // would fabricate differences on an inconsistent ontology.
+        let unsatisfiable = {
+            self.ensure_classified()?;
+            let cache = self
+                .cached_hierarchy
+                .lock()
+                .map_err(|e| crate::Error::Internal {
+                    message: format!("Lock poisoned: {e}"),
+                })?;
+            cache
+                .as_ref()
+                .map(|c| c.unsatisfiable.clone())
+                .unwrap_or_default()
+        };
+        let viable = |types: HashSet<ClassExpression>| -> HashSet<ClassExpression> {
+            types
+                .into_iter()
+                .filter(|t| {
+                    !unsatisfiable.contains(t)
+                        && !matches!(t, ClassExpression::Class(c) if c.is_nothing())
+                })
+                .collect()
+        };
+        let my_types = viable(my_types);
+
+        if !my_types.is_empty() {
+            let mut memo: HashMap<(ClassExpression, ClassExpression), bool> = HashMap::new();
+            let mut checks = 0usize;
+            'candidates: for other in &candidates {
+                let its_types = viable(self.get_types(other, true)?.get_flattened());
+                for mine in &my_types {
+                    for theirs in &its_types {
+                        if mine == theirs {
+                            continue;
+                        }
+                        if checks >= MAX_DISJOINT_PAIR_CHECKS {
+                            break 'candidates;
+                        }
+                        checks += 1;
+                        // Memo key is order-insensitive: `A ⊓ B` and `B ⊓ A`
+                        // are the same satisfiability question.
+                        let key = if format!("{mine:?}") <= format!("{theirs:?}") {
+                            (mine.clone(), theirs.clone())
+                        } else {
+                            (theirs.clone(), mine.clone())
+                        };
+                        let disjoint = if let Some(answer) = memo.get(&key) {
+                            *answer
+                        } else {
+                            let reasoner =
+                                self.reasoner.lock().map_err(|e| crate::Error::Internal {
+                                    message: format!("Lock poisoned: {e}"),
+                                })?;
+                            let complement = |c: &ClassExpression| {
+                                ClassExpression::ObjectComplementOf(Box::new(c.clone()))
+                            };
+                            // Two complementary decision procedures, ordered
+                            // cheapest-first, because neither covers every
+                            // shape on its own:
+                            //  * the classification/index closure
+                            //    (`is_subclass_of(A, ¬B)`) answers GCIs such
+                            //    as `A ⊑ ¬B`, which the consistency tableau
+                            //    does not unfold into a clash;
+                            //  * the tableau (`is_class_satisfiable(A ⊓ B)`)
+                            //    answers `DisjointClasses`, equivalent-class
+                            //    and complex-shape clashes the subsumption
+                            //    closure cannot see.
+                            let intersection = ClassExpression::ObjectIntersectionOf(vec![
+                                mine.clone(),
+                                theirs.clone(),
+                            ]);
+                            let answer = reasoner.is_subclass_of(mine, &complement(theirs))?
+                                || reasoner.is_subclass_of(theirs, &complement(mine))?
+                                || !reasoner.is_class_satisfiable(&intersection)?;
+                            drop(reasoner);
+                            memo.insert(key, answer);
+                            answer
+                        };
+                        if disjoint {
+                            // Group the whole same-as component, matching the
+                            // explicit `DifferentIndividuals` node shape.
+                            nodes.insert(equality.same_as(other));
+                            continue 'candidates;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(NodeSet::new(nodes))
     }
 
     fn get_top_object_property(&self) -> ObjectPropertyExpression {
@@ -1931,28 +2477,18 @@ impl OWLReasoner for TableauOWLReasoner {
                 message: format!("Lock poisoned: {e}"),
             })?;
         let cache = cache.as_ref().unwrap();
-        if let Some(subs) = cache.super_object_properties.get(prop) {
-            if direct {
-                Ok(NodeSet::new(
-                    subs.iter().map(|s| Node::singleton(s.clone())).collect(),
-                ))
-            } else {
-                let mut all = subs.clone();
-                let mut stack: Vec<_> = subs.iter().cloned().collect();
-                while let Some(current) = stack.pop() {
-                    if let Some(trans) = cache.super_object_properties.get(&current) {
-                        for t in trans {
-                            if all.insert(t.clone()) {
-                                stack.push(t.clone());
-                            }
-                        }
-                    }
-                }
-                Ok(NodeSet::new(all.into_iter().map(Node::singleton).collect()))
-            }
+        // `object_subs` already holds the full transitive strict sub set
+        // (`direct = false`); `direct = true` applies the OWL API
+        // `DirectSubObjectPropertyOf` filter on top of it.
+        let Some(subs) = cache.object_subs.get(prop) else {
+            return Ok(NodeSet::empty());
+        };
+        let members = if direct {
+            cache.direct_object_subs(subs)
         } else {
-            Ok(NodeSet::empty())
-        }
+            subs.clone()
+        };
+        Ok(NodeSet::new(cache.group_object_nodes(members)))
     }
 
     fn get_super_object_properties(
@@ -1968,28 +2504,17 @@ impl OWLReasoner for TableauOWLReasoner {
                 message: format!("Lock poisoned: {e}"),
             })?;
         let cache = cache.as_ref().unwrap();
-        if let Some(sups) = cache.sub_object_properties.get(prop) {
-            if direct {
-                Ok(NodeSet::new(
-                    sups.iter().map(|s| Node::singleton(s.clone())).collect(),
-                ))
-            } else {
-                let mut all = sups.clone();
-                let mut stack: Vec<_> = sups.iter().cloned().collect();
-                while let Some(current) = stack.pop() {
-                    if let Some(trans) = cache.sub_object_properties.get(&current) {
-                        for t in trans {
-                            if all.insert(t.clone()) {
-                                stack.push(t.clone());
-                            }
-                        }
-                    }
-                }
-                Ok(NodeSet::new(all.into_iter().map(Node::singleton).collect()))
-            }
+        // `object_supers` already holds the full transitive strict super set
+        // (`direct = false`); `direct = true` filters to the immediate supers.
+        let Some(supers) = cache.object_supers.get(prop) else {
+            return Ok(NodeSet::empty());
+        };
+        let members = if direct {
+            cache.direct_object_supers(supers)
         } else {
-            Ok(NodeSet::empty())
-        }
+            supers.clone()
+        };
+        Ok(NodeSet::new(cache.group_object_nodes(members)))
     }
 
     fn get_equivalent_object_properties(
@@ -2135,28 +2660,17 @@ impl OWLReasoner for TableauOWLReasoner {
                 message: format!("Lock poisoned: {e}"),
             })?;
         let cache = cache.as_ref().unwrap();
-        if let Some(subs) = cache.super_data_properties.get(prop) {
-            if direct {
-                Ok(NodeSet::new(
-                    subs.iter().map(|s| Node::singleton(s.clone())).collect(),
-                ))
-            } else {
-                let mut all = subs.clone();
-                let mut stack: Vec<_> = subs.iter().cloned().collect();
-                while let Some(current) = stack.pop() {
-                    if let Some(trans) = cache.super_data_properties.get(&current) {
-                        for t in trans {
-                            if all.insert(t.clone()) {
-                                stack.push(t.clone());
-                            }
-                        }
-                    }
-                }
-                Ok(NodeSet::new(all.into_iter().map(Node::singleton).collect()))
-            }
+        // Full transitive strict sub set (`direct = false`), filtered to the
+        // immediate subs for `direct = true`.
+        let Some(subs) = cache.data_subs.get(prop) else {
+            return Ok(NodeSet::empty());
+        };
+        let members = if direct {
+            cache.direct_data_subs(subs)
         } else {
-            Ok(NodeSet::empty())
-        }
+            subs.clone()
+        };
+        Ok(NodeSet::new(cache.group_data_nodes(members)))
     }
 
     fn get_super_data_properties(
@@ -2172,28 +2686,17 @@ impl OWLReasoner for TableauOWLReasoner {
                 message: format!("Lock poisoned: {e}"),
             })?;
         let cache = cache.as_ref().unwrap();
-        if let Some(sups) = cache.sub_data_properties.get(prop) {
-            if direct {
-                Ok(NodeSet::new(
-                    sups.iter().map(|s| Node::singleton(s.clone())).collect(),
-                ))
-            } else {
-                let mut all = sups.clone();
-                let mut stack: Vec<_> = sups.iter().cloned().collect();
-                while let Some(current) = stack.pop() {
-                    if let Some(trans) = cache.sub_data_properties.get(&current) {
-                        for t in trans {
-                            if all.insert(t.clone()) {
-                                stack.push(t.clone());
-                            }
-                        }
-                    }
-                }
-                Ok(NodeSet::new(all.into_iter().map(Node::singleton).collect()))
-            }
+        // Full transitive strict super set (`direct = false`), filtered to the
+        // immediate supers for `direct = true`.
+        let Some(supers) = cache.data_supers.get(prop) else {
+            return Ok(NodeSet::empty());
+        };
+        let members = if direct {
+            cache.direct_data_supers(supers)
         } else {
-            Ok(NodeSet::empty())
-        }
+            supers.clone()
+        };
+        Ok(NodeSet::new(cache.group_data_nodes(members)))
     }
 
     fn get_equivalent_data_properties(
@@ -2320,6 +2823,75 @@ impl OWLReasoner for TableauOWLReasoner {
         ))
     }
 
+    // ── OWLAPI / HermiT parity helpers ───────────────────────────────────────
+
+    fn has_type(&self, individual: &Individual, class: &ClassExpression) -> Result<bool> {
+        // `Reasoner::is_instance_of` is the semantically complete answer: it
+        // falls back to the materialised tableau closure for memberships that
+        // follow from a derived edge (`A ≡ ≥1 R.{b}` materialising `R(a,b)`),
+        // which the `type_map` alone can miss.
+        let reasoner = self.reasoner.lock().map_err(|e| crate::Error::Internal {
+            message: format!("Lock poisoned: {e}"),
+        })?;
+        reasoner.is_instance_of(individual, class)
+    }
+
+    fn is_same_individual(&self, a: &Individual, b: &Individual) -> Result<bool> {
+        Ok(self.get_same_individuals(a)?.contains(b))
+    }
+
+    fn has_object_property_relationship(
+        &self,
+        subject: &crate::ontology::NamedIndividual,
+        property: &ObjectPropertyExpression,
+        object: &crate::ontology::NamedIndividual,
+    ) -> Result<bool> {
+        let reasoner = self.reasoner.lock().map_err(|e| crate::Error::Internal {
+            message: format!("Lock poisoned: {e}"),
+        })?;
+        let values =
+            reasoner.get_object_property_values(&Individual::Named(subject.clone()), property)?;
+        Ok(values.iter().any(|value| value.iri() == Some(&object.iri)))
+    }
+
+    fn has_data_property_relationship(
+        &self,
+        subject: &crate::ontology::NamedIndividual,
+        property: &DataPropertyExpression,
+        value: &crate::ontology::Literal,
+    ) -> Result<bool> {
+        let reasoner = self.reasoner.lock().map_err(|e| crate::Error::Internal {
+            message: format!("Lock poisoned: {e}"),
+        })?;
+        let values =
+            reasoner.get_data_property_values(&Individual::Named(subject.clone()), property)?;
+        Ok(values.iter().any(|v| v == value))
+    }
+
+    fn get_object_property_instances(
+        &self,
+        property: &ObjectPropertyExpression,
+    ) -> Result<
+        Vec<(
+            crate::ontology::NamedIndividual,
+            crate::ontology::NamedIndividual,
+        )>,
+    > {
+        let reasoner = self.reasoner.lock().map_err(|e| crate::Error::Internal {
+            message: format!("Lock poisoned: {e}"),
+        })?;
+        let pairs = reasoner.get_object_property_instances(property)?;
+        // Core returns `Individual` pairs; the OWLAPI surface is named-only
+        // (the core method already skips anonymous endpoints).
+        Ok(pairs
+            .into_iter()
+            .filter_map(|(source, target)| match (source, target) {
+                (Individual::Named(s), Individual::Named(t)) => Some((s, t)),
+                _ => None,
+            })
+            .collect())
+    }
+
     fn is_entailed(&self, axiom: &Axiom) -> Result<bool> {
         let mut reasoner = self.reasoner.lock().map_err(|e| crate::Error::Internal {
             message: format!("Lock poisoned: {e}"),
@@ -2348,12 +2920,21 @@ impl OWLReasoner for TableauOWLReasoner {
     ) -> bool {
         use crate::ontology::axioms::AxiomType;
         // Workstream A7: every logical axiom type is answered semantically by
-        // `ReasoningTaskService::check_entailment_semantic`. Only non-logical
-        // types (annotations, SWRL rules, declarations, HasKey,
-        // DatatypeDefinition) are presence-only.
+        // `ReasoningTaskService::check_entailment_semantic`. The non-logical
+        // types listed below are answered **presence-only**: `is_entailed`
+        // returns true iff an axiom with the same content (ignoring the
+        // parser-minted id) is asserted — `Axiom::content_key` — which is the
+        // only sound answer for declarations, annotation assertions and SWRL
+        // rules (their consequences are already materialised by the SWRL
+        // forward-chainer, so an equal rule being present *is* the entailment
+        // question). `HasKey` / `DatatypeDefinition` are also answered by
+        // presence in `is_entailed` but remain unadvertised here.
         matches!(
             axiom_type,
-            AxiomType::SubClassOf
+            AxiomType::Declaration
+                | AxiomType::AnnotationAssertion
+                | AxiomType::Rule
+                | AxiomType::SubClassOf
                 | AxiomType::EquivalentClasses
                 | AxiomType::DisjointClasses
                 | AxiomType::DisjointUnion
@@ -2387,20 +2968,74 @@ impl OWLReasoner for TableauOWLReasoner {
     }
 
     fn precompute_inferences(&self, inference_types: &[InferenceType]) -> Result<()> {
-        for it in inference_types {
-            if it == &InferenceType::ClassHierarchy {
-                self.ensure_classified()?;
+        for inference_type in inference_types {
+            match inference_type {
+                // Classification + realisation: the class hierarchy, the
+                // type/instance maps behind `ClassAssertions`, and the
+                // unsatisfiable set `DisjointClasses` answers from.
+                InferenceType::ClassHierarchy
+                | InferenceType::ClassAssertions
+                | InferenceType::DisjointClasses => self.ensure_classified()?,
+                // Sub/equivalent property closures — the object- and data-side
+                // maps are built together by one pass over the property axioms.
+                InferenceType::ObjectPropertyHierarchy | InferenceType::DataPropertyHierarchy => {
+                    self.ensure_property_hierarchy()?
+                }
+                // Asserted assertions are scanned on demand (cheap); what needs
+                // warming is the materialised tableau closure the query merges
+                // in afterwards.
+                InferenceType::PropertyAssertions => self.warm_realization_snapshot()?,
+                // Syntactic same/different components plus the tableau merge
+                // map (`TableauSnapshot::individual_nodes`) behind them.
+                InferenceType::SameIndividual | InferenceType::DifferentIndividuals => {
+                    self.ensure_individual_equality()?;
+                    self.warm_realization_snapshot()?;
+                }
             }
+            // Marked only *after* the computation above succeeded, so a failed
+            // precomputation never reports as precomputed.
+            let mut precomputed = self
+                .precomputed
+                .lock()
+                .map_err(|e| crate::Error::Internal {
+                    message: format!("Lock poisoned: {e}"),
+                })?;
+            precomputed.insert(*inference_type);
         }
         Ok(())
     }
 
     fn is_precomputed(&self, inference_type: InferenceType) -> bool {
+        // Explicitly warmed by `precompute_inferences`.
+        if self
+            .precomputed
+            .lock()
+            .is_ok_and(|set| set.contains(&inference_type))
+        {
+            return true;
+        }
+        // A lazily computed inference is computed too — its answer sits in the
+        // corresponding cache. `DisjointClasses` and `ClassAssertions` are both
+        // answered from the classification/realisation cache, and
+        // `PropertyAssertions` from the one-shot tableau snapshot.
         match inference_type {
-            InferenceType::ClassHierarchy => {
+            InferenceType::ClassHierarchy
+            | InferenceType::ClassAssertions
+            | InferenceType::DisjointClasses => {
                 self.cached_hierarchy.lock().is_ok_and(|c| c.is_some())
             }
-            _ => false,
+            InferenceType::ObjectPropertyHierarchy | InferenceType::DataPropertyHierarchy => self
+                .cached_property_hierarchy
+                .lock()
+                .is_ok_and(|c| c.is_some()),
+            InferenceType::SameIndividual | InferenceType::DifferentIndividuals => self
+                .cached_individual_equality
+                .lock()
+                .is_ok_and(|c| c.is_some()),
+            InferenceType::PropertyAssertions => self
+                .reasoner
+                .lock()
+                .is_ok_and(|reasoner| reasoner.has_realization_snapshot()),
         }
     }
 }

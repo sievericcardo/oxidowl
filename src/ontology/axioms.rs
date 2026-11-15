@@ -654,6 +654,30 @@ impl AxiomTrait for Axiom {
     }
 }
 
+impl Axiom {
+    /// Content key for comparing axioms **ignoring** the parser-minted `id`.
+    ///
+    /// Every parser assigns axiom ids from a process-wide counter, so the same
+    /// axiom read from two different files always carries different ids even
+    /// though [`Axiom`]'s derived [`PartialEq`]/[`Hash`] compare them. This
+    /// key strips the `id: <n>` field from the derived `Debug` form so that
+    /// import-merge deduplication and entailment fast paths can compare axiom
+    /// *content* across ontologies (e.g. a premise re-parsed as a conclusion).
+    ///
+    /// Caveat: an IRI or literal that literally contains the text `id: <digits>`
+    /// inside its value would be normalised too; such values are vanishingly
+    /// rare and only ever affect deduplication (a skipped duplicate), never
+    /// reasoning results.
+    #[must_use]
+    pub fn content_key(&self) -> String {
+        static ID_FIELD: std::sync::LazyLock<regex::Regex> =
+            std::sync::LazyLock::new(|| regex::Regex::new(r"\bid: \d+").expect("static regex"));
+        ID_FIELD
+            .replace_all(&format!("{self:?}"), "id: _")
+            .into_owned()
+    }
+}
+
 /// Axiom store to manage OWL 2 DL axioms.
 #[derive(Debug, Clone)]
 pub struct AxiomStore {

@@ -8,7 +8,7 @@ use crate::{
     core::tableau::{ConceptLabel, Tableau, TableauBuilder, TableauState},
     ontology::{ClassExpression, Individual, Literal, Ontology},
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// A read-only snapshot of a completed tableau, used by the semantic entailment
 /// checks (workstream A7) to answer property-axiom and assertion entailments
@@ -37,6 +37,13 @@ pub struct TableauSnapshot {
     /// from an individual node to a data-successor node carrying a `DataValue`
     /// label.
     pub data_edges: Vec<(usize, String, Literal)>,
+    /// Per-node concept label sets of the completed tableau (index-aligned
+    /// with the node ids used by `edges`, `individual_nodes` and
+    /// [`TableauSnapshot::node_of`]). Populated by
+    /// [`TableauAlgorithmInstance::snapshot`] so instance queries can evaluate
+    /// class expressions against the *materialised* closure without keeping
+    /// the live tableau around.
+    pub node_concepts: Vec<HashSet<ConceptLabel>>,
 }
 
 impl TableauSnapshot {
@@ -63,6 +70,26 @@ impl TableauSnapshot {
     #[must_use]
     pub fn node_of(&self, individual: &Individual) -> Option<usize> {
         self.individual_nodes.get(&individual.to_string()).copied()
+    }
+
+    /// Whether the completed tableau labels `node` with `class`.
+    ///
+    /// Mirrors [`TableauAlgorithmInstance::node_labeled_as`]: the tableau
+    /// materialises class labels as `ConceptLabel::Complex(expr)` (from
+    /// `ClassAssertion`, Domain/Range propagation, concept unfolding) or
+    /// `ConceptLabel::Atomic(name)` for atomic classes.
+    #[must_use]
+    pub fn node_labeled_as(&self, node: usize, class: &ClassExpression) -> bool {
+        match self.node_concepts.get(node) {
+            None => false,
+            Some(concepts) => concepts.iter().any(|c| match c {
+                ConceptLabel::Complex(expr) => expr.as_ref() == class,
+                ConceptLabel::Atomic(name) => {
+                    matches!(class, ClassExpression::Class(cls) if cls.iri.as_str() == name.as_str())
+                }
+                _ => false,
+            }),
+        }
     }
 }
 
@@ -142,11 +169,21 @@ impl TableauAlgorithmInstance {
             }
         }
 
+        // Per-node label sets for the instance-query evaluator
+        // (`TableauSnapshot::node_labeled_as` / `Reasoner::snapshot_instance_of`).
+        let node_concepts = self
+            .tableau
+            .nodes()
+            .iter()
+            .map(|n| n.concepts.clone())
+            .collect();
+
         TableauSnapshot {
             satisfiable: self.tableau.is_satisfiable(),
             edges,
             individual_nodes,
             data_edges,
+            node_concepts,
         }
     }
 
@@ -282,20 +319,19 @@ impl TableauFactory {
     }
 
     /// Create a tableau runner for instance checking
+    ///
+    /// Phase A: delegates to the *typed* builder so `¬C` lands on the
+    /// individual's nominal node (the string path can only round-trip simple
+    /// class IRIs).
     pub fn create_for_instance_check(
         &self,
         ontology: &Ontology,
         individual: &Individual,
         class_expr: &ClassExpression,
     ) -> Result<Box<dyn TableauRunner>> {
-        // Convert Individual and ClassExpression to string for the current tableau builder interface
-        let individual_str = &individual
-            .iri()
-            .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
-        let class_str = &format!("{class_expr}");
-        let tableau =
-            self.tableau_builder
-                .build_for_instance_check(ontology, individual_str, class_str)?;
+        let tableau = self
+            .tableau_builder
+            .build_for_instance_check_typed(ontology, individual, class_expr)?;
         Ok(Box::new(TraditionalTableauRunner::new(tableau)))
     }
 

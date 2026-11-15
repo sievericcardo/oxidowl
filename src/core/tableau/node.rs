@@ -40,6 +40,16 @@ pub struct TableauNode {
 
     /// Status flags
     pub status: NodeStatus,
+
+    /// Monotone version of the `concepts` label set (workstream Phase A).
+    ///
+    /// Starts at `0` and is bumped by [`TableauNode::touch_labels`] on every
+    /// mutation of `concepts` (insert, clear, restore-on-backtrack, merge).
+    /// Blocking checkers cache per-node signatures keyed by
+    /// `(label_version, signature)` and recompute a signature only when this
+    /// counter changed, so pairwise blocking comparisons never re-hash an
+    /// unchanged label set.
+    pub label_version: u64,
 }
 
 /// Concept label in the tableau
@@ -155,6 +165,38 @@ impl RoleLabel {
             RoleLabel::Inverse(name) => name,
             RoleLabel::Chain(_) => "chain", // Return a default name for chains
             RoleLabel::Complex(expr) => expr,
+        }
+    }
+
+    /// Allocation-free [`Self::to_string`] comparison against `name`.
+    ///
+    /// Phase C: the tableau `RBox` sweep compared roles with
+    /// `edge.role.to_string() == name`, which formats *every* edge label into a
+    /// fresh `String` on *every* rule-loop iteration (≈27% of the consumer
+    /// profile was `RoleLabel` `Display` → `String` → grow/malloc/memmove).
+    /// This method answers the identical question with byte comparisons:
+    ///
+    /// | variant | equivalent to |
+    /// |---|---|
+    /// | `Atomic(a)` | `a == name` |
+    /// | `Inverse(a)` | `name == "inv(a)"` — matched in `inv(` … `)` form, no allocation |
+    /// | `Chain(_)` | never (its `Display` form is a ` ∘ `-joined list, never a role name) |
+    /// | `Complex(e)` | `e == name` (the `Display` of `Complex` is its raw expression) |
+    ///
+    /// The one divergence from `to_string() == name` is a `Chain` whose joined
+    /// `Display` string happens to equal `name`; that would require a role name
+    /// containing ` ∘ `, which no IRI-based role name has (and chains are never
+    /// stored as edge labels — `ensure_edge`/`add_edge` only build `Atomic`).
+    #[must_use]
+    pub fn is_role(&self, name: &str) -> bool {
+        match self {
+            RoleLabel::Atomic(n) => n == name,
+            RoleLabel::Inverse(n) => name
+                .strip_prefix("inv(")
+                .and_then(|rest| rest.strip_suffix(')'))
+                .is_some_and(|inner| inner == n.as_str()),
+            RoleLabel::Chain(_) => false,
+            RoleLabel::Complex(expr) => expr == name,
         }
     }
 }
@@ -401,12 +443,27 @@ impl TableauNode {
             concept_dependencies: HashMap::new(),
             role_successors: HashMap::new(),
             status: NodeStatus::default(),
+            label_version: 0,
         }
+    }
+
+    /// Bump [`Self::label_version`] so cached blocking signatures derived from
+    /// this node's label set are invalidated (workstream Phase A).
+    ///
+    /// Call this after *any* direct mutation of `concepts` (`insert`, `clear`,
+    /// `clone_from`, assignment). Helper methods such as [`Self::add_concept`]
+    /// do it for you; sites that reach into `concepts` directly must call it
+    /// explicitly.
+    #[inline]
+    pub fn touch_labels(&mut self) {
+        self.label_version = self.label_version.wrapping_add(1);
     }
 
     /// Add a concept to this node
     pub fn add_concept(&mut self, concept: ConceptLabel) {
-        self.concepts.insert(concept);
+        if self.concepts.insert(concept) {
+            self.touch_labels();
+        }
     }
 
     /// Add a concept with dependency information
@@ -415,7 +472,9 @@ impl TableauNode {
         concept: ConceptLabel,
         dependency: Arc<DependencySet>,
     ) {
-        self.concepts.insert(concept.clone());
+        if self.concepts.insert(concept.clone()) {
+            self.touch_labels();
+        }
         self.concept_dependencies.insert(concept, dependency);
     }
 
@@ -479,6 +538,56 @@ impl TableauNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Phase C: `RoleLabel::is_role` must answer exactly what
+    /// `to_string() == name` answered (the allocation-free replacement used by
+    /// the tableau `RBox` sweep), with the one documented exception: a
+    /// `Chain`'s `Display` join (`r ∘ s`) is never a role name.
+    #[test]
+    fn role_label_is_role_matches_display_equality() {
+        let labels = [
+            RoleLabel::Atomic("http://ex.org/p".to_string()),
+            RoleLabel::Inverse("http://ex.org/p".to_string()),
+            RoleLabel::Inverse("a)".to_string()),
+            RoleLabel::Inverse(String::new()),
+            RoleLabel::Complex("http://ex.org/c".to_string()),
+            RoleLabel::Chain(vec![
+                RoleLabel::Atomic("r".to_string()),
+                RoleLabel::Atomic("s".to_string()),
+            ]),
+        ];
+        let names = [
+            "http://ex.org/p",
+            "inv(http://ex.org/p)",
+            "inv(a))",
+            "inv(a)",
+            "inv()",
+            "inv(",
+            "a)",
+            "http://ex.org/c",
+            "chain",
+            "r ∘ s",
+            "",
+            "R",
+        ];
+        for label in &labels {
+            for name in names {
+                let display_equal = label.to_string() == name;
+                if matches!(label, RoleLabel::Chain(_)) {
+                    assert!(
+                        !label.is_role(name),
+                        "chains are never a plain role name ({name:?})"
+                    );
+                } else {
+                    assert_eq!(
+                        label.is_role(name),
+                        display_equal,
+                        "is_role({name:?}) diverged from to_string() == name for {label:?}"
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_concept_label_quoted_triple() {
