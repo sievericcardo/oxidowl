@@ -295,7 +295,7 @@ cargo kani --harness proofs::core::dep_set_new_is_empty
 - Feature-matrix checks: `server`, `server,sparql`, `ml`, `profiling`, `all-features`
 - `cargo doc --no-deps` and **MSRV 1.88** verification
 
-**Release** (`.github/workflows/release.yml`): pushing a `v*` tag publishes a GitHub Release with binaries for **Linux x86_64, macOS x86_64/aarch64, Windows x86_64** (built with `--features server,sparql`) plus a **GHCR Docker image**.
+**Release** (`.github/workflows/release.yml`): pushing a `v*` tag publishes a GitHub Release with binaries for **Linux x86_64, macOS x86_64/aarch64, Windows x86_64** (built with `--features server,sparql`), packaged with SHA-256 checksums. The release workflow also builds the Docker image to validate the Dockerfile but never pushes it; publishing to `ghcr.io/sievericcardo/oxidowl` is a manual owner action.
 
 ## Known Limitations / Experimental Features
 
@@ -317,7 +317,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md): fork th
 **Implemented in 2.1.0**
 
 - [x] Realtime performance wave (single-tableau instance queries, snapshot caches, blocking/hash optimizations)
-- [x] CI/CD: GitHub Actions CI + tagged releases with binaries and GHCR Docker image
+- [x] CI/CD: GitHub Actions CI + tagged releases with binaries and SHA-256 checksums (Docker image built but not pushed)
 - [x] 20-format support with shared `Auto` detection (incl. JSON-LD, RDFa, HDT, Binary RDF, N3)
 
 **Planned**
