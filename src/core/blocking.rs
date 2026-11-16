@@ -25,7 +25,7 @@
 //!
 //! 1. **Deterministic fast hashing.** [`concept_sort_key`] and the
 //!    [`SignatureCache`] map now use [`FastHasher`](crate::core::fast_hash)
-//!    (seedless FNV-1a) instead of SipHash. The digest is a pure function of
+//!    (seedless FNV-1a) instead of `SipHash`. The digest is a pure function of
 //!    the label's `Hash` bytes — same value every process/run/architecture —
 //!    and remains an internal cache key only: every positive answer is
 //!    re-verified with [`ConceptLabel`] equality, so a collision can never
@@ -54,7 +54,7 @@ use std::hash::{Hash, Hasher};
 ///
 /// Zero-allocation alternative to `format!("{c:?}")`. Phase E: hashed with
 /// the seedless [`FastHasher`](crate::core::fast_hash) — deterministic across
-/// processes (unlike `RandomState`) and ~2-3× cheaper than SipHash on the
+/// processes (unlike `RandomState`) and ~2-3× cheaper than `SipHash` on the
 /// per-label hot path. See `fast_hash` for the full determinism contract.
 #[inline]
 fn concept_sort_key(c: &ConceptLabel) -> u64 {
@@ -130,6 +130,7 @@ fn may_be_blocked(node: &TableauNode) -> bool {
 /// (a nominal ancestor always carries the extra `{a}` label), so excluding
 /// nominal ancestors removes no equality candidate from a chain either.
 #[inline]
+#[must_use]
 pub fn may_be_blocker(node: &TableauNode) -> bool {
     !matches!(node.node_type, NodeType::Root | NodeType::Nominal)
 }
@@ -269,7 +270,7 @@ impl NodeSignature {
 /// `label_version` matches [`TableauNode::label_version`].
 ///
 /// Phase E: keyed by [`FastBuildHasher`](crate::core::fast_hash) — the map
-/// only ever needs a stable bucket key, and SipHash on `NodeId` keys was a
+/// only ever needs a stable bucket key, and `SipHash` on `NodeId` keys was a
 /// measurable slice of `update_blocking`.
 #[derive(Debug, Default)]
 struct SignatureCache {
@@ -424,7 +425,7 @@ pub enum StrategyKind {
     Dynamic,
     /// [`SingleBlocking`] — equality (HermiT-style) blocking.
     Single,
-    /// [`CoreBlocking`] — HermiT core (identity on this label representation).
+    /// [`CoreBlocking`] — `HermiT` core (identity on this label representation).
     Core,
     /// [`OptimalBlocking`] — adaptive wrapper around another strategy.
     Optimal,
@@ -569,7 +570,7 @@ impl AncestorBlocking {
     /// merges and node-list truncation.
     fn rebuild_parent_map(&mut self, nodes: &[TableauNode]) {
         self.parent_map.clear();
-        for node in nodes.iter() {
+        for node in nodes {
             for successors in node.role_successors.values() {
                 for &successor in successors {
                     if successor < nodes.len() && successor != node.id {
@@ -858,9 +859,7 @@ impl BlockingChecker for SingleBlocking {
 
         // Update blocking information for all nodes
         for i in 0..nodes.len() {
-            let blocker = if !may_be_blocked(&nodes[i]) {
-                None
-            } else {
+            let blocker = if may_be_blocked(&nodes[i]) {
                 let node_signature = signature_of(&self.cache, &nodes[i]);
                 let mut found = None;
                 for other in nodes.iter() {
@@ -874,6 +873,8 @@ impl BlockingChecker for SingleBlocking {
                     }
                 }
                 found
+            } else {
+                None
             };
             nodes[i].blocking_info.is_blocked = blocker.is_some();
             nodes[i].blocking_info.blocker = blocker;
@@ -1334,7 +1335,7 @@ impl BlockerCandidateIndex {
     }
 
     /// Compute a hash for a signature (Phase E: [`FastHasher`](crate::core::fast_hash)
-    /// instead of SipHash — this runs for every indexed node per pass).
+    /// instead of `SipHash` — this runs for every indexed node per pass).
     fn compute_signature_hash(signature: &[ConceptLabel]) -> u64 {
         let mut hasher = crate::core::fast_hash::FastHasher::new();
 

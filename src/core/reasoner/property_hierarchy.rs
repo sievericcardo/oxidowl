@@ -190,7 +190,7 @@ impl<N: Clone + Eq + std::hash::Hash> Closure<N> {
     }
 }
 
-/// Inferred object-property hierarchy over the ontology's RBox.
+/// Inferred object-property hierarchy over the ontology's `RBox`.
 #[derive(Debug, Clone)]
 pub struct ObjectPropertyHierarchy {
     closure: Closure<ObjectPropertyExpression>,

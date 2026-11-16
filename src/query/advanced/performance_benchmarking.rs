@@ -1418,14 +1418,13 @@ impl PerformanceMetricsCollector {
         #[cfg(target_os = "linux")]
         {
             // Read from /proc/self/statm on Linux
-            if let Ok(contents) = std::fs::read_to_string("/proc/self/statm") {
-                if let Some(resident) = contents.split_whitespace().nth(1) {
-                    if let Ok(pages) = resident.parse::<usize>() {
-                        // Convert pages to bytes (typically 4KB per page)
-                        let bytes = pages * 4096;
-                        return bytes as f64;
-                    }
-                }
+            if let Ok(contents) = std::fs::read_to_string("/proc/self/statm")
+                && let Some(resident) = contents.split_whitespace().nth(1)
+                && let Ok(pages) = resident.parse::<usize>()
+            {
+                // Convert pages to bytes (typically 4KB per page)
+                let bytes = pages * 4096;
+                return bytes as f64;
             }
         }
 

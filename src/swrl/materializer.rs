@@ -1,7 +1,7 @@
 //! DL-safe SWRL forward-chaining materialization.
 //!
 //! [`SwrlMaterializer`] computes the fixpoint of every [`Axiom::Rule`] in an
-//! ontology over its *named-individual* `ABox`, in the same spirit as HermiT's
+//! ontology over its *named-individual* `ABox`, in the same spirit as `HermiT`'s
 //! DL-safe rule evaluation: the result is a set of new `ABox` assertion axioms
 //! that can be merged into the ontology before classification/realisation.
 //!
@@ -432,7 +432,7 @@ struct FactBase {
 }
 
 impl FactBase {
-    /// Index every assertion axiom of `ontology` (rules and TBox axioms are
+    /// Index every assertion axiom of `ontology` (rules and `TBox` axioms are
     /// handled by [`Closures`]).
     fn from_ontology(ontology: &Ontology) -> Self {
         let mut base = Self::default();
@@ -1036,7 +1036,7 @@ impl Matcher<'_> {
         }
 
         // Deterministic order regardless of `HashMap` iteration order.
-        candidates.sort_by_key(|a| a.to_string());
+        candidates.sort_by_key(std::string::ToString::to_string);
         candidates
     }
 
@@ -1328,7 +1328,7 @@ fn instantiate_head(atom: &SWRLAtom, bindings: &Bindings, next_id: &mut AxiomId)
             if individuals[0] == individuals[1] {
                 return None;
             }
-            individuals.sort_by_key(|a| a.to_string());
+            individuals.sort_by_key(std::string::ToString::to_string);
             Axiom::SameIndividual(SameIndividualAxiom {
                 id,
                 individuals,
@@ -1348,7 +1348,7 @@ fn instantiate_head(atom: &SWRLAtom, bindings: &Bindings, next_id: &mut AxiomId)
             if individuals[0] == individuals[1] {
                 return None;
             }
-            individuals.sort_by_key(|a| a.to_string());
+            individuals.sort_by_key(std::string::ToString::to_string);
             Axiom::DifferentIndividuals(DifferentIndividualsAxiom {
                 id,
                 individuals,

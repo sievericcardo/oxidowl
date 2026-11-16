@@ -318,7 +318,7 @@ impl TableauBuilder {
     ///
     /// Phase A fix: the previous implementation ignored `individual` and added
     /// `not(C)` to a *fresh root witness* (which can never clash with the
-    /// individual's labels), so every instance check on a TBox answered the
+    /// individual's labels), so every instance check on a `TBox` answered the
     /// same question regardless of the individual. The negated class is now
     /// asserted on the **nominal node of the individual**: the tableau is
     /// unsatisfiable exactly when `{individual} ⊓ ¬C` is, i.e. when

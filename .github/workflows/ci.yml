@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: rustfmt
       - name: cargo fmt --check
@@ -50,7 +50,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake clang libclang-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.100.0
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
@@ -78,7 +78,7 @@ jobs:
         if: runner.os == 'macOS'
         # clang/Xcode CLT are preinstalled on macOS runners; only CMake is needed.
         run: brew install cmake
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.100.0
       - uses: Swatinem/rust-cache@v2
       - name: Run workspace tests
         env:
@@ -95,7 +95,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # VS Build Tools (MSVC) and CMake are preinstalled on windows-latest.
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.100.0
       - uses: Swatinem/rust-cache@v2
       - name: cargo check (workspace)
         run: cargo check --workspace
@@ -110,7 +110,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake clang libclang-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.100.0
       - uses: Swatinem/rust-cache@v2
       - name: Run conformance / parity / imports / SWRL suites
         run: >
@@ -133,7 +133,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake clang libclang-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.100.0
       - uses: Swatinem/rust-cache@v2
       # NOTE: `--no-default-features` is known-broken and intentionally absent.
       - name: check (default features)

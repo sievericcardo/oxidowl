@@ -2346,7 +2346,7 @@ impl OWLReasoner for TableauOWLReasoner {
             // disjoint-type entailment is equally sound for `_:x` (its realised
             // types come from the same realisation snapshot).
             let mut individuals: Vec<Individual> = guard.signature()?.individuals.clone();
-            individuals.sort_by_key(|i| i.to_string());
+            individuals.sort_by_key(std::string::ToString::to_string);
             individuals.truncate(MAX_DISJOINT_CANDIDATES);
             individuals
         };
@@ -2979,7 +2979,7 @@ impl OWLReasoner for TableauOWLReasoner {
                 // Sub/equivalent property closures — the object- and data-side
                 // maps are built together by one pass over the property axioms.
                 InferenceType::ObjectPropertyHierarchy | InferenceType::DataPropertyHierarchy => {
-                    self.ensure_property_hierarchy()?
+                    self.ensure_property_hierarchy()?;
                 }
                 // Asserted assertions are scanned on demand (cheap); what needs
                 // warming is the materialised tableau closure the query merges

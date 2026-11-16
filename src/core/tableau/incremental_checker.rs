@@ -189,7 +189,7 @@ pub enum CachedCheckResult {
 ///
 /// Phase E: the hasher is [`FastBuildHasher`] (seedless FNV-1a) instead of
 /// `std`'s default — every `get` re-hashes the `(fingerprint, clause_id)`
-/// key, and SipHash was a measurable slice of `ClauseChecker::check_node`
+/// key, and `SipHash` was a measurable slice of `ClauseChecker::check_node`
 /// in the consumer profile. LRU semantics (and the eviction tests) are
 /// unchanged; only the digest function swapped.
 ///

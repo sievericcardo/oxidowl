@@ -292,12 +292,11 @@ impl MemoryTracker {
 
         if let Ok(meminfo) = fs::read_to_string("/proc/meminfo") {
             for line in meminfo.lines() {
-                if line.starts_with("MemAvailable:") {
-                    if let Some(value) = line.split_whitespace().nth(1) {
-                        if let Ok(kb) = value.parse::<usize>() {
-                            return kb * 1024; // Convert KB to bytes
-                        }
-                    }
+                if line.starts_with("MemAvailable:")
+                    && let Some(value) = line.split_whitespace().nth(1)
+                    && let Ok(kb) = value.parse::<usize>()
+                {
+                    return kb * 1024; // Convert KB to bytes
                 }
             }
         }

@@ -89,7 +89,7 @@ pub struct Tableau {
     pub ontology: Arc<Ontology>,
 
     /// Phase C: pre-extracted `RBox` (role-axiom) data, built **once** from
-    /// `ontology.axioms()` on the first [`executor::TableauExecutor`] RBox sweep
+    /// `ontology.axioms()` on the first [`executor::TableauExecutor`] `RBox` sweep
     /// and shared (`Arc`) across every subsequent sweep of this tableau run.
     ///
     /// The ontology is immutable for the lifetime of a tableau (the `Arc` is

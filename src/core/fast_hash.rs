@@ -1,7 +1,7 @@
 //! Deterministic fast hasher (FNV-1a, 64-bit) for hot signature paths
 //!
 //! Phase E: the tableau hot paths (blocking signature keys, signature caches,
-//! clause-check result cache) hashed with `std`'s SipHash (`DefaultHasher` /
+//! clause-check result cache) hashed with `std`'s `SipHash` (`DefaultHasher` /
 //! `RandomState`) even though they only ever need a *fast, stable* bucket
 //! key — never a cryptographic-quality hash. FNV-1a is a fixed, seedless
 //! mixing function: one multiply-xor per byte, no key schedule, no random

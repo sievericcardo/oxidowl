@@ -61,8 +61,8 @@ impl ChangeHistory {
     pub fn redo(&mut self, n: usize) -> Vec<OntologyChange> {
         let to_redo = std::cmp::min(n, self.history.len() - self.position);
         let mut result = Vec::new();
-        for i in self.position..self.position + to_redo {
-            result.extend(self.history[i].iter().cloned());
+        for change in self.history.iter().skip(self.position).take(to_redo) {
+            result.extend(change.iter().cloned());
         }
         self.position += to_redo;
         result

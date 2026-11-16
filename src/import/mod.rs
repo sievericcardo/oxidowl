@@ -443,7 +443,7 @@ impl ImportManager {
     }
 
     /// Resolve the ontology's `owl:imports` closure **recursively** and merge
-    /// every reachable ontology into `ontology` (HermiT `Imports.INCLUDED`
+    /// every reachable ontology into `ontology` (`HermiT` `Imports.INCLUDED`
     /// parity).
     ///
     /// Compared to the flat [`Self::resolve_imports`]:

@@ -890,7 +890,7 @@ impl Reasoner {
     /// individual can be reachable both through the signature and through
     /// nominal merging).
     fn sort_and_dedup_individuals(mut individuals: Vec<Individual>) -> Vec<Individual> {
-        individuals.sort_by_key(|a| a.to_string());
+        individuals.sort_by_key(std::string::ToString::to_string);
         individuals.dedup_by(|a, b| a.to_string() == b.to_string());
         individuals
     }
@@ -936,12 +936,11 @@ impl Reasoner {
             .snapshot_cache
             .lock()
             .map_err(|_| Error::reasoning("Realisation snapshot cache poisoned"))?;
-        Ok(match slot.as_ref() {
-            Some(existing) => existing.clone(),
-            None => {
-                *slot = Some(built.clone());
-                built
-            }
+        Ok(if let Some(existing) = slot.as_ref() {
+            existing.clone()
+        } else {
+            *slot = Some(built.clone());
+            built
         })
     }
 
@@ -1536,7 +1535,7 @@ impl Reasoner {
         }
 
         // Remove duplicates (Display form distinguishes named from anonymous).
-        values.sort_by_key(|i| i.to_string());
+        values.sort_by_key(std::string::ToString::to_string);
         values.dedup_by_key(|i| i.to_string());
 
         Ok(values)
@@ -1848,13 +1847,7 @@ impl Reasoner {
                         // completeness check never fires; it is the safety net
                         // that keeps the fast path from ever returning a
                         // partial hierarchy.
-                        if !finalise_el_result(&ontology, &mut result) {
-                            log::warn!(
-                                "EL classification is incomplete (missing signature classes); \
-                                 falling back to general classification"
-                            );
-                            self.el_reasoner = None;
-                        } else {
+                        if finalise_el_result(&ontology, &mut result) {
                             // Store for future use, cache the result, and make
                             // the query fast-paths reuse it.
                             self.el_reasoner = Some(Box::new(el_reasoner));
@@ -1864,6 +1857,11 @@ impl Reasoner {
                                 .store_classification_result(&ontology, result.clone());
                             return Ok(result);
                         }
+                        log::warn!(
+                            "EL classification is incomplete (missing signature classes); \
+                             falling back to general classification"
+                        );
+                        self.el_reasoner = None;
                     }
                     Err(err) => {
                         statistics.add_reasoning_time(el_elapsed);
@@ -2258,7 +2256,7 @@ impl Reasoner {
     }
 
     /// Load an ontology into the reasoner, resolving its `owl:imports`
-    /// closure first (HermiT `Imports.INCLUDED` parity).
+    /// closure first (`HermiT` `Imports.INCLUDED` parity).
     ///
     /// - Imports are resolved **recursively** — cycle-safe and bounded by
     ///   `max_import_depth` — with the default best-effort configuration:

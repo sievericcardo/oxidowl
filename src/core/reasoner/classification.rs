@@ -2016,7 +2016,7 @@ impl ClassificationService {
     /// instead of recursing.  This bounds *all* recursive paths through this
     /// method — the complex-expression branch (`check_complex_expression`
     /// operands, existential fillers) and Strategies 3/5/6 alike — and is the
-    /// termination guarantee for cyclic TBoxes (`A ≡ ∃r.B` / `B ≡ ∃r.A`,
+    /// termination guarantee for cyclic `TBoxes` (`A ≡ ∃r.B` / `B ≡ ∃r.A`,
     /// self-referential `C ≡ C ⊓ D`) and for the nested defined-subclass
     /// (Strategy 5) re-entry that previously re-evaluated the same query state
     /// from sibling paths after the helper-scoped [`DEFINED_EVAL_STACK`] keys

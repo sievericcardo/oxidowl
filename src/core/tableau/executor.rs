@@ -33,9 +33,9 @@ pub struct TableauExecutor;
 /// The extraction depends only on the (immutable) ontology, so it is computed
 /// once on the first sweep, stored in [`super::Tableau::rbox_cache`] behind an
 /// `Arc`, and re-used by every subsequent sweep. Every field holds exactly the
-/// value the per-sweep extraction produced for the same axiom, so RBox
+/// value the per-sweep extraction produced for the same axiom, so `RBox`
 /// semantics — role inclusions, transitivity, symmetry, reflexivity, inverse
-/// pairs, property chains, domain/range, data-property RBox, functional /
+/// pairs, property chains, domain/range, data-property `RBox`, functional /
 /// inverse-functional merging, `HasKey`, and the role-constraint clashes — are
 /// unchanged.
 #[derive(Debug, Default)]
@@ -98,7 +98,7 @@ impl RBoxCache {
                 Axiom::SymmetricObjectProperty(a) => cache.symmetric.push(a.property.to_string()),
                 Axiom::AsymmetricObjectProperty(a) => cache.asymmetric.push(a.property.to_string()),
                 Axiom::IrreflexiveObjectProperty(a) => {
-                    cache.irreflexive.push(a.property.to_string())
+                    cache.irreflexive.push(a.property.to_string());
                 }
                 Axiom::ReflexiveObjectProperty(a) => cache.reflexive.push(a.property.to_string()),
                 Axiom::FunctionalObjectProperty(a) => cache.functional.push(a.property.to_string()),
@@ -3170,20 +3170,19 @@ impl TableauExecutor {
         Ok(())
     }
 
-    /// The cached RBox extraction for `tableau`, built from the ontology's
+    /// The cached `RBox` extraction for `tableau`, built from the ontology's
     /// axioms on first use (Phase C) and shared via `Arc` afterwards.
     ///
     /// The ontology `Arc` is fixed for the lifetime of the tableau, so the
     /// extraction is stable; `Tableau::load_ontology` clears the cache
     /// defensively if a caller reloads axioms.
     fn rbox_cache(tableau: &mut super::Tableau) -> Arc<RBoxCache> {
-        match &tableau.rbox_cache {
-            Some(cached) => cached.clone(),
-            None => {
-                let built = Arc::new(RBoxCache::build(tableau.ontology.as_ref()));
-                tableau.rbox_cache = Some(built.clone());
-                built
-            }
+        if let Some(cached) = &tableau.rbox_cache {
+            cached.clone()
+        } else {
+            let built = Arc::new(RBoxCache::build(tableau.ontology.as_ref()));
+            tableau.rbox_cache = Some(built.clone());
+            built
         }
     }
 
