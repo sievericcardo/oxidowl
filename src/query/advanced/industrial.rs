@@ -1303,14 +1303,13 @@ impl LargeScaleMemoryManager {
         // Try to get actual process memory if available
         #[cfg(target_os = "linux")]
         {
-            if let Ok(contents) = std::fs::read_to_string("/proc/self/statm") {
-                if let Some(resident) = contents.split_whitespace().nth(1) {
-                    if let Ok(pages) = resident.parse::<usize>() {
-                        // Convert pages to bytes (typically 4KB per page)
-                        let estimated = pages * 4096;
-                        return estimated.max(base_usage + checkpoint_overhead);
-                    }
-                }
+            if let Ok(contents) = std::fs::read_to_string("/proc/self/statm")
+                && let Some(resident) = contents.split_whitespace().nth(1)
+                && let Ok(pages) = resident.parse::<usize>()
+            {
+                // Convert pages to bytes (typically 4KB per page)
+                let estimated = pages * 4096;
+                return estimated.max(base_usage + checkpoint_overhead);
             }
         }
 

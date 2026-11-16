@@ -28,11 +28,179 @@ use crate::{
         Ontology, OntologyRef,
     },
 };
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::{
+    cell::{Cell, RefCell},
     collections::{HashMap, HashSet, VecDeque},
     time::Instant,
 };
+
+/// Hard recursion depth cap for
+/// [`ClassificationService::check_instance_with_datatype_reasoning`].
+///
+/// Second safety net behind the [`INSTANCE_EVAL_STACK`] re-entrancy guard: a
+/// pathological ontology whose evaluation legitimately nests more than this
+/// many *distinct* `(individual, class expression)` states gets a conservative
+/// `false` (logged once) instead of exhausting the native stack.  The caller's
+/// tableau snapshot fallback remains authoritative for the cut state.
+const INSTANCE_EVAL_MAX_DEPTH: usize = 256;
+
+std::thread_local! {
+    /// `(individual IRI, defined class IRI)` pairs whose complex definition is
+    /// currently being evaluated by Strategy 5 of
+    /// `ClassificationService::check_instance_with_datatype_reasoning`, or
+    /// whose complex GCI (`SubClassOf(E, I)`) is being evaluated by Strategy 6
+    /// under the same key (`individual`, `I`).
+    ///
+    /// A definition may reference other *named* classes (`D ≡ Tree ⊓ (age some
+    /// int < 40)`), and checking those re-enters the named-class branch, which
+    /// may evaluate further defined subclasses.  Cyclic definition references
+    /// (`D ≡ E ⊓ …` with `E` reachable back from `D`) would otherwise recurse
+    /// forever; the on-stack set breaks any such cycle by returning a
+    /// conservative `false` for the re-entered pair (the tableau snapshot
+    /// remains the caller's fallback).  The pair set is finite (asserted
+    /// individuals × defined classes), so recursion always terminates; acyclic
+    /// definition chains are evaluated in full.
+    ///
+    /// Kept as a helper-scoped guard *in addition to* the general
+    /// [`INSTANCE_EVAL_STACK`] entry guard: it cuts named-class re-entry from
+    /// *inside* the Strategy helpers (where the entry guard may not hold a
+    /// matching frame), e.g. a Strategy-6 `check_complex_gci` re-entering the
+    /// same named class through a complex filler.
+    static DEFINED_EVAL_STACK: RefCell<HashSet<(String, IRI)>> =
+        RefCell::new(HashSet::new());
+}
+
+std::thread_local! {
+    /// General re-entrancy guard: every `(individual key, class expression)`
+    /// state whose evaluation by
+    /// [`ClassificationService::check_instance_with_datatype_reasoning`] is
+    /// currently in progress on this thread.
+    ///
+    /// The individual key is the `Individual` Display form (named → IRI,
+    /// anonymous → stable `_:id`).  Unlike [`DEFINED_EVAL_STACK`] — which is
+    /// keyed only by `(individual, named class IRI)` and only inside Strategies
+    /// 3/5/6 — this guard covers **every** entry into the checker, including
+    /// the complex-expression branch that never touches a named class, and it
+    /// is held for the *whole* call (Strategies 1–4 included) rather than only
+    /// inside a helper, so sibling Strategy-5/6 paths that re-enter the same
+    /// query state after the helper guard popped are cut as well.  Without it,
+    /// recursion alternating through different class expressions / fillers
+    /// (`check_instance ⇄ check_complex_expression`, e.g. the defined-subclass
+    /// Strategy 5 re-entering the query state from each defined subclass, or
+    /// `A ≡ ∃r.B` / `B ≡ ∃r.A` filler cycles) could nest without bound or
+    /// re-evaluate the same state factorially often — observed as a
+    /// non-terminating 100 % CPU spin in a consumer workload.
+    ///
+    /// A re-entered state returns a conservative `Ok(false)`; this is the
+    /// co-inductive reading of a circular proof (any proof of the re-entered
+    /// state would have to assume itself), and every caller — `get_instances`,
+    /// `is_instance_of`, `get_types`, `realize` — keeps its tableau snapshot
+    /// / `task_service.check_instance` fallback, which remains authoritative
+    /// for memberships the structural checker cannot prove.
+    static INSTANCE_EVAL_STACK: RefCell<HashSet<(String, ClassExpression)>> =
+        RefCell::new(HashSet::new());
+
+    /// Current nesting depth of guarded
+    /// [`ClassificationService::check_instance_with_datatype_reasoning`]
+    /// frames on this thread (guarded by [`INSTANCE_EVAL_STACK`] entries, so
+    /// it equals the stack size).
+    static INSTANCE_EVAL_DEPTH: Cell<usize> = const { Cell::new(0) };
+
+    /// Whether the [`INSTANCE_EVAL_MAX_DEPTH`] warning was already logged
+    /// (warn once per thread, not once per cut).
+    static INSTANCE_EVAL_DEPTH_WARNED: Cell<bool> = const { Cell::new(false) };
+}
+
+/// RAII entry for [`INSTANCE_EVAL_STACK`] + [`INSTANCE_EVAL_DEPTH`]: inserts
+/// the key and bumps the depth on creation and removes / decrements on drop,
+/// so every exit path (`Ok`, `Err`, early `return`) keeps the guard balanced —
+/// including nested calls.
+struct InstanceEvalGuard((String, ClassExpression));
+
+impl InstanceEvalGuard {
+    /// Push `key` unless it is already on the stack (cycle → `None`) and
+    /// unless the hard depth cap [`INSTANCE_EVAL_MAX_DEPTH`] would be exceeded
+    /// (→ `None`, warn once).  The caller returns a conservative `Ok(false)`
+    /// in both cases.
+    fn enter(key: (String, ClassExpression)) -> Option<Self> {
+        if INSTANCE_EVAL_STACK.with(|stack| stack.borrow().contains(&key)) {
+            return None;
+        }
+        let depth = INSTANCE_EVAL_DEPTH.with(Cell::get);
+        if depth >= INSTANCE_EVAL_MAX_DEPTH {
+            if !INSTANCE_EVAL_DEPTH_WARNED.with(|warned| warned.replace(true)) {
+                warn!(
+                    "instance evaluation depth cap ({INSTANCE_EVAL_MAX_DEPTH}) exceeded; \
+                     cutting the recursion with a conservative false — the tableau \
+                     snapshot fallback remains authoritative"
+                );
+            }
+            return None;
+        }
+        INSTANCE_EVAL_STACK.with(|stack| {
+            stack.borrow_mut().insert(key.clone());
+        });
+        INSTANCE_EVAL_DEPTH.with(|cell| cell.set(depth + 1));
+        Some(Self(key))
+    }
+}
+
+impl Drop for InstanceEvalGuard {
+    fn drop(&mut self) {
+        INSTANCE_EVAL_STACK.with(|stack| {
+            stack.borrow_mut().remove(&self.0);
+        });
+        INSTANCE_EVAL_DEPTH.with(|depth| {
+            depth.set(depth.get().saturating_sub(1));
+        });
+    }
+}
+
+/// RAII entry for [`DEFINED_EVAL_STACK`]: inserts the pair on creation and
+/// removes it on drop so every exit path (including `Err` propagation) keeps
+/// the stack balanced.
+struct DefinedEvalGuard((String, IRI));
+
+impl DefinedEvalGuard {
+    /// Push `key` unless it is already on the stack (cycle → `None`).
+    fn enter(key: (String, IRI)) -> Option<Self> {
+        if DEFINED_EVAL_STACK.with(|stack| stack.borrow().contains(&key)) {
+            return None;
+        }
+        DEFINED_EVAL_STACK.with(|stack| {
+            stack.borrow_mut().insert(key.clone());
+        });
+        Some(Self(key))
+    }
+}
+
+impl Drop for DefinedEvalGuard {
+    fn drop(&mut self) {
+        DEFINED_EVAL_STACK.with(|stack| {
+            stack.borrow_mut().remove(&self.0);
+        });
+    }
+}
+
+/// Collect the *named* classes of a (possibly nested) `ObjectIntersectionOf`
+/// into `out` (`D ⊑ E ⊓ (F ⊓ G)` yields `E`, `F`, `G`). A bare named class
+/// is collected as-is so nested positions resolve through the recursion.
+///
+/// Only intersection operands are decomposed: union, existential, universal
+/// and data-restriction operands are **not** entailed as named subclasses
+/// (`D ⊑ E ⊔ F` does not entail `D ⊑ E`), so they are skipped.
+fn named_intersection_conjuncts(expr: &ClassExpression, out: &mut Vec<IRI>) {
+    match expr {
+        ClassExpression::Class(cls) => out.push(cls.iri.clone()),
+        ClassExpression::ObjectIntersectionOf(parts) => {
+            for part in parts {
+                named_intersection_conjuncts(part, out);
+            }
+        }
+        _ => {}
+    }
+}
 
 /// Service for complex reasoning operations like classification and realisation
 #[derive(Debug)]
@@ -647,7 +815,12 @@ impl ClassificationService {
         Ok(hierarchy)
     }
 
-    /// Classify object properties
+    /// Classify object properties.
+    ///
+    /// Answers from the shared [`property_hierarchy::ObjectPropertyHierarchy`]
+    /// closure (transitive `SubObjectPropertyOf`, equivalence reachability,
+    /// inverse pairs, `top`/`bottom`) instead of pairwise asserted-edge
+    /// checks, matching [`crate::core::reasoner::Reasoner::classify_object_properties`].
     pub fn classify_object_properties(
         &self,
         ontology: &OntologyRef,
@@ -662,6 +835,10 @@ impl ClassificationService {
             "classification: reading ontology for object property classification",
         )?;
 
+        let closure = crate::core::reasoner::property_hierarchy::ObjectPropertyHierarchy::compute(
+            &ontology_guard,
+        );
+
         // Get all object properties from the ontology
         let signature = ontology_guard.signature()?;
         let properties: Vec<ObjectPropertyExpression> = signature
@@ -674,20 +851,8 @@ impl ClassificationService {
 
         info!("Classifying {} object properties", properties.len());
 
-        // Build property hierarchy using subsumption checks
         for property in &properties {
-            let mut superproperties = HashSet::new();
-
-            for superproperty in &properties {
-                if property != superproperty {
-                    // Check if property is subproperty of superproperty
-                    if self.is_subproperty_of(property, superproperty, &ontology_guard)? {
-                        superproperties.insert(superproperty.clone());
-                    }
-                }
-            }
-
-            hierarchy.insert(property.clone(), superproperties);
+            hierarchy.insert(property.clone(), closure.supers(property));
         }
 
         let result = PropertyClassificationResult::new_object_properties(hierarchy);
@@ -699,7 +864,7 @@ impl ClassificationService {
         Ok(result)
     }
 
-    /// Classify data properties
+    /// Classify data properties (see [`Self::classify_object_properties`]).
     pub fn classify_data_properties(
         &self,
         ontology: &OntologyRef,
@@ -714,6 +879,10 @@ impl ClassificationService {
             "classification: reading ontology for data property classification",
         )?;
 
+        let closure = crate::core::reasoner::property_hierarchy::DataPropertyHierarchy::compute(
+            &ontology_guard,
+        );
+
         // Get all data properties from the ontology
         let signature = ontology_guard.signature()?;
         let properties: Vec<DataPropertyExpression> = signature
@@ -726,20 +895,8 @@ impl ClassificationService {
 
         info!("Classifying {} data properties", properties.len());
 
-        // Build property hierarchy using subsumption checks
         for property in &properties {
-            let mut superproperties = HashSet::new();
-
-            for superproperty in &properties {
-                if property != superproperty {
-                    // Check if property is subproperty of superproperty
-                    if self.is_data_subproperty_of(property, superproperty, &ontology_guard)? {
-                        superproperties.insert(superproperty.clone());
-                    }
-                }
-            }
-
-            hierarchy.insert(property.clone(), superproperties);
+            hierarchy.insert(property.clone(), closure.supers(property));
         }
 
         let result = PropertyClassificationResult::new_data_properties(hierarchy);
@@ -886,17 +1043,16 @@ impl ClassificationService {
             let mut instance_classes: HashSet<ClassExpression> = HashSet::new();
 
             // ── Step 1: collect explicitly asserted named types ──────────────────
-            let individual_iri = individual
-                .iri()
-                .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
-
+            // Identity is compared as a whole `Individual`, so **anonymous**
+            // individuals (`_:x`) get their own asserted types instead of
+            // collapsing onto the shared "anonymous" fallback key (or, with an
+            // `iri()`-based comparison, onto each other: `None == None`).
             let mut bfs: VecDeque<IRI> = VecDeque::new();
             let mut visited_iri: HashSet<IRI> = HashSet::new();
 
             for axiom in ontology_guard.axioms() {
                 if let crate::ontology::axioms::Axiom::ClassAssertion(ca) = axiom
-                    && let crate::ontology::Individual::Named(ni) = &ca.individual
-                    && ni.iri.as_str() == individual_iri
+                    && ca.individual == *individual
                 {
                     match &ca.class {
                         ClassExpression::Class(cls) => {
@@ -1537,6 +1693,10 @@ impl ClassificationService {
     }
 
     /// Check if one object property is a subproperty of another
+    ///
+    /// Superseded by [`crate::core::reasoner::property_hierarchy::ObjectPropertyHierarchy`]
+    /// for hierarchy queries; kept for the asserted-edge chain helpers below.
+    #[allow(dead_code)]
     fn is_subproperty_of(
         &self,
         subproperty: &ObjectPropertyExpression,
@@ -1558,6 +1718,7 @@ impl ClassificationService {
     }
 
     /// Check property chain entailment for complex property relationships
+    #[allow(dead_code)]
     fn check_property_chain_entailment(
         &self,
         subproperty: &ObjectPropertyExpression,
@@ -1609,7 +1770,12 @@ impl ClassificationService {
         Ok(false)
     }
 
-    /// Check if one data property is a subproperty of another
+    /// Check if one data property is a subproperty of another.
+    ///
+    /// Superseded by [`crate::core::reasoner::property_hierarchy::DataPropertyHierarchy`]
+    /// for hierarchy queries; kept for callers that need the raw asserted
+    /// edge check.
+    #[allow(dead_code)]
     fn is_data_subproperty_of(
         &self,
         subproperty: &DataPropertyExpression,
@@ -1773,16 +1939,12 @@ impl ClassificationService {
         ontology: &Ontology,
     ) -> Result<bool> {
         // Get all data property values for this individual and property
-        let individual_iri = individual
-            .iri()
-            .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
-
+        // (whole-`Individual` identity: anonymous individuals match too).
         let mut has_matching_value = false;
 
         for axiom in ontology.axioms() {
             if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom
-                && let crate::ontology::Individual::Named(subj) = &assertion.individual
-                && subj.iri.as_str() == individual_iri
+                && assertion.individual == *individual
             {
                 // Check if this is the right property
                 if self.data_properties_match(property, &assertion.property) {
@@ -1845,12 +2007,39 @@ impl ClassificationService {
 
     /// Enhanced instance checking that also checks datatype restrictions
     /// This checks if an individual satisfies a class expression based on data property values
+    ///
+    /// # Re-entrancy
+    ///
+    /// Every call runs under the general [`INSTANCE_EVAL_STACK`] guard keyed
+    /// on `(individual key, whole class expression)`: a state that is already
+    /// being evaluated higher up the stack returns a conservative `Ok(false)`
+    /// instead of recursing.  This bounds *all* recursive paths through this
+    /// method — the complex-expression branch (`check_complex_expression`
+    /// operands, existential fillers) and Strategies 3/5/6 alike — and is the
+    /// termination guarantee for cyclic `TBoxes` (`A ≡ ∃r.B` / `B ≡ ∃r.A`,
+    /// self-referential `C ≡ C ⊓ D`) and for the nested defined-subclass
+    /// (Strategy 5) re-entry that previously re-evaluated the same query state
+    /// from sibling paths after the helper-scoped [`DEFINED_EVAL_STACK`] keys
+    /// had already popped.  [`INSTANCE_EVAL_MAX_DEPTH`] (256) is a hard second
+    /// safety net against unbounded *distinct*-state nesting.  Cut states are
+    /// conservative `false`: every caller keeps its tableau snapshot /
+    /// `task_service.check_instance` fallback, which remains authoritative.
     pub fn check_instance_with_datatype_reasoning(
         &self,
         individual: &Individual,
         class_expr: &ClassExpression,
         ontology: &Ontology,
     ) -> Result<bool> {
+        // General re-entrancy guard — see the method docs.  Keyed on the
+        // whole `ClassExpression` (Hash + Eq), so nested evaluation of the
+        // *same* state — through any alternation of class expressions,
+        // fillers and named classes — is cut here before any strategy runs.
+        let Some(_guard) = InstanceEvalGuard::enter((individual.to_string(), class_expr.clone()))
+        else {
+            // Cycle or depth cap: conservative false; the caller's tableau
+            // snapshot fallback remains authoritative.
+            return Ok(false);
+        };
         // Handle specific class expression types that we can check directly
         match class_expr {
             ClassExpression::Class(cls) => {
@@ -1860,16 +2049,15 @@ impl ClassificationService {
                 }
 
                 // Strategy 2: Check if individual is asserted to be in a subclass of this class
-                // Get all asserted types of the individual
-                let individual_iri = individual
-                    .iri()
-                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
+                // Get all asserted types of the individual. The stable key is
+                // the `Individual` Display form (named → IRI, anonymous →
+                // `_:id`); it also keys the defined-evaluation cycle guard.
+                let individual_key = individual.to_string();
                 let mut asserted_classes = Vec::new();
 
                 for axiom in ontology.axioms() {
                     if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom
-                        && let crate::ontology::Individual::Named(subj) = &assertion.individual
-                        && subj.iri.as_str() == individual_iri
+                        && assertion.individual == *individual
                         && let ClassExpression::Class(asserted_cls) = &assertion.class
                     {
                         asserted_classes.push(asserted_cls.iri.clone());
@@ -1884,79 +2072,127 @@ impl ClassificationService {
                 }
 
                 // Strategy 3: Check if there's an EquivalentClasses axiom that defines this class
-                // with a complex expression we can evaluate
-                for axiom in ontology.axioms() {
-                    if let crate::ontology::axioms::Axiom::EquivalentClasses(equiv_axiom) = axiom {
-                        // Check if our class is in the equivalent classes
-                        let our_class_in_equiv = equiv_axiom.classes.iter().any(|c| {
-                            if let ClassExpression::Class(eq_cls) = c {
-                                eq_cls.iri == cls.iri
-                            } else {
-                                false
-                            }
-                        });
-
-                        if our_class_in_equiv {
-                            // Check all the other equivalent class expressions
-                            for equiv_class in &equiv_axiom.classes {
-                                if let ClassExpression::Class(eq_cls) = equiv_class {
-                                    // Skip the class itself
-                                    if eq_cls.iri == cls.iri {
-                                        continue;
-                                    }
-                                    // Skip owl:Class which appears due to parsing artifacts
-                                    if eq_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Class"
-                                    {
-                                        continue;
-                                    }
-                                }
-
-                                // Try to match against this equivalent expression.
-                                // Covers all complex constructors that check_complex_expression handles.
-                                match equiv_class {
-                                    ClassExpression::ObjectIntersectionOf(_)
-                                    | ClassExpression::ObjectUnionOf(_)
-                                    | ClassExpression::ObjectSomeValuesFrom { .. }
-                                    | ClassExpression::ObjectHasValue { .. }
-                                    | ClassExpression::ObjectOneOf(_)
-                                    | ClassExpression::DataSomeValuesFrom { .. }
-                                    | ClassExpression::DataHasValue { .. }
-                                        if self.check_complex_expression(
-                                            individual,
-                                            equiv_class,
-                                            ontology,
-                                        )? =>
-                                    {
-                                        return Ok(true);
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
+                // with a complex expression we can evaluate.  Runs under the
+                // `DEFINED_EVAL_STACK` cycle guard: a definition that (transitively)
+                // references this very (individual, class) pair — `C ≡ C ⊓ …`, or
+                // `C ≡ D ⊓ …` with `D ≡ C ⊓ …` — would otherwise recurse forever; the
+                // re-entered evaluation is skipped (conservative `false`, the tableau
+                // snapshot remains the caller's fallback).
+                if self.check_own_equivalent_definition(
+                    individual,
+                    &cls.iri,
+                    &individual_key,
+                    ontology,
+                )? {
+                    return Ok(true);
                 }
 
                 // Strategy 4: iterative BFS through the named subclass hierarchy.
-                // Only check direct ClassAssertion axioms for each subclass to avoid
-                // re-entering check_instance_with_datatype_reasoning and causing a
-                // stack overflow on large ontologies (e.g. 2995 classes deep).
+                // Direct subclasses are checked with ClassAssertion axioms only (no
+                // recursive call — avoids a stack overflow on large ontologies, e.g.
+                // 2995 classes deep); *defined* subclasses additionally get their
+                // complex equivalent definition evaluated (Strategy 5, guarded by
+                // `DEFINED_EVAL_STACK` for termination), and every visited class —
+                // including `C` itself — gets its complex GCIs
+                // (`SubClassOf(E, I)`, Strategy 6) evaluated for the individual.
                 {
-                    // Pre-build a superclass-IRI → [subclass Class] index in one pass so
-                    // that the BFS inner loop is an O(1) lookup instead of a full axiom
-                    // scan on every frontier step (O(n×m) → O(n+m)).
+                    // Pre-build, in ONE pass over the axioms:
+                    //  * `subclass_index`: superclass-IRI → named subclasses
+                    //    (SubClassOf named→named, the named-conjunct
+                    //    decompositions of `SubClassOf(D, E ⊓ …)` /
+                    //    `EquivalentClasses(D, E ⊓ …)` — both entail
+                    //    `D ⊑ E` —, DisjointUnion members, and the
+                    //    bidirectional edges of EquivalentClasses(named, named) —
+                    //    `A ≡ B` means `A ⊑ B` and `B ⊑ A`), so the BFS inner loop
+                    //    is an O(1) lookup instead of a full axiom scan per frontier
+                    //    step (O(n×m) → O(n+m));
+                    //  * `defined_index`: named class → its complex equivalent
+                    //    definitions (non-named operands of an EquivalentClasses
+                    //    axiom that has the class as a named operand);
+                    //  * `complex_subclass_index`: named superclass → complex
+                    //    subclass expressions of `SubClassOf(E, I)` axioms
+                    //    (Strategy 6).
+                    // All three are built in the same pass so Strategies 5 and 6
+                    // pay no extra axiom scan to find their candidates; only the
+                    // *defined* definitions and complex GCIs the BFS reaches are
+                    // ever evaluated (bounded work — see Strategies 5 and 6
+                    // below).
                     let mut subclass_index: std::collections::HashMap<
                         crate::ontology::IRI,
                         Vec<crate::ontology::concepts::Class>,
                     > = std::collections::HashMap::new();
+                    let mut defined_index: std::collections::HashMap<
+                        crate::ontology::IRI,
+                        Vec<ClassExpression>,
+                    > = std::collections::HashMap::new();
+                    // `complex_subclass_index`: named superclass → *complex*
+                    // subclass expressions (`SubClassOf(E, I)` where `E` is not a
+                    // named class — intersection, union, someValuesFrom,
+                    // hasValue, data restrictions, … — and `I` is named).
+                    // Strategy 6 evaluates the entries headed by every class the
+                    // BFS visits: if `individual ∈ E` and `E ⊑ I` with
+                    // `I ⊑* C`, then `individual ∈ C`.  Built in the same
+                    // O(#axioms) pass, so the BFS pays no extra axiom scan to
+                    // *find* the candidates; only the GCIs headed by visited
+                    // classes are ever evaluated (bounded work — Strategy 6).
+                    let mut complex_subclass_index: std::collections::HashMap<
+                        crate::ontology::IRI,
+                        Vec<ClassExpression>,
+                    > = std::collections::HashMap::new();
                     for axiom in ontology.axioms() {
-                        if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom
-                            && let ClassExpression::Class(superclass) = &subclass_axiom.superclass
-                            && let ClassExpression::Class(sub_cls) = &subclass_axiom.subclass
-                        {
-                            subclass_index
-                                .entry(superclass.iri.clone())
-                                .or_default()
-                                .push(sub_cls.clone());
+                        if let crate::ontology::axioms::Axiom::SubClassOf(subclass_axiom) = axiom {
+                            match (&subclass_axiom.subclass, &subclass_axiom.superclass) {
+                                (
+                                    ClassExpression::Class(sub_cls),
+                                    ClassExpression::Class(superclass),
+                                ) => {
+                                    subclass_index
+                                        .entry(superclass.iri.clone())
+                                        .or_default()
+                                        .push(sub_cls.clone());
+                                }
+                                // Complex subclass with a *named* head → the
+                                // complex-GCI index (Strategy 6).
+                                (complex_sub, ClassExpression::Class(superclass)) => {
+                                    complex_subclass_index
+                                        .entry(superclass.iri.clone())
+                                        .or_default()
+                                        .push(complex_sub.clone());
+                                }
+                                // Named subclass + intersection superclass:
+                                // `D ⊑ E ⊓ F` entails `D ⊑ E` and `D ⊑ F` —
+                                // and recursively, `D ⊑` every *named*
+                                // conjunct of a nested intersection — so the
+                                // BFS can reach `D` downward from any
+                                // conjunct (e.g. `D ⊑ E ⊓ F` + `E ⊑ C` ⇒
+                                // `C → E → D`). Union / existential /
+                                // universal / data-restriction superclasses
+                                // are deliberately NOT decomposed: `D ⊑ E ⊔ F`
+                                // does not entail `D ⊑ E`, so they would be
+                                // unsound as named subclass edges (they fall
+                                // through to `_` below, as does
+                                // `SubClassOf(complex, complex)` — no named
+                                // head to index).
+                                (
+                                    ClassExpression::Class(sub_cls),
+                                    ClassExpression::ObjectIntersectionOf(_),
+                                ) => {
+                                    let mut conjuncts = Vec::new();
+                                    named_intersection_conjuncts(
+                                        &subclass_axiom.superclass,
+                                        &mut conjuncts,
+                                    );
+                                    for conjunct_iri in conjuncts {
+                                        if conjunct_iri != sub_cls.iri {
+                                            subclass_index
+                                                .entry(conjunct_iri)
+                                                .or_default()
+                                                .push(sub_cls.clone());
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            }
                         }
                         // DisjointUnion(A, [B, C]): each member is a subclass of A, so the
                         // instance BFS must reach B/C when walking down from A.
@@ -1972,6 +2208,72 @@ impl ClassificationService {
                                 }
                             }
                         }
+                        // EquivalentClasses: named↔named edges (mutual subclass) plus
+                        // the complex definitions attached to every named operand.
+                        if let crate::ontology::axioms::Axiom::EquivalentClasses(equivalent) = axiom
+                        {
+                            let named: Vec<crate::ontology::IRI> = equivalent
+                                .classes
+                                .iter()
+                                .filter_map(|c| match c {
+                                    ClassExpression::Class(cls)
+                                        if cls.iri.as_str()
+                                            != "http://www.w3.org/2002/07/owl#Class" =>
+                                    {
+                                        Some(cls.iri.clone())
+                                    }
+                                    _ => None,
+                                })
+                                .collect();
+                            let complex: Vec<ClassExpression> = equivalent
+                                .classes
+                                .iter()
+                                .filter(|c| !matches!(c, ClassExpression::Class(_)))
+                                .cloned()
+                                .collect();
+                            if !complex.is_empty() {
+                                for iri in &named {
+                                    defined_index
+                                        .entry(iri.clone())
+                                        .or_default()
+                                        .extend(complex.iter().cloned());
+                                }
+                            }
+                            for (i, a) in named.iter().enumerate() {
+                                for (j, b) in named.iter().enumerate() {
+                                    if i != j {
+                                        subclass_index.entry(a.clone()).or_default().push(
+                                            crate::ontology::concepts::Class { iri: b.clone() },
+                                        );
+                                    }
+                                }
+                            }
+                            // `D ≡ E ⊓ …`: the `D ⊑ E ⊓ …` half entails
+                            // `D ⊑ E` for every *named* conjunct (recursively
+                            // through nested intersections) — a sound
+                            // named→named edge that lets the BFS reach `D`
+                            // downward from a conjunct. The converse half
+                            // (`E ⊓ … ⊑ D`) does NOT entail `E ⊑ D`
+                            // (`Student ≡ Student ⊓ Minor` does not make
+                            // every Student a Minor), so no
+                            // conjunct→`D` edge is added.
+                            let mut conjuncts: Vec<crate::ontology::IRI> = Vec::new();
+                            for operand in &complex {
+                                named_intersection_conjuncts(operand, &mut conjuncts);
+                            }
+                            for conjunct_iri in &conjuncts {
+                                for named_iri in &named {
+                                    if named_iri != conjunct_iri {
+                                        subclass_index
+                                            .entry(conjunct_iri.clone())
+                                            .or_default()
+                                            .push(crate::ontology::concepts::Class {
+                                                iri: named_iri.clone(),
+                                            });
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     let mut worklist: std::collections::VecDeque<crate::ontology::IRI> =
@@ -1982,6 +2284,25 @@ impl ClassificationService {
                     visited_s4.insert(cls.iri.clone());
 
                     while let Some(current_iri) = worklist.pop_front() {
+                        // Strategy 6: complex GCIs headed by the visited class.
+                        // The BFS reached `current_iri` because
+                        // `current_iri ⊑* C`, so an individual satisfying any
+                        // `SubClassOf(E, current_iri)` is an instance of `C`.
+                        // Evaluated for *every* visited class (including `C`
+                        // itself on the first pop) — the head need not be
+                        // asserted for the individual.
+                        if let Some(complex_subclasses) = complex_subclass_index.get(&current_iri) {
+                            for complex_sub in complex_subclasses {
+                                if self.check_complex_gci(
+                                    individual,
+                                    &current_iri,
+                                    complex_sub,
+                                    ontology,
+                                )? {
+                                    return Ok(true);
+                                }
+                            }
+                        }
                         if let Some(sub_classes) = subclass_index.get(&current_iri) {
                             for sub_cls in sub_classes {
                                 if !visited_s4.contains(&sub_cls.iri) {
@@ -1992,11 +2313,27 @@ impl ClassificationService {
                                     )? {
                                         return Ok(true);
                                     }
+                                    // Strategy 5: upward inference from a *defined*
+                                    // subclass.  The BFS reached `D` because `D ⊑* C`;
+                                    // if `D` has a complex equivalent definition and the
+                                    // individual satisfies it, then individual ∈ D ⊑ C.
+                                    // Only *defined* candidates are evaluated — bounded
+                                    // by the number of defined subclasses of C below
+                                    // (each check is one axiom scan), never all classes.
+                                    if let Some(definitions) = defined_index.get(&sub_cls.iri)
+                                        && self.check_defined_subclass(
+                                            individual,
+                                            sub_cls,
+                                            definitions,
+                                            ontology,
+                                        )?
+                                    {
+                                        return Ok(true);
+                                    }
                                     worklist.push_back(sub_cls.iri.clone());
                                 }
                             }
                         }
-                        // Complex subclass expressions are handled by the tableau.
                     }
                 }
 
@@ -2006,6 +2343,151 @@ impl ClassificationService {
             // For complex expressions, delegate to specialized handler
             _ => self.check_complex_expression(individual, class_expr, ontology),
         }
+    }
+
+    /// Strategy 3 helper: membership from `class_iri`'s own complex equivalent
+    /// definition(s) — the non-named operands of every `EquivalentClasses` axiom
+    /// that has `class_iri` as a named operand.
+    ///
+    /// Runs under the [`DEFINED_EVAL_STACK`] cycle guard keyed on
+    /// (`individual_iri`, `class_iri`): the guard is acquired for the whole
+    /// evaluation and released on every exit path (including `Err`), so a
+    /// re-entrant evaluation of the same pair returns `Ok(false)` instead of
+    /// recursing forever.
+    fn check_own_equivalent_definition(
+        &self,
+        individual: &Individual,
+        class_iri: &IRI,
+        individual_iri: &str,
+        ontology: &Ontology,
+    ) -> Result<bool> {
+        let Some(_guard) = DefinedEvalGuard::enter((individual_iri.to_string(), class_iri.clone()))
+        else {
+            return Ok(false);
+        };
+        for axiom in ontology.axioms() {
+            if let crate::ontology::axioms::Axiom::EquivalentClasses(equiv_axiom) = axiom {
+                // Check if our class is in the equivalent classes
+                let our_class_in_equiv = equiv_axiom.classes.iter().any(|c| {
+                    if let ClassExpression::Class(eq_cls) = c {
+                        eq_cls.iri == *class_iri
+                    } else {
+                        false
+                    }
+                });
+
+                if our_class_in_equiv {
+                    // Check all the other equivalent class expressions
+                    for equiv_class in &equiv_axiom.classes {
+                        if let ClassExpression::Class(eq_cls) = equiv_class {
+                            // Skip the class itself
+                            if eq_cls.iri == *class_iri {
+                                continue;
+                            }
+                            // Skip owl:Class which appears due to parsing artifacts
+                            if eq_cls.iri.as_str() == "http://www.w3.org/2002/07/owl#Class" {
+                                continue;
+                            }
+                        }
+
+                        // Try to match against this equivalent expression.
+                        // Covers all complex constructors that check_complex_expression handles.
+                        match equiv_class {
+                            ClassExpression::ObjectIntersectionOf(_)
+                            | ClassExpression::ObjectUnionOf(_)
+                            | ClassExpression::ObjectSomeValuesFrom { .. }
+                            | ClassExpression::ObjectHasValue { .. }
+                            | ClassExpression::ObjectOneOf(_)
+                            | ClassExpression::DataSomeValuesFrom { .. }
+                            | ClassExpression::DataHasValue { .. }
+                                if self.check_complex_expression(
+                                    individual,
+                                    equiv_class,
+                                    ontology,
+                                )? =>
+                            {
+                                return Ok(true);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    /// Strategy 5 helper: evaluate the complex equivalent definitions of the
+    /// *defined* subclass `defined_class` (reached by the named-subclass BFS of
+    /// [`Self::check_instance_with_datatype_reasoning`]) for `individual`.
+    ///
+    /// Runs under the [`DEFINED_EVAL_STACK`] cycle guard keyed on
+    /// (`individual`, `defined_class`): definitions may reference named classes
+    /// whose own definition chains lead back here; the re-entered pair is
+    /// skipped with a conservative `false` (the tableau snapshot remains the
+    /// fallback), which also bounds recursion to the finite pair set.
+    ///
+    /// Returns `Ok(true)` as soon as one definition is satisfied.
+    fn check_defined_subclass(
+        &self,
+        individual: &Individual,
+        defined_class: &crate::ontology::concepts::Class,
+        definitions: &[ClassExpression],
+        ontology: &Ontology,
+    ) -> Result<bool> {
+        // Same key derivation as `check_own_equivalent_definition` so the two
+        // guards see the same pair for the same individual.
+        let individual_key = individual
+            .iri()
+            .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
+        let Some(_guard) = DefinedEvalGuard::enter((individual_key, defined_class.iri.clone()))
+        else {
+            // Cycle: this pair's definitions are already being evaluated higher
+            // in the stack — conservative false.
+            return Ok(false);
+        };
+        for definition in definitions {
+            if self.check_complex_expression(individual, definition, ontology)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Strategy 6 helper: membership from a *complex GCI* — `SubClassOf(E, I)`
+    /// where `E` is a complex class expression and `I` a named class — reached
+    /// by the named-subclass BFS of
+    /// [`Self::check_instance_with_datatype_reasoning`].
+    ///
+    /// If `individual ∈ E` and `I ⊑* C` (the BFS reached `I` from the queried
+    /// class `C`), then `individual ∈ C`.
+    ///
+    /// Runs under the [`DEFINED_EVAL_STACK`] cycle guard keyed on
+    /// (`individual`, `I`): evaluating `E` re-enters the named-class branch for
+    /// every named operand of `E`, and a GCI cycle (`A ⊓ B ⊑ C` evaluated while
+    /// an evaluation of `C` is already on the stack) would otherwise recurse
+    /// forever.  The re-entered pair returns a conservative `false` (the tableau
+    /// snapshot remains the caller's fallback); the key set is finite
+    /// (individuals × named classes), so recursion is bounded to one frame per
+    /// pair.  Acyclic chains — e.g. `∃r.D ⊑ C` where `D`'s own check reaches
+    /// further GCIs — are evaluated in full.
+    fn check_complex_gci(
+        &self,
+        individual: &Individual,
+        superclass_iri: &IRI,
+        subclass_expr: &ClassExpression,
+        ontology: &Ontology,
+    ) -> Result<bool> {
+        // Same key derivation as `check_own_equivalent_definition` so the two
+        // guards see the same pair for the same individual (a re-entered
+        // Strategy 3/5 evaluation of this very class is likewise skipped).
+        let individual_key = individual.to_string();
+        let Some(_guard) = DefinedEvalGuard::enter((individual_key, superclass_iri.clone())) else {
+            // Cycle: this class's complex GCIs are already being evaluated
+            // higher in the stack — conservative false.
+            return Ok(false);
+        };
+        self.check_complex_expression(individual, subclass_expr, ontology)
     }
 
     /// Check complex class expressions (non-named classes) directly
@@ -2038,15 +2520,10 @@ impl ClassificationService {
             }
             ClassExpression::ObjectSomeValuesFrom { property, filler } => {
                 // ∃ r.C : individual must have at least one r-successor that satisfies C
-                let individual_iri = individual
-                    .iri()
-                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
-
                 for axiom in ontology.axioms() {
                     if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) =
                         axiom
-                        && let crate::ontology::Individual::Named(subj) = &assertion.source
-                        && subj.iri.as_str() == individual_iri
+                        && assertion.source == *individual
                         && self.object_properties_match(property, &assertion.property)
                         && self.check_instance_with_datatype_reasoning(
                             &assertion.target,
@@ -2064,21 +2541,14 @@ impl ClassificationService {
                 value: filler_ind,
             } => {
                 // ∃ r.{o} : individual must have exactly the specified individual as an r-value
-                let individual_iri = individual
-                    .iri()
-                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
-                let filler_iri = filler_ind
-                    .iri()
-                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
-
+                // (whole-`Individual` identity on both endpoints, so
+                // anonymous individuals participate as well).
                 for axiom in ontology.axioms() {
                     if let crate::ontology::axioms::Axiom::ObjectPropertyAssertion(assertion) =
                         axiom
-                        && let crate::ontology::Individual::Named(subj) = &assertion.source
-                        && subj.iri.as_str() == individual_iri
+                        && assertion.source == *individual
                         && self.object_properties_match(property, &assertion.property)
-                        && let crate::ontology::Individual::Named(obj) = &assertion.target
-                        && obj.iri.as_str() == filler_iri
+                        && assertion.target == *filler_ind
                     {
                         return Ok(true);
                     }
@@ -2086,18 +2556,11 @@ impl ClassificationService {
                 Ok(false)
             }
             ClassExpression::ObjectOneOf(individuals) => {
-                // {a, b, …}: nominal enumeration.  The queried individual is a
-                // member iff it *is* one of the listed individuals — compare by
-                // IRI.  An anonymous query individual can never be equal to a
-                // named nominal (nor to another anonymous individual we cannot
-                // identify), so it conservatively returns false and the tableau
-                // remains authoritative for those cases.
-                match individual.iri() {
-                    Some(query_iri) => {
-                        Ok(individuals.iter().any(|ind| ind.iri() == Some(query_iri)))
-                    }
-                    None => Ok(false),
-                }
+                // {a, b, …}: nominal enumeration. The queried individual is a
+                // member iff it *is* one of the listed individuals — whole
+                // `Individual` identity, so anonymous members (`_:x`) match
+                // their own nominal and never a named or foreign one.
+                Ok(individuals.iter().any(|ind| ind == individual))
             }
             ClassExpression::DataSomeValuesFrom { property, filler } => {
                 // Check if individual has a data property value that satisfies the restriction
@@ -2105,14 +2568,10 @@ impl ClassificationService {
             }
             ClassExpression::DataHasValue { property, value } => {
                 // Check if individual has this specific data property value
-                let individual_iri = individual
-                    .iri()
-                    .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
-
+                // (whole-`Individual` identity: anonymous individuals match).
                 for axiom in ontology.axioms() {
                     if let crate::ontology::axioms::Axiom::DataPropertyAssertion(assertion) = axiom
-                        && let crate::ontology::Individual::Named(subj) = &assertion.individual
-                        && subj.iri.as_str() == individual_iri
+                        && assertion.individual == *individual
                         && self.data_properties_match(property, &assertion.property)
                         && crate::core::reasoner::datatype_validation::DatatypeValidator::
                             literal_values_equal(&assertion.value, value)
@@ -2142,14 +2601,11 @@ impl ClassificationService {
         class: &crate::ontology::Class,
         ontology: &Ontology,
     ) -> Result<bool> {
-        let individual_iri = individual
-            .iri()
-            .map_or_else(|| "anonymous".to_string(), std::string::ToString::to_string);
-
+        // Whole-`Individual` identity: named individuals match by IRI and
+        // anonymous individuals by their stable `_:id` Display key.
         for axiom in ontology.axioms() {
             if let crate::ontology::axioms::Axiom::ClassAssertion(assertion) = axiom
-                && let crate::ontology::Individual::Named(subj) = &assertion.individual
-                && subj.iri.as_str() == individual_iri
+                && assertion.individual == *individual
                 && let ClassExpression::Class(asserted_class) = &assertion.class
                 && asserted_class.iri == class.iri
             {

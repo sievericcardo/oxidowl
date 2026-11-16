@@ -425,10 +425,15 @@ fn annotation_axioms_do_not_affect_reasoning() -> Result<()> {
         "logical entailment (a:B via A ⊑ B) must hold alongside annotation axioms"
     );
 
-    // The reasoner must not claim entailment support for annotation axiom types.
+    // `AnnotationAssertion` is answered presence-only (it *is* entailment-
+    // checkable: an equal assertion in the ontology is entailed), while the
+    // annotation-schema axioms stay unsupported.
     let reasoner = api_reasoner(ont);
+    assert!(
+        reasoner.is_entailment_checking_supported(&AxiomType::AnnotationAssertion),
+        "AnnotationAssertion must be entailment-checkable (presence answer)"
+    );
     for t in [
-        AxiomType::AnnotationAssertion,
         AxiomType::SubAnnotationPropertyOf,
         AxiomType::AnnotationPropertyDomain,
         AxiomType::AnnotationPropertyRange,

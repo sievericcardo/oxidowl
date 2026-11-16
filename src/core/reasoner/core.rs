@@ -16,19 +16,21 @@ use crate::{
             queries::QueryProcessor,
             results::{ClassificationResult, RealisationResult},
             statistics::ReasoningStatistics,
-            tableau::TableauFactory,
+            tableau::{TableauFactory, TableauSnapshot},
             tasks::ReasoningTaskService,
         },
         tableau::TableauState,
     },
     dl_clauses::DLClauseGenerator,
+    import::{ImportManager, ImportManagerConfig, ImportResolutionStrategy},
     ontology::{
         ClassExpression, DataPropertyExpression, Individual, ObjectPropertyExpression, OntologyRef,
+        axioms::AxiomTrait,
     },
 };
 use serde_json;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
 };
 
@@ -109,8 +111,20 @@ pub struct Reasoner {
     /// Tableau factory for creating reasoning algorithms
     tableau_factory: TableauFactory,
 
-    /// Statistics about reasoning operations
-    statistics: ReasoningStatistics,
+    /// Statistics about reasoning operations.
+    ///
+    /// Interior-mutable so the shared totals can be accumulated from
+    /// `&self`/`&mut self` operation wrappers (`classify`, `realize`,
+    /// `get_instances`, `is_consistent`) and still be read by
+    /// [`Reasoner::get_statistics`].
+    statistics: std::sync::Mutex<ReasoningStatistics>,
+
+    /// Memoised answer of [`Reasoner::is_consistent`]:
+    /// `(ontology version, consistency answer)`.  Version-stamped so that any
+    /// mutation of the loaded ontology (which bumps the version) invalidates
+    /// it, and cleared explicitly by every mutator through
+    /// [`Reasoner::invalidate_query_caches`].
+    consistency_cache: std::sync::Mutex<Option<(u64, bool)>>,
 
     /// Task service for basic reasoning operations
     task_service: ReasoningTaskService,
@@ -143,6 +157,15 @@ pub struct Reasoner {
     /// Oxigraph-backed SPARQL store (lazy-initialised, interior-mutable)
     #[cfg(feature = "sparql-store")]
     oxigraph_store: std::sync::Mutex<Option<crate::core::reasoner::oxigraph_store::OxigraphStore>>,
+
+    /// One-shot cache of the completed-realisation tableau snapshot (Phase A).
+    ///
+    /// Built lazily by [`Reasoner::realization_snapshot`] — one tableau run
+    /// shared by every `get_instances` / `is_instance_of` query — and cleared
+    /// by every method that mutates the loaded ontology. A `Mutex<Option<…>>`
+    /// (rather than `OnceLock`) because several mutators — SPARQL
+    /// `INSERT`/`DELETE DATA`, `materialize_abox` — take `&self`.
+    snapshot_cache: std::sync::Mutex<Option<std::sync::Arc<TableauSnapshot>>>,
 }
 
 impl Reasoner {
@@ -170,7 +193,8 @@ impl Reasoner {
             config: config.clone(),
             cache_manager,
             tableau_factory,
-            statistics: ReasoningStatistics::default(),
+            statistics: std::sync::Mutex::new(ReasoningStatistics::default()),
+            consistency_cache: std::sync::Mutex::new(None),
             task_service,
             classification_service,
             query_processor: QueryProcessor::new(),
@@ -181,6 +205,7 @@ impl Reasoner {
             materialization_stale: std::sync::atomic::AtomicBool::new(false),
             #[cfg(feature = "sparql-store")]
             oxigraph_store: std::sync::Mutex::new(None),
+            snapshot_cache: std::sync::Mutex::new(None),
         })
     }
 
@@ -438,6 +463,27 @@ impl Reasoner {
         if self.ontology.is_none() {
             return Ok(Some(HashMap::new()));
         }
+        // Reuse the shared one-shot snapshot when the caller's ontology *is*
+        // the reasoner's own (Arc identity) — the very tableau the instance and
+        // property-value queries use, built once and cached. A foreign ontology
+        // (witness / outer ref) still gets its own fresh run so it is never
+        // answered from a cache entry built over different axioms.
+        if self
+            .ontology
+            .as_ref()
+            .is_some_and(|own| Arc::ptr_eq(own, ontology))
+        {
+            return match self.realization_snapshot(ontology) {
+                Ok(snapshot) if snapshot.satisfiable => Ok(Some(snapshot.individual_nodes.clone())),
+                // Inconsistent ontology: same answer as the fresh-run path —
+                // no merge map, the caller keeps its syntactic equality view.
+                Ok(_) => Ok(None),
+                // `Unknown` (timeout / resource abort) proves nothing; a failed
+                // cache must not change the answer either. Keep the pre-existing
+                // "no merge map" behaviour so callers fall back to syntax.
+                Err(_) => Ok(None),
+            };
+        }
         let guard = read_lock(ontology, "core: reading ontology for tableau merge map")?;
         let mut tableau = self.tableau_factory.create_algorithm_instance(&guard)?;
         let state = tableau.run()?;
@@ -447,8 +493,63 @@ impl Reasoner {
         Ok(Some(tableau.snapshot().individual_nodes))
     }
 
-    /// Check if the ontology is consistent
+    /// Check if the ontology is consistent.
+    ///
+    /// The answer is memoised against the ontology's version stamp: repeated
+    /// calls without an intervening mutation return the stored answer instead
+    /// of re-running the tableau (the miss is counted in
+    /// [`ReasoningStatistics::consistency_checks`], the reuse in
+    /// [`ReasoningStatistics::consistency_cache_hits`]).  Every mutator
+    /// invalidates the memo via [`Reasoner::invalidate_query_caches`], and the
+    /// version stamp additionally protects against mutations that bypass the
+    /// reasoner (they still bump `Ontology::version`).
     pub fn is_consistent(&self) -> Result<bool> {
+        let version = match &self.ontology {
+            Some(ontology_ref) => read_lock(
+                ontology_ref,
+                "core: reading ontology version for consistency memo",
+            )?
+            .version(),
+            // Empty ontology is consistent (cheap, nothing to memoise).
+            None => return Ok(true),
+        };
+
+        if let Some((memo_version, value)) = *self
+            .consistency_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            && memo_version == version
+        {
+            self.statistics
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .consistency_cache_hits += 1;
+            return Ok(value);
+        }
+
+        let start = std::time::Instant::now();
+        let value = self.compute_consistency()?;
+
+        let mut memo = self
+            .consistency_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *memo = Some((version, value));
+        drop(memo);
+
+        let mut statistics = self
+            .statistics
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        statistics.consistency_checks += 1;
+        statistics.add_reasoning_time(start.elapsed());
+        drop(statistics);
+
+        Ok(value)
+    }
+
+    /// Run the pre-check + tableau consistency computation (uncached).
+    fn compute_consistency(&self) -> Result<bool> {
         if let Some(ontology) = &self.ontology {
             let ontology_ref = read_lock(ontology, "core: reading ontology for consistency check")?;
 
@@ -477,7 +578,13 @@ impl Reasoner {
             let _node_count = tableau.get_node_count();
             let _backtrack_count = tableau.get_backtrack_count();
 
-            Ok(state == TableauState::Satisfiable)
+            // A timed-out / resource-aborted tableau (`Unknown`) proves
+            // nothing: surface an error instead of claiming consistency.
+            match state {
+                TableauState::Satisfiable => Ok(true),
+                TableauState::Unsatisfiable => Ok(false),
+                TableauState::Unknown => Err(Error::reasoning("Tableau returned unknown result")),
+            }
         } else {
             Ok(true) // Empty ontology is consistent
         }
@@ -532,7 +639,12 @@ impl Reasoner {
             // Run the tableau algorithm
             let state = test_tableau.run()?;
 
-            Ok(state == TableauState::Satisfiable)
+            // `Unknown` (timeout / resource abort) is not a negative answer.
+            match state {
+                TableauState::Satisfiable => Ok(true),
+                TableauState::Unsatisfiable => Ok(false),
+                TableauState::Unknown => Err(Error::reasoning("Tableau returned unknown result")),
+            }
         } else {
             // In empty ontology, all classes are satisfiable (except owl:Nothing, already handled)
             Ok(true)
@@ -657,26 +769,207 @@ impl Reasoner {
         }
     }
 
-    /// Get instances of a class
+    /// Get instances of a class.
+    ///
+    /// Every call is counted in [`ReasoningStatistics::instance_queries`] and
+    /// contributes its wall time to [`ReasoningStatistics::total_reasoning_time`];
+    /// both surface through [`Reasoner::get_statistics`]. The query strategy is
+    /// documented on [`Self::get_instances_inner`].
     pub fn get_instances(
         &mut self,
         class: &ClassExpression,
         direct: bool,
     ) -> Result<Vec<Individual>> {
-        if let Some(ontology_ref) = self.ontology.clone() {
-            // Use the classification service to properly handle datatype reasoning
-            let mut statistics = ReasoningStatistics::new();
-            let instances = self.classification_service.get_instances(
-                class,
-                &ontology_ref,
-                &mut statistics,
-                direct,
-                &mut self.cache_manager,
-            )?;
+        let start = std::time::Instant::now();
+        let result = self.get_instances_inner(class, direct);
+        let mut statistics = self
+            .statistics
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        statistics.instance_queries += 1;
+        statistics.add_reasoning_time(start.elapsed());
+        drop(statistics);
+        result
+    }
 
-            Ok(instances)
+    /// Implementation of [`Reasoner::get_instances`] — the single-tableau
+    /// query strategy documented below.
+    ///
+    /// Phase A rewrite — previously this delegated to
+    /// [`ClassificationService::get_instances`], which loops over *every*
+    /// individual and builds one full tableau per individual
+    /// (`task_service.check_instance`), i.e. O(N) tableau runs per query.
+    /// The new path is:
+    ///
+    /// 1. individuals come from the ontology signature,
+    /// 2. each individual keeps the structural/datatype positive check
+    ///    (`check_instance_with_datatype_reasoning`) as a fast positive proof,
+    /// 3. whatever is not proven is evaluated against **one** cached
+    ///    completed-tableau snapshot ([`Reasoner::realization_snapshot`]);
+    ///    if that snapshot is unsatisfiable every individual is an instance
+    ///    (vacuous truth),
+    /// 4. the result is sorted and deduplicated.
+    ///
+    /// `direct` is accepted for API compatibility and ignored — matching the
+    /// previous behaviour of `ClassificationService::get_instances`, whose
+    /// `_direct` parameter was likewise ignored. That method is unchanged and
+    /// remains available to other callers.
+    fn get_instances_inner(
+        &mut self,
+        class: &ClassExpression,
+        direct: bool,
+    ) -> Result<Vec<Individual>> {
+        let _ = direct;
+        let Some(ontology_ref) = self.ontology.clone() else {
+            return Ok(Vec::new());
+        };
+
+        let individuals = {
+            let guard = read_lock(&ontology_ref, "core: reading ontology for get_instances")?;
+            guard.signature()?.individuals.clone()
+        };
+
+        // ── owl:Thing / owl:Nothing fast paths (OWL API parity) ────────────
+        // Every individual of the signature — named **and** anonymous,
+        // including those that only occur in property assertions — is an
+        // instance of `owl:Thing`, and nothing is an instance of
+        // `owl:Nothing`. The tableau snapshot never labels a node with
+        // `owl:Thing`, so without this fast path both answers came back
+        // empty. `owl:Nothing` is answered *before* the inconsistent-ontology
+        // vacuous-truth branch: the OWL API contract is an empty instance set.
+        if let ClassExpression::Class(cls) = class {
+            if cls.is_thing() {
+                return Ok(Self::sort_and_dedup_individuals(individuals));
+            }
+            if cls.is_nothing() {
+                return Ok(Vec::new());
+            }
+        }
+
+        // Phase 1: structural / datatype positive proofs (no tableau).
+        let mut proven: Vec<Individual> = Vec::new();
+        let mut unresolved: Vec<Individual> = Vec::new();
+        {
+            let guard = read_lock(&ontology_ref, "core: reading ontology for get_instances")?;
+            for individual in &individuals {
+                match self
+                    .classification_service
+                    .check_instance_with_datatype_reasoning(individual, class, &guard)
+                {
+                    Ok(true) => proven.push(individual.clone()),
+                    // Errors fall through to the snapshot evaluator, which is
+                    // authoritative for the derived cases (same error policy
+                    // as before: a failed structural check never fails the
+                    // whole query).
+                    _ => unresolved.push(individual.clone()),
+                }
+            }
+        }
+
+        if unresolved.is_empty() {
+            return Ok(Self::sort_and_dedup_individuals(proven));
+        }
+
+        // Phase 2: one shared completed-tableau snapshot for the remainder.
+        let snapshot = self.realization_snapshot(&ontology_ref)?;
+        let mut instances = if snapshot.satisfiable {
+            unresolved
+                .into_iter()
+                .filter(|individual| Self::snapshot_instance_of(&snapshot, individual, class))
+                .collect()
         } else {
-            Ok(Vec::new())
+            // Inconsistent ontology: every individual is an instance (vacuous
+            // truth) — same policy as `is_instance_of_ontology`.
+            unresolved
+        };
+        instances.append(&mut proven);
+        Ok(Self::sort_and_dedup_individuals(instances))
+    }
+
+    /// Sort individuals by their Display form and drop duplicates (an
+    /// individual can be reachable both through the signature and through
+    /// nominal merging).
+    fn sort_and_dedup_individuals(mut individuals: Vec<Individual>) -> Vec<Individual> {
+        individuals.sort_by_key(std::string::ToString::to_string);
+        individuals.dedup_by(|a, b| a.to_string() == b.to_string());
+        individuals
+    }
+
+    /// Run the realisation tableau **once** for `ontology_ref` and return the
+    /// cached read-only [`TableauSnapshot`] of the completed tableau.
+    ///
+    /// The cache lives on the reasoner and is dropped by every mutating
+    /// method (see [`Reasoner::invalidate_query_caches`]). Returns `Err`
+    /// when the tableau ends `Unknown` (timeout / resource abort): an
+    /// interrupted run proves nothing, so callers must surface an error
+    /// instead of a silently wrong answer.
+    pub fn realization_snapshot(
+        &self,
+        ontology_ref: &OntologyRef,
+    ) -> Result<std::sync::Arc<TableauSnapshot>> {
+        // Fast path: snapshot cached by a previous query.
+        if let Some(cached) = self
+            .snapshot_cache
+            .lock()
+            .map_err(|_| Error::reasoning("Realisation snapshot cache poisoned"))?
+            .as_ref()
+        {
+            return Ok(cached.clone());
+        }
+
+        let built = {
+            let guard = read_lock(
+                ontology_ref,
+                "core: reading ontology for realization snapshot",
+            )?;
+            let mut instance = self.tableau_factory.create_algorithm_instance(&guard)?;
+            let state = instance.run()?;
+            if state == TableauState::Unknown {
+                return Err(Error::reasoning("Tableau returned unknown result"));
+            }
+            std::sync::Arc::new(instance.snapshot())
+        };
+
+        // Publish; if another thread won the race in the meantime, keep its
+        // (equivalent) snapshot so all callers share one Arc.
+        let mut slot = self
+            .snapshot_cache
+            .lock()
+            .map_err(|_| Error::reasoning("Realisation snapshot cache poisoned"))?;
+        Ok(if let Some(existing) = slot.as_ref() {
+            existing.clone()
+        } else {
+            *slot = Some(built.clone());
+            built
+        })
+    }
+
+    /// Build a snapshot of `ontology_ref` *without* touching the reasoner's
+    /// one-shot cache — used when the ontology to reason over is not the
+    /// loaded one (e.g. `check_entailment` witness ontologies).
+    fn build_fresh_snapshot(
+        &self,
+        ontology_ref: &OntologyRef,
+    ) -> Result<std::sync::Arc<TableauSnapshot>> {
+        let guard = read_lock(ontology_ref, "core: reading ontology for fresh snapshot")?;
+        let mut instance = self.tableau_factory.create_algorithm_instance(&guard)?;
+        let state = instance.run()?;
+        if state == TableauState::Unknown {
+            return Err(Error::reasoning("Tableau returned unknown result"));
+        }
+        Ok(std::sync::Arc::new(instance.snapshot()))
+    }
+
+    /// Drop the cached realisation snapshot and the memoised consistency
+    /// answer. Must be called by every method that mutates the loaded ontology
+    /// (axiom add/remove, ontology reload, SPARQL `INSERT`/`DELETE DATA`,
+    /// `ABox` materialisation).
+    fn invalidate_query_caches(&self) {
+        if let Ok(mut slot) = self.snapshot_cache.lock() {
+            *slot = None;
+        }
+        if let Ok(mut memo) = self.consistency_cache.lock() {
+            *memo = None;
         }
     }
 
@@ -697,13 +990,28 @@ impl Reasoner {
         class: &ClassExpression,
         ontology_ref: &OntologyRef,
     ) -> Result<bool> {
-        let ontology = read_lock(ontology_ref, "core: reading ontology for is_instance_of")?;
-        if self
-            .classification_service
-            .check_instance_with_datatype_reasoning(individual, class, &ontology)?
-        {
-            return Ok(true);
+        // ── owl:Thing / owl:Nothing fast paths (OWL API parity) ────────────
+        // Every individual is an instance of `owl:Thing`; none is an instance
+        // of `owl:Nothing` (the tableau never labels a node `owl:Thing`, and
+        // the vacuous-truth branch of an inconsistent ontology must not turn
+        // `hasType(x, owl:Nothing)` into `true`).
+        if let ClassExpression::Class(cls) = class {
+            if cls.is_thing() {
+                return Ok(true);
+            }
+            if cls.is_nothing() {
+                return Ok(false);
+            }
         }
+        {
+            let ontology = read_lock(ontology_ref, "core: reading ontology for is_instance_of")?;
+            if self
+                .classification_service
+                .check_instance_with_datatype_reasoning(individual, class, &ontology)?
+            {
+                return Ok(true);
+            }
+        } // drop the read guard before running (or reusing) the tableau
 
         // Fallback: consult the *materialized* tableau closure. The structural checker
         // above only sees asserted axioms, so it misses memberships that follow from a
@@ -712,52 +1020,55 @@ impl Reasoner {
         // the queried expression against a completed tableau snapshot covers exactly
         // those derived cases; constructors the evaluator cannot decide return `false`
         // (the pre-existing conservative behaviour).
-        let mut tableau = self
-            .task_service
-            .tableau_factory
-            .create_algorithm_instance(&ontology)?;
-        let state = tableau.run()?;
-        if state != TableauState::Satisfiable {
+        //
+        // Phase A: when the caller's ontology *is* the reasoner's own (Arc identity),
+        // reuse the shared one-shot snapshot instead of running a fresh tableau per
+        // call.
+        let snapshot = if self
+            .ontology
+            .as_ref()
+            .is_some_and(|own| Arc::ptr_eq(own, ontology_ref))
+        {
+            self.realization_snapshot(ontology_ref)?
+        } else {
+            self.build_fresh_snapshot(ontology_ref)?
+        };
+        if !snapshot.satisfiable {
             // Inconsistent ontology: every instance query is vacuously true.
             return Ok(true);
         }
-        let snapshot = tableau.snapshot();
-        Ok(Self::snapshot_instance_of(
-            &snapshot, &tableau, individual, class,
-        ))
+        Ok(Self::snapshot_instance_of(&snapshot, individual, class))
     }
 
     /// Evaluate a class expression against a completed tableau snapshot for a given
     /// individual (see [`Reasoner::is_instance_of_ontology`] for when this is used).
     fn snapshot_instance_of(
-        snapshot: &crate::core::reasoner::tableau::TableauSnapshot,
-        tableau: &crate::core::reasoner::tableau::TableauAlgorithmInstance,
+        snapshot: &TableauSnapshot,
         individual: &Individual,
         class: &ClassExpression,
     ) -> bool {
         let Some(node) = snapshot.node_of(individual) else {
             return false;
         };
-        Self::snapshot_node_instance_of(snapshot, tableau, node, class)
+        Self::snapshot_node_instance_of(snapshot, node, class)
     }
 
     /// Evaluate a class expression against a completed tableau snapshot *node*.
     /// Handles the constructors that are not answerable from the asserted axioms
     /// alone — chiefly nominal fillers `{b}` whose witnessing edge is derived.
     fn snapshot_node_instance_of(
-        snapshot: &crate::core::reasoner::tableau::TableauSnapshot,
-        tableau: &crate::core::reasoner::tableau::TableauAlgorithmInstance,
+        snapshot: &TableauSnapshot,
         node: usize,
         class: &ClassExpression,
     ) -> bool {
         match class {
-            ClassExpression::Class(_) => tableau.node_labeled_as(node, class),
+            ClassExpression::Class(_) => snapshot.node_labeled_as(node, class),
             ClassExpression::ObjectIntersectionOf(ops) => ops
                 .iter()
-                .all(|op| Self::snapshot_node_instance_of(snapshot, tableau, node, op)),
+                .all(|op| Self::snapshot_node_instance_of(snapshot, node, op)),
             ClassExpression::ObjectUnionOf(ops) => ops
                 .iter()
-                .any(|op| Self::snapshot_node_instance_of(snapshot, tableau, node, op)),
+                .any(|op| Self::snapshot_node_instance_of(snapshot, node, op)),
             ClassExpression::ObjectOneOf(individuals) => individuals
                 .iter()
                 .any(|ind| snapshot.node_of(ind) == Some(node)),
@@ -766,7 +1077,7 @@ impl Reasoner {
                 snapshot.edges.iter().any(|(f, t, r)| {
                     *f == node
                         && r == &role
-                        && Self::snapshot_node_instance_of(snapshot, tableau, *t, filler)
+                        && Self::snapshot_node_instance_of(snapshot, *t, filler)
                 })
             }
             ClassExpression::ObjectHasValue { property, value } => {
@@ -787,7 +1098,7 @@ impl Reasoner {
                     .filter(|(f, t, r)| {
                         *f == node
                             && r == &role
-                            && Self::snapshot_node_instance_of(snapshot, tableau, *t, filler)
+                            && Self::snapshot_node_instance_of(snapshot, *t, filler)
                     })
                     .count();
                 count >= *cardinality as usize
@@ -818,10 +1129,14 @@ impl Reasoner {
             let ontology = read_lock(ontology_ref, "core: reading ontology for get_types")?;
             let mut types = Vec::new();
 
-            // Look for explicit class assertions
+            // Look for explicit class assertions. Identity is compared as a
+            // whole `Individual`: named individuals by IRI, anonymous ones by
+            // their stable `_:id` key (the previous `iri()`-based comparison
+            // matched `None == None`, i.e. *every* anonymous individual
+            // against *any* anonymous query).
             for axiom in ontology.axioms() {
                 if let crate::ontology::Axiom::ClassAssertion(class_assertion) = axiom
-                    && class_assertion.individual.iri() == individual.iri()
+                    && class_assertion.individual == *individual
                 {
                     types.push(class_assertion.class.clone());
                 }
@@ -877,6 +1192,15 @@ impl Reasoner {
             }
 
             if direct {
+                // `owl:Thing` is a type of every individual. It is inserted
+                // *before* the most-specific filter, which drops it exactly
+                // when the individual has a proper type (the filter removes a
+                // type that has a strict subclass in the result set — and
+                // `owl:Thing` has one whenever any other type is present).
+                let thing = ClassExpression::Class(crate::ontology::Class::thing());
+                if !types.contains(&thing) {
+                    types.push(thing);
+                }
                 // Most-specific filtering for `direct = true` (CR-008 MAJOR #1):
                 // a type is dropped when the result set also contains one of its
                 // *strict* subclasses — e.g. `B ≡ {a}`, `A ⊑ B`, `A(x)` yields
@@ -927,6 +1251,13 @@ impl Reasoner {
                     let superclasses = self.get_superclasses(direct_type, false)?;
                     all_types.extend(superclasses);
                 }
+                // `owl:Thing` is a type of every individual. Appended after
+                // the superclass extension so `get_superclasses(owl:Thing)`
+                // is never queried as if it were a subtype of something.
+                let thing = ClassExpression::Class(crate::ontology::Class::thing());
+                if !all_types.contains(&thing) {
+                    all_types.push(thing);
+                }
                 types = all_types;
             }
 
@@ -940,82 +1271,411 @@ impl Reasoner {
         }
     }
 
-    /// Get object property values for an individual
+    // ── Materialised property-value closure (OWLAPI / HermiT parity) ─────────
+
+    /// Invert a tableau edge-role Display form: `R` → `inv(R)`,
+    /// `inv(R)` → `R`.
+    fn invert_role_display(role: &str) -> String {
+        match role
+            .strip_prefix("inv(")
+            .and_then(|rest| rest.strip_suffix(')'))
+        {
+            Some(inner) => inner.to_string(),
+            None => format!("inv({role})"),
+        }
+    }
+
+    /// Transitive sub-property closure of `property` over the ontology's
+    /// `SubObjectPropertyOf` / `EquivalentObjectProperties` /
+    /// `InverseObjectProperties` axioms, expressed as tableau edge-role Display
+    /// forms (`IRI` or `inv(IRI)`).
+    ///
+    /// Every axiom contributes both its *forward* and its *inverse* reading:
+    /// `R ⊑ S` also yields `inv(R) ⊑ inv(S)`, and `InverseObjectProperties(P,Q)`
+    /// (i.e. `Q ≡ inv(P)`) yields `Q ⊑ inv(P)` plus `inv(P) ⊑ Q`. A query for
+    /// `inv(R)` therefore matches edges materialised under `inv(R)`, under a
+    /// sub-property `inv(S)`, or under a property `Q` declared inverse to `R`.
+    ///
+    /// Property chains are ignored on the inverse side (a chain has no inverse
+    /// expression); their composite edges are materialised under the *super*
+    /// property, which the closure already contains.
+    fn object_property_subroles(
+        ontology: &crate::ontology::Ontology,
+        property: &ObjectPropertyExpression,
+    ) -> HashSet<String> {
+        fn inverse(p: &ObjectPropertyExpression) -> Option<ObjectPropertyExpression> {
+            match p {
+                ObjectPropertyExpression::ObjectProperty(prop) => Some(
+                    ObjectPropertyExpression::InverseObjectProperty(prop.clone()),
+                ),
+                ObjectPropertyExpression::InverseObjectProperty(prop) => {
+                    Some(ObjectPropertyExpression::ObjectProperty(prop.clone()))
+                }
+                ObjectPropertyExpression::PropertyChain(_) => None,
+            }
+        }
+
+        // Direct `sub ⊑ super` pairs collected from the axioms.
+        let mut direct: Vec<(ObjectPropertyExpression, ObjectPropertyExpression)> = Vec::new();
+        for axiom in ontology.axioms() {
+            match axiom {
+                crate::ontology::Axiom::SubObjectPropertyOf(a) => {
+                    direct.push((a.sub_property.clone(), a.super_property.clone()));
+                }
+                crate::ontology::Axiom::EquivalentObjectProperties(a) => {
+                    for p1 in &a.properties {
+                        for p2 in &a.properties {
+                            if p1 != p2 {
+                                direct.push((p1.clone(), p2.clone()));
+                            }
+                        }
+                    }
+                }
+                crate::ontology::Axiom::InverseObjectProperties(a) => {
+                    // `Q ≡ inv(P)` gives both directions; the inverse expansion
+                    // below derives `inv(Q) ≡ P` from them.
+                    let (p, q) = (&a.property1, &a.property2);
+                    if let Some(inv_p) = inverse(p) {
+                        direct.push((q.clone(), inv_p.clone()));
+                        direct.push((inv_p, q.clone()));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Every `sub ⊑ super` also implies `inv(sub) ⊑ inv(super)`.
+        let mut all_pairs = direct.clone();
+        for (sub, sup) in &direct {
+            if let (Some(inv_sub), Some(inv_sup)) = (inverse(sub), inverse(sup)) {
+                all_pairs.push((inv_sub, inv_sup));
+            }
+        }
+
+        let mut sub_of: HashMap<String, HashSet<String>> = HashMap::new();
+        for (sub, sup) in all_pairs {
+            sub_of
+                .entry(sup.to_string())
+                .or_default()
+                .insert(sub.to_string());
+        }
+
+        // Reachability from the requested property downwards.
+        let mut closure: HashSet<String> = HashSet::new();
+        let mut stack = vec![property.to_string()];
+        while let Some(current) = stack.pop() {
+            if !closure.insert(current.clone()) {
+                continue;
+            }
+            if let Some(subs) = sub_of.get(&current) {
+                stack.extend(subs.iter().cloned());
+            }
+        }
+        closure
+    }
+
+    /// Edge-role matchers for an object-property value query.
+    ///
+    /// Returns `(outgoing, incoming)`:
+    /// * `outgoing` — role labels `E` for which an edge `x --E--> y` *out of*
+    ///   the queried individual entails `property(x, y)`;
+    /// * `incoming` — role labels `E` for which an edge `y --E--> x` *into* the
+    ///   queried individual entails `property(x, y)` (i.e. `inv(E) ⊑ property`),
+    ///   so an edge `b --inv(R)--> a` is read as `R(a, b)`.
+    fn object_property_edge_roles(
+        ontology: &crate::ontology::Ontology,
+        property: &ObjectPropertyExpression,
+    ) -> (HashSet<String>, HashSet<String>) {
+        let closure = Self::object_property_subroles(ontology, property);
+        let incoming = closure
+            .iter()
+            .map(|role| Self::invert_role_display(role))
+            .collect();
+        (closure, incoming)
+    }
+
+    /// Transitive sub-property closure of a *data* property over the ontology's
+    /// `SubDataPropertyOf` / `EquivalentDataProperties` axioms, as edge-role
+    /// Display forms (data roles are never inverted).
+    fn data_property_subroles(
+        ontology: &crate::ontology::Ontology,
+        property: &DataPropertyExpression,
+    ) -> HashSet<String> {
+        let mut direct: Vec<(DataPropertyExpression, DataPropertyExpression)> = Vec::new();
+        for axiom in ontology.axioms() {
+            match axiom {
+                crate::ontology::Axiom::SubDataPropertyOf(a) => {
+                    direct.push((a.sub_property.clone(), a.super_property.clone()));
+                }
+                crate::ontology::Axiom::EquivalentDataProperties(a) => {
+                    for p1 in &a.properties {
+                        for p2 in &a.properties {
+                            if p1 != p2 {
+                                direct.push((p1.clone(), p2.clone()));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut sub_of: HashMap<String, HashSet<String>> = HashMap::new();
+        for (sub, sup) in direct {
+            sub_of
+                .entry(sup.to_string())
+                .or_default()
+                .insert(sub.to_string());
+        }
+
+        let mut closure: HashSet<String> = HashSet::new();
+        let mut stack = vec![property.to_string()];
+        while let Some(current) = stack.pop() {
+            if !closure.insert(current.clone()) {
+                continue;
+            }
+            if let Some(subs) = sub_of.get(&current) {
+                stack.extend(subs.iter().cloned());
+            }
+        }
+        closure
+    }
+
+    /// Named individuals of the completed tableau, indexed by node id.
+    ///
+    /// Successor nodes without a nominal label (anonymous fillers created by
+    /// existential expansion) get no entry, so callers that return only named
+    /// individuals skip them automatically. Individuals merged by
+    /// `SameIndividual` / functionality / `HasKey` share one node and each keep
+    /// their own entry.
+    fn named_individuals_by_node(snapshot: &TableauSnapshot) -> HashMap<usize, Vec<Individual>> {
+        let mut by_node: HashMap<usize, Vec<Individual>> = HashMap::new();
+        for (display, &node) in &snapshot.individual_nodes {
+            // Anonymous individuals display as `_:id` and are not reconstructible
+            // as named values.
+            if display.starts_with("_:") {
+                continue;
+            }
+            by_node
+                .entry(node)
+                .or_default()
+                .push(Individual::named(crate::ontology::IRI::new(display)));
+        }
+        by_node
+    }
+
+    /// Get object property values for an individual.
+    ///
+    /// The answer is the union of:
+    ///
+    /// 1. the asserted `ObjectPropertyAssertion` axioms (fast path — runs no
+    ///    tableau), and
+    /// 2. the **materialised closure** of the completed tableau snapshot
+    ///    ([`Reasoner::realization_snapshot`]), which is authoritative for every
+    ///    value the reasoner can derive: inverse edges, sub-property edges,
+    ///    transitive / property-chain derived edges and equivalent-property
+    ///    materialisations all appear there.
+    ///
+    /// Edge roles are matched through the sub-property closure in both
+    /// directions (see [`Reasoner::object_property_edge_roles`]), so an edge
+    /// `b --S--> a` with `S ⊑ R` answers an `R` query and an edge
+    /// `b --inv(R)--> a` answers both the `R` and the `inv(R)` query.
+    ///
+    /// Only **named** individuals are returned: anonymous tableau successors
+    /// (no IRI) are skipped. Results are sorted by Display form and
+    /// deduplicated.
+    ///
+    /// Error/consistency policy:
+    /// * an inconsistent ontology (`snapshot.satisfiable == false`) keeps the
+    ///   asserted values only — vacuous truth would make every individual a
+    ///   value of every property, which is not a useful API answer;
+    /// * a tableau that ends `Unknown` (timeout / resource abort) propagates as
+    ///   `Err`: an interrupted run proves nothing (same policy as
+    ///   [`Reasoner::get_instances`]).
     pub fn get_object_property_values(
         &self,
         individual: &Individual,
         property: &ObjectPropertyExpression,
     ) -> Result<Vec<Individual>> {
-        if let Some(ontology_ref) = &self.ontology {
+        let Some(ontology_ref) = self.ontology.clone() else {
+            return Ok(Vec::new());
+        };
+
+        let mut values: Vec<Individual> = Vec::new();
+        let roles = {
             let ontology = read_lock(
-                ontology_ref,
+                &ontology_ref,
                 "core: reading ontology for get_object_property_values",
             )?;
-            let mut values = Vec::new();
-
-            // Look for explicit object property assertions
+            // Fast path: explicit object property assertions.
             for axiom in ontology.axioms() {
                 if let crate::ontology::Axiom::ObjectPropertyAssertion(prop_assertion) = axiom
-                    && prop_assertion.source.iri() == individual.iri()
+                    && prop_assertion.source == *individual
+                    && self.object_properties_equivalent(&prop_assertion.property, property)?
                 {
-                    // Check if the property matches (need to handle property expressions)
-                    if self.object_properties_equivalent(&prop_assertion.property, property)? {
-                        values.push(prop_assertion.target.clone());
+                    values.push(prop_assertion.target.clone());
+                }
+            }
+            Self::object_property_edge_roles(&ontology, property)
+        }; // read guard dropped before the tableau run
+
+        let snapshot = self.realization_snapshot(&ontology_ref)?;
+        if snapshot.satisfiable {
+            let by_node = Self::named_individuals_by_node(&snapshot);
+            let (outgoing, incoming) = roles;
+            if let Some(node) = snapshot.node_of(individual) {
+                for (from, to, role) in &snapshot.edges {
+                    if *from == node && outgoing.contains(role) {
+                        values.extend(by_node.get(to).into_iter().flatten().cloned());
+                    } else if *to == node && incoming.contains(role) {
+                        values.extend(by_node.get(from).into_iter().flatten().cloned());
                     }
                 }
             }
-
-            // Remove duplicates
-            values.sort_by_key(|i| {
-                i.iri()
-                    .map(std::string::ToString::to_string)
-                    .unwrap_or_default()
-            });
-            values.dedup_by_key(|i| {
-                i.iri()
-                    .map(std::string::ToString::to_string)
-                    .unwrap_or_default()
-            });
-
-            Ok(values)
-        } else {
-            Ok(Vec::new())
         }
+
+        // Remove duplicates (Display form distinguishes named from anonymous).
+        values.sort_by_key(std::string::ToString::to_string);
+        values.dedup_by_key(|i| i.to_string());
+
+        Ok(values)
     }
 
-    /// Get data property values for an individual
+    /// Get data property values for an individual.
+    ///
+    /// Same two-source policy as [`Reasoner::get_object_property_values`]:
+    /// asserted `DataPropertyAssertion` axioms (fast path) unioned with the
+    /// completed tableau's `data_edges` (which carry every derived value —
+    /// sub-property and equivalent-property materialisations included), matched
+    /// through the data sub-property closure
+    /// ([`Reasoner::data_property_subroles`]). Results are deduplicated by
+    /// literal value.
+    ///
+    /// The inconsistency / timeout policy matches
+    /// [`Reasoner::get_object_property_values`].
     pub fn get_data_property_values(
         &self,
         individual: &Individual,
         property: &DataPropertyExpression,
     ) -> Result<Vec<crate::ontology::Literal>> {
-        if let Some(ontology_ref) = &self.ontology {
+        let Some(ontology_ref) = self.ontology.clone() else {
+            return Ok(Vec::new());
+        };
+
+        let mut values: Vec<crate::ontology::Literal> = Vec::new();
+        let roles = {
             let ontology = read_lock(
-                ontology_ref,
+                &ontology_ref,
                 "core: reading ontology for get_data_property_values",
             )?;
-            let mut values = Vec::new();
-
-            // Look for explicit data property assertions
+            // Fast path: explicit data property assertions.
             for axiom in ontology.axioms() {
                 if let crate::ontology::Axiom::DataPropertyAssertion(prop_assertion) = axiom
-                    && prop_assertion.individual.iri() == individual.iri()
+                    && prop_assertion.individual == *individual
+                    && self.data_properties_equivalent(&prop_assertion.property, property)?
                 {
-                    // Check if the property matches
-                    if self.data_properties_equivalent(&prop_assertion.property, property)? {
-                        values.push(prop_assertion.value.clone());
+                    values.push(prop_assertion.value.clone());
+                }
+            }
+            Self::data_property_subroles(&ontology, property)
+        }; // read guard dropped before the tableau run
+
+        let snapshot = self.realization_snapshot(&ontology_ref)?;
+        if snapshot.satisfiable
+            && let Some(node) = snapshot.node_of(individual)
+        {
+            for (from, role, literal) in &snapshot.data_edges {
+                if *from == node && roles.contains(role) {
+                    values.push(literal.clone());
+                }
+            }
+        }
+
+        // Remove duplicates
+        values.sort_by_key(|l| format!("{l:?}"));
+        values.dedup_by_key(|l| format!("{l:?}"));
+
+        Ok(values)
+    }
+
+    /// All materialised `(source, target)` pairs for `property`.
+    ///
+    /// Union of the asserted `ObjectPropertyAssertion` axioms (both endpoints
+    /// named) and the completed tableau's edges, including inverse-labelled
+    /// edges — `b --inv(R)--> a` yields `(a, b)` for a query on `R`. Only
+    /// **named** individuals are returned (anonymous successors are skipped).
+    /// Output is sorted by `(source, target)` Display form and deduplicated, so
+    /// it is deterministic across runs.
+    ///
+    /// The inconsistency / timeout policy matches
+    /// [`Reasoner::get_object_property_values`].
+    pub fn get_object_property_instances(
+        &self,
+        property: &ObjectPropertyExpression,
+    ) -> Result<Vec<(Individual, Individual)>> {
+        let Some(ontology_ref) = self.ontology.clone() else {
+            return Ok(Vec::new());
+        };
+
+        let mut pairs: Vec<(Individual, Individual)> = Vec::new();
+        let roles = {
+            let ontology = read_lock(
+                &ontology_ref,
+                "core: reading ontology for get_object_property_instances",
+            )?;
+            for axiom in ontology.axioms() {
+                if let crate::ontology::Axiom::ObjectPropertyAssertion(prop_assertion) = axiom
+                    && self.object_properties_equivalent(&prop_assertion.property, property)?
+                    && prop_assertion.source.is_named()
+                    && prop_assertion.target.is_named()
+                {
+                    pairs.push((prop_assertion.source.clone(), prop_assertion.target.clone()));
+                }
+            }
+            Self::object_property_edge_roles(&ontology, property)
+        }; // read guard dropped before the tableau run
+
+        let snapshot = self.realization_snapshot(&ontology_ref)?;
+        if snapshot.satisfiable {
+            let by_node = Self::named_individuals_by_node(&snapshot);
+            let (outgoing, incoming) = roles;
+            for (from, to, role) in &snapshot.edges {
+                if outgoing.contains(role) {
+                    if let (Some(sources), Some(targets)) = (by_node.get(from), by_node.get(to)) {
+                        for source in sources {
+                            for target in targets {
+                                pairs.push((source.clone(), target.clone()));
+                            }
+                        }
+                    }
+                } else if incoming.contains(role)
+                    && let (Some(sources), Some(targets)) = (by_node.get(to), by_node.get(from))
+                {
+                    for source in sources {
+                        for target in targets {
+                            pairs.push((source.clone(), target.clone()));
+                        }
                     }
                 }
             }
-
-            // Remove duplicates
-            values.sort_by_key(|l| format!("{l:?}"));
-            values.dedup_by_key(|l| format!("{l:?}"));
-
-            Ok(values)
-        } else {
-            Ok(Vec::new())
         }
+
+        pairs.sort_by(|a, b| {
+            a.0.to_string()
+                .cmp(&b.0.to_string())
+                .then_with(|| a.1.to_string().cmp(&b.1.to_string()))
+        });
+        pairs.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
+        Ok(pairs)
+    }
+
+    /// Whether the one-shot realisation snapshot is already cached.
+    ///
+    /// Lets callers (e.g. `precompute_inferences`) report a warm
+    /// property-assertion cache without exposing the snapshot itself.
+    #[must_use]
+    pub fn has_realization_snapshot(&self) -> bool {
+        self.snapshot_cache.lock().is_ok_and(|slot| slot.is_some())
     }
 
     /// Get all object property assertions for a given property expression.
@@ -1076,14 +1736,39 @@ impl Reasoner {
     /// `ELReasoner` is used automatically, giving up to 100× speedup over the
     /// full tableau algorithm.  Falls back to the general classification
     /// service when the profile is not EL, when an explicit `DL`/`QL`/`RL`
-    /// target profile is configured, or whenever the EL fast path fails for
-    /// any reason (never propagates an EL-only error).
+    /// target profile is configured, whenever the EL fast path fails for any
+    /// reason (never propagates an EL-only error), and whenever the EL result
+    /// is incomplete — i.e. does not key the hierarchy by every signature
+    /// class plus `owl:Thing` (B1).
+    ///
+    /// The classification result is memoised: a call served from the
+    /// classification cache returns without re-running anything and is not
+    /// counted in [`ReasoningStatistics::classification_runs`].  The statistics
+    /// of a real run are folded into the shared totals returned by
+    /// [`Reasoner::get_statistics`].
     pub fn classify(&mut self) -> Result<ClassificationResult> {
+        // Memoised: the classification service stores the result of every run
+        // and invalidates it on each ontology mutation.
+        if let Some(cached) = self.classification_service.cached_classification() {
+            return Ok(cached.clone());
+        }
+
+        let mut statistics = ReasoningStatistics::new();
+        statistics.classification_runs = 1;
+        let result = self.classify_with_stats(&mut statistics);
+        self.merge_statistics(&statistics);
+        result
+    }
+
+    /// Body of [`Reasoner::classify`] — accumulates into the caller's
+    /// statistics value, which [`Reasoner::classify`] merges afterwards.
+    fn classify_with_stats(
+        &mut self,
+        statistics: &mut ReasoningStatistics,
+    ) -> Result<ClassificationResult> {
         use crate::profiles::ProfileValidator;
 
         if let Some(ontology) = self.ontology.clone() {
-            let mut statistics = ReasoningStatistics::new();
-
             // ── EL profile short-circuit ─────────────────────────────────────
             // Only honour the EL fast path when the configured target profile
             // allows it: an explicit DL/QL/RL target must always run the
@@ -1121,7 +1806,7 @@ impl Reasoner {
                     );
                     return self.classification_service.classify(
                         &ontology,
-                        &mut statistics,
+                        statistics,
                         &mut self.cache_manager,
                     );
                 }
@@ -1131,6 +1816,7 @@ impl Reasoner {
                 // ontology is released before `self` is mutated, and the
                 // reasoner is only handed back to `self` on success — a
                 // failure can never leave a half-initialised reasoner cached.
+                let el_start = std::time::Instant::now();
                 let el_attempt = {
                     let ont = read_lock(&ontology, "classify: EL")?;
                     let mut el_reasoner =
@@ -1141,19 +1827,44 @@ impl Reasoner {
                     };
                     outcome.map(|result| (el_reasoner, result))
                 };
+                // The EL attempt does its own work outside the classification
+                // service, so record its wall time explicitly (all exit paths).
+                let el_elapsed = el_start.elapsed();
 
                 match el_attempt {
-                    Ok((el_reasoner, result)) => {
-                        // Store for future use, cache the result, and make the
-                        // query fast-paths reuse it.
-                        self.el_reasoner = Some(Box::new(el_reasoner));
-                        self.classification_service
-                            .store_classification(result.clone());
-                        self.cache_manager
-                            .store_classification_result(&ontology, result.clone());
-                        return Ok(result);
+                    Ok((el_reasoner, mut result)) => {
+                        statistics.add_reasoning_time(el_elapsed);
+                        // Completeness guard + metadata parity (B1): an EL
+                        // result that does not cover the ontology's signature
+                        // (or `owl:Thing`) is incomplete — never cache or
+                        // serve it, fall through to the general classification
+                        // below instead.  When it *is* complete, the metadata
+                        // the general path always sets (`ontology_iri`, the
+                        // object/data property lists used by the HermiT-style
+                        // writer) is filled in here, so an Auto run produces
+                        // the same document as a DL run.  With the EL
+                        // hierarchy writer covering every signature class the
+                        // completeness check never fires; it is the safety net
+                        // that keeps the fast path from ever returning a
+                        // partial hierarchy.
+                        if finalise_el_result(&ontology, &mut result) {
+                            // Store for future use, cache the result, and make
+                            // the query fast-paths reuse it.
+                            self.el_reasoner = Some(Box::new(el_reasoner));
+                            self.classification_service
+                                .store_classification(result.clone());
+                            self.cache_manager
+                                .store_classification_result(&ontology, result.clone());
+                            return Ok(result);
+                        }
+                        log::warn!(
+                            "EL classification is incomplete (missing signature classes); \
+                             falling back to general classification"
+                        );
+                        self.el_reasoner = None;
                     }
                     Err(err) => {
+                        statistics.add_reasoning_time(el_elapsed);
                         // The memory guard abort is NOT an EL-translation
                         // problem: retrying the (heavier) general path under
                         // memory pressure would only make things worse, so it
@@ -1175,11 +1886,8 @@ impl Reasoner {
             }
 
             // ── General tableau classification ───────────────────────────────
-            self.classification_service.classify(
-                &ontology,
-                &mut statistics,
-                &mut self.cache_manager,
-            )
+            self.classification_service
+                .classify(&ontology, statistics, &mut self.cache_manager)
         } else {
             Err(Error::ontology_parsing(
                 "No ontology loaded for classification",
@@ -1187,12 +1895,20 @@ impl Reasoner {
         }
     }
 
-    /// Realize the ontology (compute instance relationships)
+    /// Realize the ontology (compute instance relationships).
+    ///
+    /// The statistics produced by the realisation run are folded into the
+    /// shared totals returned by [`Reasoner::get_statistics`].
     pub fn realize(&mut self) -> Result<RealisationResult> {
         if let Some(ontology) = self.ontology.clone() {
             let mut statistics = ReasoningStatistics::new();
-            self.classification_service
-                .realize(&ontology, &mut statistics, &mut self.cache_manager)
+            let result = self.classification_service.realize(
+                &ontology,
+                &mut statistics,
+                &mut self.cache_manager,
+            );
+            self.merge_statistics(&statistics);
+            result
         } else {
             Err(Error::ontology_parsing(
                 "No ontology loaded for realisation",
@@ -1207,6 +1923,28 @@ impl Reasoner {
         ontology: &Arc<RwLock<crate::ontology::Ontology>>,
         stats: &mut ReasoningStatistics,
     ) -> Result<bool> {
+        // Syntactic entailment fast path: an axiom identical to one asserted
+        // in the premise is entailed by definition. `Axiom: PartialEq` also
+        // compares the parser-minted ids (a per-file serialisation detail),
+        // so the fast path re-checks axiom *content* when direct equality
+        // misses — e.g. a conclusion ontology parsed from its own file shares
+        // axiom content with the premise but never ids.
+        {
+            let guard = read_lock(ontology, "core: reading ontology for entailment check")?;
+            if guard.axioms().contains(axiom) {
+                return Ok(true);
+            }
+            let want_type = axiom.axiom_type();
+            let want_key = axiom.content_key();
+            if guard
+                .axioms()
+                .iter()
+                .any(|a| a.axiom_type() == want_type && a.content_key() == want_key)
+            {
+                return Ok(true);
+            }
+        }
+
         // Route SubClassOf/ClassAssertion through the typed reasoner methods,
         // which operate directly on ClassExpression values rather than the
         // general check_entailment tableau path.
@@ -1359,8 +2097,16 @@ impl Reasoner {
         }
     }
 
-    /// Add an axiom to the ontology
+    /// Add an axiom to the ontology.
+    ///
+    /// **Note:** adding an [`crate::ontology::Axiom::Rule`] does *not* run SWRL
+    /// materialization — rules only take effect when the ontology is (re)loaded
+    /// through [`Reasoner::load_ontology`] or when
+    /// [`Reasoner::materialize_swrl_rules`] is called explicitly.  This keeps
+    /// axiom insertion cheap and side-effect free.
     pub fn add_axiom(&mut self, axiom: crate::ontology::Axiom) -> Result<()> {
+        // Any mutation invalidates the cached realisation snapshot.
+        self.invalidate_query_caches();
         if let Some(ontology_ref) = &mut self.ontology {
             let mut ontology = write_lock(ontology_ref, "core: writing ontology to add axiom")?;
             ontology.add_axiom(axiom);
@@ -1382,8 +2128,80 @@ impl Reasoner {
         }
     }
 
+    /// Run DL-safe SWRL forward-chaining materialization over the currently
+    /// loaded ontology and merge the derived `ABox` facts into it.
+    ///
+    /// Returns the number of **new** axioms added — `0` when the ontology has
+    /// no rules or when a previous run already derived everything, so repeated
+    /// calls are idempotent (facts are deduplicated by
+    /// [`crate::ontology::Axiom::content_key`], which ignores axiom ids).
+    /// When axioms are added, every cache derived from the ontology
+    /// (realisation snapshot, consistency memo, classification cache and the
+    /// `ABox` materialization marker) is invalidated.
+    ///
+    /// `Reasoner::add_axiom` deliberately does **not** materialize: reload the
+    /// ontology through [`Reasoner::load_ontology`] or call this method
+    /// explicitly after adding rules.
+    pub fn materialize_swrl_rules(&mut self) -> Result<usize> {
+        let Some(ontology_ref) = self.ontology.clone() else {
+            return Ok(0);
+        };
+
+        let materialization = {
+            let guard = read_lock(
+                &ontology_ref,
+                "core: reading ontology for SWRL materialization",
+            )?;
+            crate::swrl::SwrlMaterializer::new().materialize(&guard)?
+        };
+        if materialization.derived_axioms.is_empty() {
+            return Ok(0);
+        }
+
+        let mut added = 0usize;
+        {
+            let mut guard = write_lock(&ontology_ref, "core: writing SWRL materializations")?;
+            // Content-key guard: a mutation between the snapshot above and
+            // this write must never duplicate a fact.
+            let mut known: HashSet<String> = guard
+                .axioms()
+                .iter()
+                .filter(|axiom| {
+                    matches!(
+                        axiom,
+                        crate::ontology::Axiom::ClassAssertion(_)
+                            | crate::ontology::Axiom::ObjectPropertyAssertion(_)
+                            | crate::ontology::Axiom::DataPropertyAssertion(_)
+                            | crate::ontology::Axiom::SameIndividual(_)
+                            | crate::ontology::Axiom::DifferentIndividuals(_)
+                    )
+                })
+                .map(crate::ontology::Axiom::content_key)
+                .collect();
+            for axiom in materialization.derived_axioms {
+                if known.insert(axiom.content_key()) {
+                    guard.add_axiom(axiom);
+                    added += 1;
+                }
+            }
+        }
+
+        if added > 0 {
+            self.invalidate_query_caches();
+            self.cache_manager.clear_all()?;
+            self.classification_service
+                .invalidate_classification_cache();
+            self.materialization_stale
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            log::info!("SWRL materialization added {added} new axiom(s)");
+        }
+        Ok(added)
+    }
+
     /// Remove an axiom from the ontology
     pub fn remove_axiom(&mut self, axiom: &crate::ontology::Axiom) -> Result<bool> {
+        // Any mutation invalidates the cached realisation snapshot.
+        self.invalidate_query_caches();
         if let Some(ontology_ref) = &mut self.ontology {
             let mut ontology = write_lock(ontology_ref, "core: writing ontology to remove axiom")?;
             let original_count = ontology.axioms().len();
@@ -1404,10 +2222,26 @@ impl Reasoner {
         }
     }
 
-    /// Get reasoning statistics
+    /// Get reasoning statistics.
+    ///
+    /// Returns the accumulated totals of every operation performed through
+    /// this reasoner (`classify`, `realize`, `get_instances`, consistency
+    /// checks — including memoised-cache hits). Signature unchanged from the
+    /// always-zero-stats behaviour it replaces.
     #[must_use]
     pub fn get_statistics(&self) -> ReasoningStatistics {
-        self.statistics.clone()
+        self.statistics
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Fold a per-operation local statistics value into the shared totals.
+    fn merge_statistics(&self, local: &ReasoningStatistics) {
+        self.statistics
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .merge(local);
     }
 
     /// Get the size of the current ontology
@@ -1421,8 +2255,150 @@ impl Reasoner {
         }
     }
 
-    /// Load an ontology into the reasoner
+    /// Load an ontology into the reasoner, resolving its `owl:imports`
+    /// closure first (`HermiT` `Imports.INCLUDED` parity).
+    ///
+    /// - Imports are resolved **recursively** — cycle-safe and bounded by
+    ///   `max_import_depth` — with the default best-effort configuration:
+    ///   base directories are the current working directory plus the importing
+    ///   file's directory (when loaded via [`Self::load_ontology_from_file`]),
+    ///   a 10 s HTTP timeout, no import validation, and deduplicated merging of
+    ///   the imported axioms.
+    /// - A missing / unresolvable import logs a `warn` and the ontology is
+    ///   loaded without it: the load itself never fails because of imports.
+    /// - Ontologies declaring no imports (neither a structured `imports` entry
+    ///   nor an `owl:imports` annotation) take exactly the previous code path.
+    ///
+    /// Use [`Reasoner::load_ontology_with_imports`] to supply a custom
+    /// [`ImportManagerConfig`] (strict strategy, explicit base directories…).
     pub fn load_ontology(&mut self, ontology: crate::ontology::Ontology) -> Result<()> {
+        let config = Self::default_import_config();
+        self.load_ontology_with_import_config(ontology, config, None)
+    }
+
+    /// Load an ontology with an explicit import-resolution configuration —
+    /// the explicit variant of [`Reasoner::load_ontology`].
+    ///
+    /// With `config.resolution_strategy == ImportResolutionStrategy::Strict` a
+    /// failed import aborts the load with an error; under the default
+    /// `BestEffort` strategy failures are only logged (see
+    /// [`Reasoner::load_ontology`]).
+    pub fn load_ontology_with_imports(
+        &mut self,
+        ontology: crate::ontology::Ontology,
+        config: ImportManagerConfig,
+    ) -> Result<()> {
+        self.load_ontology_with_import_config(ontology, config, None)
+    }
+
+    /// Default import configuration used by [`Reasoner::load_ontology`]:
+    /// best-effort, merging, no validation, depth 10, 10 s timeout, and the
+    /// current working directory as base directory (the importing file's own
+    /// directory is appended by [`Self::load_ontology_with_import_config`]).
+    fn default_import_config() -> ImportManagerConfig {
+        let mut base_directories = Vec::with_capacity(2);
+        if let Ok(cwd) = std::env::current_dir() {
+            base_directories.push(cwd);
+        }
+        base_directories.push(std::path::PathBuf::from("."));
+        ImportManagerConfig {
+            resolution_strategy: ImportResolutionStrategy::BestEffort,
+            max_import_depth: 10,
+            base_directories,
+            url_mappings: std::collections::HashMap::new(),
+            validate_imports: false,
+            merge_imports: true,
+            timeout: Some(std::time::Duration::from_secs(10)),
+        }
+    }
+
+    /// Whether the ontology declares imports (structured `imports` field
+    /// populated by the functional/manchester parsers, or an `owl:imports`
+    /// annotation produced by the RDF-family parsers).
+    fn ontology_has_imports(ontology: &crate::ontology::Ontology) -> bool {
+        !ontology.imports.is_empty()
+            || ontology.annotations.iter().any(|annotation| {
+                annotation.property.iri.as_str() == "http://www.w3.org/2002/07/owl#imports"
+            })
+    }
+
+    /// Resolve the `owl:imports` closure (when the ontology declares any) and
+    /// install the result, invalidating every query-time cache.
+    ///
+    /// `source_dir` (the directory of the file the ontology was parsed from,
+    /// if any) is appended to the configuration's base directories so relative
+    /// and `file://` imports resolve next to the importing document.
+    fn load_ontology_with_import_config(
+        &mut self,
+        mut ontology: crate::ontology::Ontology,
+        config: ImportManagerConfig,
+        source_dir: Option<std::path::PathBuf>,
+    ) -> Result<()> {
+        if Self::ontology_has_imports(&ontology) {
+            let strict = matches!(config.resolution_strategy, ImportResolutionStrategy::Strict);
+            let mut config = config;
+            if let Some(dir) = source_dir {
+                config.base_directories.push(dir);
+            }
+            let manager = ImportManager::new(config);
+            match manager.resolve_imports_recursive(&mut ontology) {
+                Ok(results) => {
+                    for result in &results {
+                        for error in &result.errors {
+                            log::warn!("owl:imports {}: {error}", result.import_iri);
+                        }
+                        for warning in &result.warnings {
+                            log::warn!("owl:imports {}: {warning}", result.import_iri);
+                        }
+                    }
+                }
+                // Best effort by default: a failed import must never fail the
+                // whole load — warn and keep the axioms that did resolve.
+                Err(err) => {
+                    if strict {
+                        return Err(err);
+                    }
+                    log::warn!(
+                        "owl:imports resolution failed; loading ontology without the failed imports: {err}"
+                    );
+                }
+            }
+        }
+        self.install_ontology(ontology)
+    }
+
+    /// Install a (fully import-closed) ontology, replacing the current one and
+    /// invalidating every cache derived from it.
+    ///
+    /// **SWRL materialization**: every `Axiom::Rule` is DL-safe
+    /// forward-chained over the `ABox` *before* the ontology is installed (see
+    /// [`crate::swrl::SwrlMaterializer`]), so the first query already sees the
+    /// rule-derived facts.  This runs after `owl:imports` merging and before
+    /// any cache is built; ontologies without rules are untouched.  Adding a
+    /// rule later via [`Reasoner::add_axiom`] does **not** materialize — use
+    /// [`Reasoner::materialize_swrl_rules`] or reload the ontology.
+    fn install_ontology(&mut self, mut ontology: crate::ontology::Ontology) -> Result<()> {
+        let rule_count = ontology
+            .axioms()
+            .iter()
+            .filter(|axiom| matches!(axiom, crate::ontology::Axiom::Rule(_)))
+            .count();
+        let materialization = crate::swrl::SwrlMaterializer::new().materialize(&ontology)?;
+        if rule_count > 0 {
+            log::info!(
+                "SWRL materialization: {rule_count} rule(s), {} application(s), {} iteration(s), {} new axiom(s)",
+                materialization.applications,
+                materialization.iterations,
+                materialization.derived_axioms.len()
+            );
+        }
+        for axiom in materialization.derived_axioms {
+            ontology.add_axiom(axiom);
+        }
+
+        // The ontology is replaced wholesale → drop the cached snapshot and
+        // the memoised consistency answer.
+        self.invalidate_query_caches();
         self.ontology = Some(Arc::new(RwLock::new(ontology.clone())));
         self.materialization_stale
             .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1449,6 +2425,22 @@ impl Reasoner {
         };
 
         let file_path = path.as_ref();
+
+        // `Auto` delegates to the *shared* auto-detecting loader
+        // (`parsers::parse_file_auto`), so the CLI matches library detection
+        // exactly (B5): the unambiguous extension table (`.rdf` → RDF/XML,
+        // `.jsonld`, `.n3`, `.html` → RDFa, `.hdt`/`.brdf` → binary), content
+        // sniffing for the ambiguous extensions, and a byte-oriented read for
+        // the binary formats.  The previous inline extension switch
+        // misrouted `.rdf`/`.jsonld`/`.n3`/`.html` to OWL/XML and died in
+        // `read_to_string` on `.hdt`/`.brdf` (not valid UTF-8).
+        if matches!(format, crate::ontology::OntologyFormat::Auto) {
+            let ontology = crate::parsers::parse_file_auto(file_path)?;
+            let source_dir = file_path.parent().map(std::path::Path::to_path_buf);
+            let config = Self::default_import_config();
+            return self.load_ontology_with_import_config(ontology, config, source_dir);
+        }
+
         let content = std::fs::read_to_string(file_path).map_err(|e| crate::Error::Io {
             message: format!("Failed to read file: {e}"),
         })?;
@@ -1521,108 +2513,35 @@ impl Reasoner {
                 let parser = ntriples::NTriplesParser::new();
                 parser.parse(&parsed_content)?
             }
+            // Handled by the early return above: `Auto` never reaches this
+            // point (it is delegated to `parsers::parse_file_auto`, which
+            // resolves the format from the shared extension table / content
+            // sniffing / binary magic before any read).  Kept so the match
+            // stays exhaustive.
             crate::ontology::OntologyFormat::Auto => {
-                // Try to determine format from file extension
-                let extension = file_path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .unwrap_or("");
-
-                match extension.to_lowercase().as_str() {
-                    "owl" | "owx" => {
-                        // Content-based detection for .owl files
-                        // Some files like "*_functional.owl" are actually in Functional Syntax
-                        // but have .owl extension, so we need to check the content
-                        let trimmed = parsed_content.trim_start();
-                        if trimmed.starts_with("Prefix(") || trimmed.starts_with("Ontology(") {
-                            // This is Functional Syntax
-                            let parser = functional::FunctionalParser::new();
-                            parser.parse(&parsed_content)?
-                        } else if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
-                            // This is OWL/XML
-                            let parser = owl_xml::OwlXmlParser::new();
-                            parser.parse(&parsed_content)?
-                        } else {
-                            // Default to OWL/XML for .owl files
-                            let parser = owl_xml::OwlXmlParser::new();
-                            parser.parse(&parsed_content)?
-                        }
-                    }
-                    "xml" | "rdf" => {
-                        // Try to detect XML type from content
-                        if parsed_content.trim_start().starts_with("<?xml")
-                            || parsed_content.contains("owl:Ontology")
-                            || parsed_content.contains("<Ontology")
-                        {
-                            let parser = owl_xml::OwlXmlParser::new();
-                            parser.parse(&parsed_content)?
-                        } else {
-                            let parser = rdf_xml::RdfXmlParser::new();
-                            parser.parse(&parsed_content)?
-                        }
-                    }
-                    "ttl" => {
-                        let parser = turtle::TurtleParser::new();
-                        parser.parse(&parsed_content)?
-                    }
-                    "ofn" => {
-                        let parser = functional::FunctionalParser::new();
-                        parser.parse(&parsed_content)?
-                    }
-                    "omn" | "man" => {
-                        let parser = manchester::ManchesterParser::new(
-                            manchester::ManchesterParserConfig::default(),
-                        );
-                        parser.parse(&parsed_content)?
-                    }
-                    "swrl" => {
-                        // SWRL uses functional-like syntax
-                        let parser = functional::FunctionalParser::new();
-                        parser.parse(&parsed_content)?
-                    }
-                    "nt" => {
-                        let parser = ntriples::NTriplesParser::new();
-                        parser.parse(&parsed_content)?
-                    }
-                    "txt" => {
-                        // Content-based detection for .txt files
-                        let trimmed = parsed_content.trim();
-                        if trimmed.starts_with("Ontology(") || trimmed.starts_with("Prefix(") {
-                            let parser = functional::FunctionalParser::new();
-                            parser.parse(&parsed_content)?
-                        } else if trimmed.starts_with("Prefix:")
-                            || trimmed.starts_with("Ontology:")
-                            || trimmed.starts_with("Class:")
-                        {
-                            let parser = manchester::ManchesterParser::new(
-                                manchester::ManchesterParserConfig::default(),
-                            );
-                            parser.parse(&parsed_content)?
-                        } else if trimmed.starts_with("@prefix") || trimmed.starts_with("@base") {
-                            let parser = turtle::TurtleParser::new();
-                            parser.parse(&parsed_content)?
-                        } else if trimmed.starts_with("<?xml") || trimmed.starts_with('<') {
-                            let parser = owl_xml::OwlXmlParser::new();
-                            parser.parse(&parsed_content)?
-                        } else {
-                            // Default to functional
-                            let parser = functional::FunctionalParser::new();
-                            parser.parse(&parsed_content)?
-                        }
-                    }
-                    _ => {
-                        // Default to OWL/XML
-                        let parser = owl_xml::OwlXmlParser::new();
-                        parser.parse(&parsed_content)?
-                    }
-                }
+                return Err(crate::Error::ontology_parsing(
+                    "Auto format must be resolved before parsing",
+                ));
             }
         };
 
-        self.load_ontology(ontology)
+        // Resolve the ontology's `owl:imports` closure with the file's own
+        // directory as an import base (HermiT `Imports.INCLUDED` parity).
+        let source_dir = file_path.parent().map(std::path::Path::to_path_buf);
+        let config = Self::default_import_config();
+        self.load_ontology_with_import_config(ontology, config, source_dir)
     }
 
-    /// Classify object properties
+    /// Classify object properties.
+    ///
+    /// The returned [`super::results::PropertyClassificationResult`] maps each
+    /// named object property of the signature to its **full strict
+    /// superproperty set**: the transitive closure of `SubObjectPropertyOf`,
+    /// `EquivalentObjectProperties` (used for reachability only — equivalents
+    /// are *strict* supers of nothing, see
+    /// [`super::property_hierarchy`]), `InverseObjectProperties`, plus
+    /// `owl:topObjectProperty` as a super of every property. Property-chain
+    /// subs are not hierarchy edges (their internals are ignored).
     pub fn classify_object_properties(
         &mut self,
     ) -> Result<super::results::PropertyClassificationResult> {
@@ -1631,27 +2550,16 @@ impl Reasoner {
                 ontology,
                 "core: reading ontology for classify_object_properties",
             )?;
-            let mut hierarchy = std::collections::HashMap::new();
+            let closure =
+                super::property_hierarchy::ObjectPropertyHierarchy::compute(&ontology_ref);
 
             // Extract all object properties from the ontology
-            let mut object_properties = std::collections::HashSet::new();
-            for axiom in ontology_ref.axioms() {
-                self.extract_object_properties_from_axiom(axiom, &mut object_properties);
-            }
-
-            // Build hierarchy based on SubObjectPropertyOf axioms
-            for property in &object_properties {
-                let mut superproperties = std::collections::HashSet::new();
-
-                for axiom in ontology_ref.axioms() {
-                    if let crate::ontology::Axiom::SubObjectPropertyOf(axiom) = axiom
-                        && self.object_properties_equivalent(&axiom.sub_property, property)?
-                    {
-                        superproperties.insert(axiom.super_property.clone());
-                    }
-                }
-
-                hierarchy.insert(property.clone(), superproperties);
+            let signature = ontology_ref.signature()?;
+            let mut hierarchy = std::collections::HashMap::new();
+            for property in &signature.object_properties {
+                let expression =
+                    crate::ontology::ObjectPropertyExpression::ObjectProperty(property.clone());
+                hierarchy.insert(expression.clone(), closure.supers(&expression));
             }
 
             Ok(super::results::PropertyClassificationResult::new_object_properties(hierarchy))
@@ -1664,7 +2572,12 @@ impl Reasoner {
         }
     }
 
-    /// Classify data properties  
+    /// Classify data properties.
+    ///
+    /// Same contract as [`Self::classify_object_properties`] on the data side:
+    /// the full strict superproperty closure of `SubDataPropertyOf` /
+    /// `EquivalentDataProperties` plus `owl:topDataProperty` as a super of
+    /// every data property.
     pub fn classify_data_properties(
         &mut self,
     ) -> Result<super::results::PropertyClassificationResult> {
@@ -1673,27 +2586,15 @@ impl Reasoner {
                 ontology,
                 "core: reading ontology for classify_data_properties",
             )?;
-            let mut hierarchy = std::collections::HashMap::new();
+            let closure = super::property_hierarchy::DataPropertyHierarchy::compute(&ontology_ref);
 
             // Extract all data properties from the ontology
-            let mut data_properties = std::collections::HashSet::new();
-            for axiom in ontology_ref.axioms() {
-                self.extract_data_properties_from_axiom(axiom, &mut data_properties);
-            }
-
-            // Build hierarchy based on SubDataPropertyOf axioms
-            for property in &data_properties {
-                let mut superproperties = std::collections::HashSet::new();
-
-                for axiom in ontology_ref.axioms() {
-                    if let crate::ontology::Axiom::SubDataPropertyOf(axiom) = axiom
-                        && self.data_properties_equivalent(&axiom.sub_property, property)?
-                    {
-                        superproperties.insert(axiom.super_property.clone());
-                    }
-                }
-
-                hierarchy.insert(property.clone(), superproperties);
+            let signature = ontology_ref.signature()?;
+            let mut hierarchy = std::collections::HashMap::new();
+            for property in &signature.data_properties {
+                let expression =
+                    crate::ontology::DataPropertyExpression::DataProperty(property.clone());
+                hierarchy.insert(expression.clone(), closure.supers(&expression));
             }
 
             Ok(super::results::PropertyClassificationResult::new_data_properties(hierarchy))
@@ -2277,6 +3178,8 @@ impl Reasoner {
             ontology_guard.add_axiom(axiom);
             inserted_count += 1;
         }
+        drop(ontology_guard);
+        self.invalidate_query_caches();
 
         Ok(serde_json::json!({
             "status": "success",
@@ -2309,6 +3212,8 @@ impl Reasoner {
 
         // Calculate how many were actually deleted
         deleted_count = initial_count - ontology_guard.axioms().len();
+        drop(ontology_guard);
+        self.invalidate_query_caches();
 
         Ok(serde_json::json!({
             "status": "success",
@@ -2771,6 +3676,11 @@ impl Reasoner {
     }
 
     /// Extract object properties from axiom
+    ///
+    /// Superseded by [`super::property_hierarchy::ObjectPropertyHierarchy`] for
+    /// hierarchy queries; kept as the low-level "which properties does this
+    /// axiom mention" helper.
+    #[allow(dead_code)]
     fn extract_object_properties_from_axiom(
         &self,
         axiom: &crate::ontology::Axiom,
@@ -2797,7 +3707,9 @@ impl Reasoner {
         }
     }
 
-    /// Extract data properties from axiom
+    /// Extract data properties from axiom (see
+    /// [`Self::extract_object_properties_from_axiom`]).
+    #[allow(dead_code)]
     fn extract_data_properties_from_axiom(
         &self,
         axiom: &crate::ontology::Axiom,
@@ -2942,6 +3854,8 @@ impl Reasoner {
         self.rl_reasoner = Some(Box::new(rl));
         self.materialization_stale
             .store(false, std::sync::atomic::Ordering::Relaxed);
+        // Inferred class assertions were pushed into the ontology above.
+        self.invalidate_query_caches();
 
         // Mark Oxigraph store as stale so it gets rebuilt on next SPARQL query
         #[cfg(feature = "sparql-store")]
@@ -3162,6 +4076,8 @@ impl Reasoner {
         }
         self.materialization_stale
             .store(false, std::sync::atomic::Ordering::Relaxed);
+        // Inferred `rdf:type` triples were synced back into the ontology above.
+        self.invalidate_query_caches();
 
         Ok(MaterializationStats {
             rules_fired: 0,
@@ -3201,6 +4117,64 @@ impl Reasoner {
 
         guard.as_ref().unwrap().execute_update(sparql)
     }
+}
+
+/// B1 completeness guard + metadata parity for the EL fast path.
+///
+/// Returns `false` when the EL result does not key the hierarchy by **every**
+/// named class of the ontology signature plus `owl:Thing` — exactly what the
+/// general classification produces (`signature() + owl:Thing`, see
+/// `ClassificationService::classify`) — in which case the caller must fall
+/// back to the general path.  (It also returns `false` when the signature
+/// cannot be read.)
+///
+/// On success it fills in the metadata the general classification always
+/// sets, so an `Auto` run writes the same document as a `DL` run: the
+/// ontology IRI (HermiT-style header) and the sorted object/data property
+/// lists consumed by `ClassificationResult::write_object_properties` /
+/// `write_data_properties`.
+fn finalise_el_result(ontology: &OntologyRef, result: &mut ClassificationResult) -> bool {
+    let Ok(guard) = read_lock(ontology, "classify: EL result finalisation") else {
+        return false;
+    };
+    let Ok(signature) = guard.signature() else {
+        return false;
+    };
+
+    let owl_thing = ClassExpression::Class(crate::ontology::Class::new(
+        crate::ontology::IRI::owl_thing(),
+    ));
+    let covers_signature = signature.classes.iter().all(|class| {
+        result
+            .hierarchy
+            .contains_key(&ClassExpression::Class(class.clone()))
+    }) && result.hierarchy.contains_key(&owl_thing);
+
+    if !covers_signature {
+        return false;
+    }
+
+    result.ontology_iri = guard.id.ontology_iri.as_ref().map(ToString::to_string);
+
+    let mut object_properties: Vec<String> = signature
+        .object_properties
+        .iter()
+        .map(|p| p.iri.to_string())
+        .collect();
+    object_properties.sort();
+    object_properties.dedup();
+    result.object_properties = object_properties;
+
+    let mut data_properties: Vec<String> = signature
+        .data_properties
+        .iter()
+        .map(|p| p.iri.to_string())
+        .collect();
+    data_properties.sort();
+    data_properties.dedup();
+    result.data_properties = data_properties;
+
+    true
 }
 
 /// Returns `true` when an (EL-conforming) ontology is fully covered by the

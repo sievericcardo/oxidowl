@@ -1,4 +1,11 @@
-version: '3.8'
+# Docker Compose for Oxidowl.
+#
+# Default service runs the CLI (prints help). Uncomment/override `command`
+# for your reasoning task, or use the `oxidowl-server` example below to run
+# the HTTP servers.
+#
+# Note: the `version:` top-level key is obsolete in Compose v2 and removed
+# here; Compose infers the schema automatically.
 
 services:
   oxidowl:
@@ -18,7 +25,10 @@ services:
     # command: ["-c", "-P", "/ontologies/greenhouse.ttl"]
     # command: ["--help"]
     command: ["--help"]
-    
+
+    # No healthcheck on the CLI service: the container exits after running
+    # the command. The server example below has one.
+
     # Optional: Resource limits
     # deploy:
     #   resources:
@@ -29,7 +39,17 @@ services:
     #       cpus: '1.0'
     #       memory: 2G
 
-  # Example: Server mode (uncomment to use)
+  # Example: HTTP server mode (uncomment to use).
+  #
+  # Flags match the actual CLI (src/bin/main.rs):
+  #   --enable-server   start server mode (REST API on --server-port)
+  #   --server-bind     listen address (0.0.0.0 inside the container)
+  #   --server-port     REST API port (default 8080, also sets rest_api_port)
+  #   --enable-sparql   start the SPARQL endpoint
+  #   --sparql-port     SPARQL port (default 8082)
+  # Optional: --enable-owllink / --owllink-port (default 8081).
+  #
+  # Health endpoint: GET /api/v1/health on the REST port (src/server/rest.rs).
   # oxidowl-server:
   #   build:
   #     context: .
@@ -37,7 +57,22 @@ services:
   #   image: oxidowl:latest
   #   container_name: oxidowl-server
   #   ports:
-  #     - "8080:8080"
+  #     - "8080:8080"   # REST API
+  #     - "8082:8082"   # SPARQL endpoint
   #   volumes:
   #     - ./ontologies:/ontologies
-  #   command: ["server", "--host", "0.0.0.0", "--port", "8080"]
+  #   command:
+  #     - "--enable-server"
+  #     - "--server-bind"
+  #     - "0.0.0.0"
+  #     - "--server-port"
+  #     - "8080"
+  #     - "--enable-sparql"
+  #     - "--sparql-port"
+  #     - "8082"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/v1/health"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 15s

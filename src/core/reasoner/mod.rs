@@ -24,6 +24,7 @@ pub mod hypertableau_adapter;
 pub mod oxigraph_store;
 pub mod parallel_classification;
 pub mod parallel_tableau;
+pub mod property_hierarchy;
 pub mod queries;
 pub mod results;
 pub mod statistics;

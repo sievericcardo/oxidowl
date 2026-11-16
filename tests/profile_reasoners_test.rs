@@ -400,6 +400,98 @@ fn test_classify_nominal_ontology_matches_dl_path() -> Result<()> {
     Ok(())
 }
 
+/// `A ⊑ B ⊑ C` **plus an ABox assertion** `A(x)` — the B1 audit fixture.
+/// The `ClassAssertion` keeps `el_covered_by_absorption` false, so
+/// `classify()` under `target_profile=Auto` runs the `ELReasoner` fast path
+/// (never the A8 absorption path) and must still return the complete named
+/// class hierarchy: every named class as a key, `A ⊑ B`, `B ⊑ C` and the
+/// transitive `A ⊑ C`.
+fn abox_chain_ontology() -> Ontology {
+    let df = DF::new();
+    let mut onto = df.new_ontology();
+    onto.add_axiom(df.sub_class_of(
+        df.class_ce("http://ex.org/A"),
+        df.class_ce("http://ex.org/B"),
+    ));
+    onto.add_axiom(df.sub_class_of(
+        df.class_ce("http://ex.org/B"),
+        df.class_ce("http://ex.org/C"),
+    ));
+    onto.add_axiom(df.class_assertion(df.class_ce("http://ex.org/A"), df.named("http://ex.org/x")));
+    df.auto_declare(&mut onto);
+    onto
+}
+
+/// Assert `result.hierarchy` covers every named class of the fixture and
+/// carries the told + transitive subsumptions (and `owl:Thing`).
+fn assert_complete_chain_hierarchy(result: &ClassificationResult, label: &str) {
+    let a = ClassExpression::Class(Class::new(IRI::new("http://ex.org/A")));
+    let b = ClassExpression::Class(Class::new(IRI::new("http://ex.org/B")));
+    let c = ClassExpression::Class(Class::new(IRI::new("http://ex.org/C")));
+    let thing = ClassExpression::Class(Class::new(IRI::new("http://www.w3.org/2002/07/owl#Thing")));
+
+    for class in [&a, &b, &c] {
+        assert!(
+            result.hierarchy.contains_key(class),
+            "{label}: hierarchy must contain {class:?} as a key, got {:?}",
+            result.hierarchy.keys().collect::<Vec<_>>()
+        );
+    }
+
+    let sups_of = |sub: &ClassExpression| -> Vec<String> {
+        result
+            .hierarchy
+            .get(sub)
+            .map(|sups| sups.iter().map(|s| format!("{s:?}")).collect())
+            .unwrap_or_default()
+    };
+
+    let a_sups = sups_of(&a);
+    assert!(
+        a_sups.contains(&format!("{b:?}")),
+        "{label}: A must be a subclass of B, supers of A: {a_sups:?}"
+    );
+    assert!(
+        a_sups.contains(&format!("{c:?}")),
+        "{label}: A must be a subclass of C (transitive), supers of A: {a_sups:?}"
+    );
+    let b_sups = sups_of(&b);
+    assert!(
+        b_sups.contains(&format!("{c:?}")),
+        "{label}: B must be a subclass of C, supers of B: {b_sups:?}"
+    );
+    // `owl:Thing` must be part of the hierarchy (as its root key, with no
+    // superclasses — the general DL classification keys the hierarchy by
+    // `signature() + owl:Thing` and does not list `owl:Thing` among the
+    // *strict* superclasses of the named classes).
+    assert!(
+        result.hierarchy.contains_key(&thing),
+        "{label}: hierarchy must contain owl:Thing as a key, got {:?}",
+        result.hierarchy.keys().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_classify_abox_chain_is_complete_under_auto() -> Result<()> {
+    let auto = classify_with(OWLProfile::Auto, abox_chain_ontology())?;
+    assert_complete_chain_hierarchy(&auto, "target_profile=Auto");
+    Ok(())
+}
+
+#[test]
+fn test_classify_abox_chain_auto_matches_dl() -> Result<()> {
+    let auto = classify_with(OWLProfile::Auto, abox_chain_ontology())?;
+    let dl = classify_with(OWLProfile::DL, abox_chain_ontology())?;
+    assert_complete_chain_hierarchy(&dl, "target_profile=DL");
+    assert_eq!(
+        canonical_hierarchy(&auto),
+        canonical_hierarchy(&dl),
+        "classify() under target_profile=Auto must agree with target_profile=DL \
+         on an ABox ontology (A ⊑ B ⊑ C with A(x))"
+    );
+    Ok(())
+}
+
 #[test]
 fn test_classify_falls_back_when_el_fast_path_unsupported() -> Result<()> {
     // The fixture must be EL-conforming, otherwise this test would never

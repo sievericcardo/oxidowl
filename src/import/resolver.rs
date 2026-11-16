@@ -55,7 +55,6 @@ impl ImportResolver {
     }
 
     /// Resolve import IRI to actual location
-    #[must_use]
     pub fn resolve_import<'a>(
         &'a self,
         import_iri: &'a str,

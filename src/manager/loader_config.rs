@@ -28,7 +28,7 @@ impl Default for LoaderConfig {
     fn default() -> Self {
         Self {
             connection_timeout: Duration::from_secs(30),
-            read_timeout: Duration::from_mins(1),
+            read_timeout: Duration::from_secs(60),
             retry_count: 3,
             retry_backoff: Duration::from_secs(1),
             strict_parsing: false,

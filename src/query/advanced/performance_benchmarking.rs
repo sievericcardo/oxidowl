@@ -719,7 +719,7 @@ impl PerformanceBenchmarkingSystem {
 
         // Run query optimization with timeout
         let result = tokio::time::timeout(
-            Duration::from_mins(1), // 1 minute timeout for queries
+            Duration::from_secs(60), // 1 minute timeout for queries
             async { optimizer.optimize_advanced(query) },
         )
         .await;
@@ -744,7 +744,7 @@ impl PerformanceBenchmarkingSystem {
                 error_message: Some(format!("Query error: {e:?}")),
             }),
             Err(_) => Ok(SingleQueryMeasurement {
-                execution_time: Duration::from_mins(1),
+                execution_time: Duration::from_secs(60),
                 success: false,
                 result_size: 0,
                 optimization_effectiveness: 0.0,
@@ -1418,14 +1418,13 @@ impl PerformanceMetricsCollector {
         #[cfg(target_os = "linux")]
         {
             // Read from /proc/self/statm on Linux
-            if let Ok(contents) = std::fs::read_to_string("/proc/self/statm") {
-                if let Some(resident) = contents.split_whitespace().nth(1) {
-                    if let Ok(pages) = resident.parse::<usize>() {
-                        // Convert pages to bytes (typically 4KB per page)
-                        let bytes = pages * 4096;
-                        return bytes as f64;
-                    }
-                }
+            if let Ok(contents) = std::fs::read_to_string("/proc/self/statm")
+                && let Some(resident) = contents.split_whitespace().nth(1)
+                && let Ok(pages) = resident.parse::<usize>()
+            {
+                // Convert pages to bytes (typically 4KB per page)
+                let bytes = pages * 4096;
+                return bytes as f64;
             }
         }
 

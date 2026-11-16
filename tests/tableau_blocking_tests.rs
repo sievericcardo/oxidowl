@@ -386,3 +386,133 @@ fn strongly_cyclic_terminates_within_timeout() -> Result<()> {
     );
     Ok(())
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Phase A: cached signatures must not change blocking semantics
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Phase A rewrite: per-node signatures are now cached and keyed by
+/// `label_version` instead of being re-cloned/re-hashed for every pairwise
+/// comparison. On a cyclic existential `TBox` with an `ABox` every one of the
+/// 8 strategies must still terminate, report the ontology consistent, and
+/// keep the node count bounded — i.e. the cache changes the *cost* of
+/// blocking, never its decisions.
+#[test]
+fn cyclic_existential_bounded_for_all_strategies_with_cached_signatures() -> Result<()> {
+    let a = cls("http://example.org/A");
+    let onto = ontology(vec![
+        subclass(a.clone(), some("http://example.org/R", a.clone())),
+        assert_class("http://example.org/a", a.clone()),
+        assert_class("http://example.org/b", a),
+    ]);
+
+    for strategy in [
+        BlockingStrategy::Anywhere,
+        BlockingStrategy::Ancestor,
+        BlockingStrategy::Pairwise,
+        BlockingStrategy::Single,
+        BlockingStrategy::Core,
+        BlockingStrategy::Dynamic,
+        BlockingStrategy::Optimal,
+        BlockingStrategy::Indexed,
+    ] {
+        let mut tableau = build_tableau(strategy, onto.clone(), 5000)?;
+        let start = std::time::Instant::now();
+        let state = tableau.expand()?;
+        let elapsed = start.elapsed();
+        assert_eq!(
+            state,
+            TableauState::Satisfiable,
+            "strategy {strategy:?} must terminate and be consistent"
+        );
+        assert!(
+            tableau.nodes().len() <= 16,
+            "strategy {strategy:?}: node count blew up with cached signatures: {}",
+            tableau.nodes().len()
+        );
+        assert!(
+            elapsed < Duration::from_secs(3),
+            "strategy {strategy:?} took {elapsed:?} (potential non-termination)"
+        );
+    }
+    Ok(())
+}
+
+/// The cache must not silently *disable* blocking: with two individuals
+/// unfolding the same `∃R.A`, the two generated R-successors carry identical
+/// labels and the later one must still be blocked by the earlier one.
+#[test]
+fn cached_signatures_still_block_identical_successors() -> Result<()> {
+    let a = cls("http://example.org/A");
+    let onto = ontology(vec![
+        subclass(a.clone(), some("http://example.org/R", a.clone())),
+        assert_class("http://example.org/a", a.clone()),
+        assert_class("http://example.org/b", a),
+    ]);
+
+    let mut tableau = build_tableau(BlockingStrategy::Anywhere, onto, 5000)?;
+    let state = tableau.expand()?;
+    assert_eq!(state, TableauState::Satisfiable);
+
+    let blocked_generated = tableau
+        .nodes()
+        .iter()
+        .filter(|n| n.node_type == NodeType::Generated && n.is_blocked())
+        .count();
+    assert!(
+        blocked_generated >= 1,
+        "expected at least one blocked generated node with cached signatures; nodes: {:?}",
+        tableau
+            .nodes()
+            .iter()
+            .map(|n| (n.id, n.node_type, n.is_blocked(), n.blocking_info.blocker))
+            .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Phase E: blocker candidacy (Root/Nominal nodes are never blockers)
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Phase E: across every strategy, no node may ever be blocked by a `Root` or
+/// `Nominal` node — the checkers skip those candidates in the pairwise scan
+/// (`blocking::may_be_blocker`) and the executor post-filter rejects them.
+/// Nominals are still present in the tableau (the two `a`/`b` individuals),
+/// so this exercises exactly the "nominal candidates exist" workload.
+#[test]
+fn blockers_are_never_root_or_nominal_nodes() -> Result<()> {
+    let a = cls("http://example.org/A");
+    let onto = ontology(vec![
+        subclass(a.clone(), some("http://example.org/R", a.clone())),
+        assert_class("http://example.org/a", a.clone()),
+        assert_class("http://example.org/b", a),
+    ]);
+
+    for strategy in [
+        BlockingStrategy::Anywhere,
+        BlockingStrategy::Ancestor,
+        BlockingStrategy::Pairwise,
+        BlockingStrategy::Single,
+        BlockingStrategy::Core,
+        BlockingStrategy::Dynamic,
+        BlockingStrategy::Optimal,
+        BlockingStrategy::Indexed,
+    ] {
+        let mut tableau = build_tableau(strategy, onto.clone(), 5000)?;
+        let state = tableau.expand()?;
+        assert_eq!(state, TableauState::Satisfiable, "strategy {strategy:?}");
+
+        for node in tableau.nodes() {
+            if let Some(blocker) = node.blocking_info.blocker {
+                let blocker_type = tableau.nodes()[blocker].node_type;
+                assert!(
+                    matches!(blocker_type, NodeType::Generated | NodeType::Individual),
+                    "strategy {strategy:?}: node {} is blocked by {blocker_type:?} node {blocker}",
+                    node.id
+                );
+            }
+        }
+    }
+    Ok(())
+}

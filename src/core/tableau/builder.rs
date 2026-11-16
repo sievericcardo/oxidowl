@@ -315,24 +315,86 @@ impl TableauBuilder {
     }
 
     /// Build a tableau for instance checking (individual membership in class)
+    ///
+    /// Phase A fix: the previous implementation ignored `individual` and added
+    /// `not(C)` to a *fresh root witness* (which can never clash with the
+    /// individual's labels), so every instance check on a `TBox` answered the
+    /// same question regardless of the individual. The negated class is now
+    /// asserted on the **nominal node of the individual**: the tableau is
+    /// unsatisfiable exactly when `{individual} ⊓ ¬C` is, i.e. when
+    /// `individual ∈ C` (or the ontology is inconsistent — vacuous truth).
+    ///
+    /// `class_str` accepts the legacy string forms: a bare (or `<…>`-wrapped)
+    /// class IRI and an optional `not(<iri>)` wrapper. Complex `Display`
+    /// round-trips are rejected with an error — use
+    /// [`Self::build_for_instance_check_typed`] with the typed expression.
     pub fn build_for_instance_check(
         &self,
         ontology: &Ontology,
-        _individual: &str,
+        individual: &str,
         class_str: &str,
     ) -> Result<super::Tableau> {
-        // For instance checking, we create a tableau with individual ∈ ¬C and check for satisfiability
-        // If unsatisfiable, then individual ∈ C
-        let negated_class = format!("not({class_str})");
-        let concept_label = ConceptLabel::parse(&negated_class);
+        let individual_ref =
+            crate::ontology::Individual::named(crate::ontology::IRI::new(individual));
+        let class = Self::parse_simple_class_expression(class_str).ok_or_else(|| {
+            crate::Error::reasoning(format!(
+                "build_for_instance_check: cannot parse class expression string \
+                 {class_str:?}; use the typed builder instead"
+            ))
+        })?;
+        self.build_for_instance_check_typed(ontology, &individual_ref, &class)
+    }
+
+    /// Build a tableau for instance checking from the *typed* individual and
+    /// class expression (no string round-trip).
+    ///
+    /// Returns a tableau that is unsatisfiable iff `{individual} ⊓ ¬C` is,
+    /// i.e. iff `individual` is an instance of `class`.
+    pub fn build_for_instance_check_typed(
+        &self,
+        ontology: &Ontology,
+        individual: &crate::ontology::Individual,
+        class: &ClassExpression,
+    ) -> Result<super::Tableau> {
         let mut tableau =
             super::Tableau::from_ontology(Arc::new(ontology.clone()), self.config.clone())?;
 
-        // Add the negated class assertion to check instance membership
-        let root_node = tableau.add_node(crate::core::tableau::NodeType::Root)?;
-        tableau.add_concept_to_node(root_node, concept_label)?;
+        // Assert `¬C` on the individual's own nominal node — never on a fresh
+        // root witness, which would decouple the answer from the individual.
+        let node = tableau.get_or_create_nominal_node(individual)?;
+        let negated = ConceptLabel::Complex(Box::new(ClassExpression::ObjectComplementOf(
+            Box::new(class.clone()),
+        )));
+        tableau.add_concept_to_node(node, negated)?;
 
         Ok(tableau)
+    }
+
+    /// Best-effort parse of the legacy instance-check class string: a bare or
+    /// `<…>`-wrapped class IRI, optionally wrapped in `not(...)`. Returns
+    /// `None` for complex `Display` forms (they cannot be round-tripped).
+    fn parse_simple_class_expression(class_str: &str) -> Option<ClassExpression> {
+        let trimmed = class_str.trim();
+        if let Some(inner) = trimmed
+            .strip_prefix("not(")
+            .and_then(|rest| rest.strip_suffix(')'))
+        {
+            return Some(ClassExpression::ObjectComplementOf(Box::new(
+                Self::parse_simple_class_expression(inner)?,
+            )));
+        }
+        let iri = trimmed.trim_start_matches('<').trim_end_matches('>').trim();
+        if iri.is_empty()
+            || iri.chars().any(|c| {
+                c.is_whitespace()
+                    || matches!(c, '(' | ')' | '¬' | '∃' | '∀' | '⊓' | '⊔' | '{' | '}' | ',')
+            })
+        {
+            return None;
+        }
+        Some(ClassExpression::Class(crate::ontology::Class::new(
+            crate::ontology::IRI::new(iri),
+        )))
     }
 
     #[allow(dead_code)]

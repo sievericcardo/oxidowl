@@ -63,6 +63,23 @@ println!("SWRL execution: {} rules fired, {} new inferences",
          swrl_result.applications, swrl_result.inferences.len());
 ```
 
+## DL-safe SWRL materialization
+
+`Reasoner::load_ontology` runs every `Axiom::Rule` to a fixpoint over the
+named-individual `ABox` before the ontology is installed, so instance queries
+see the rule consequences immediately.  `add_axiom(Axiom::Rule(..))` does
+**not** materialize — call the explicit entry point (idempotent, returns the
+number of *new* axioms) or reload:
+
+```rust
+use oxidowl::{Reasoner, ReasonerConfig};
+
+let mut reasoner = Reasoner::new(ReasonerConfig::default())?;
+reasoner.load_ontology(ontology)?; // applies DL-safe SWRL rules
+let added = reasoner.materialize_swrl_rules()?; // 0 on a repeat run
+println!("SWRL materialization added {added} new axiom(s)");
+```
+
 ## Server Mode
 
 ```rust

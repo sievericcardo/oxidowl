@@ -10,7 +10,7 @@ use super::{
 use crate::{
     Error, Result,
     core::{
-        blocking::{BlockingChecker, BlockingStrategy as BlockingFactory},
+        blocking::{BlockingChecker, BlockingStrategy as BlockingFactory, StrategyKind},
         completion::{CompletionRule, RuleApplication, RuleContext, RulePriority},
         dependency::DependencySet,
     },
@@ -22,6 +22,177 @@ use std::{sync::Arc, time::Instant};
 /// Tableau execution engine
 pub struct TableauExecutor;
 
+/// Pre-extracted `RBox` (role-axiom) data for one tableau.
+///
+/// Phase C: [`TableauExecutor::apply_role_rules`] runs on **every** iteration
+/// of the expansion loop and used to re-scan `ontology.axioms()` from scratch
+/// each time — allocating a `String` per matching property (the profile
+/// attributed ≈41% of the consumer run to this sweep, ≈27% of the total to
+/// `RoleLabel` `Display` → `String` → grow/malloc/memmove alone).
+///
+/// The extraction depends only on the (immutable) ontology, so it is computed
+/// once on the first sweep, stored in [`super::Tableau::rbox_cache`] behind an
+/// `Arc`, and re-used by every subsequent sweep. Every field holds exactly the
+/// value the per-sweep extraction produced for the same axiom, so `RBox`
+/// semantics — role inclusions, transitivity, symmetry, reflexivity, inverse
+/// pairs, property chains, domain/range, data-property `RBox`, functional /
+/// inverse-functional merging, `HasKey`, and the role-constraint clashes — are
+/// unchanged.
+#[derive(Debug, Default)]
+pub struct RBoxCache {
+    /// `TransitiveObjectProperty(P)` role names.
+    pub transitive: Vec<String>,
+    /// `SymmetricObjectProperty(P)` role names.
+    pub symmetric: Vec<String>,
+    /// `AsymmetricObjectProperty(P)` role names.
+    pub asymmetric: Vec<String>,
+    /// `IrreflexiveObjectProperty(P)` role names.
+    pub irreflexive: Vec<String>,
+    /// `ReflexiveObjectProperty(P)` role names.
+    pub reflexive: Vec<String>,
+    /// `FunctionalObjectProperty(P)` role names.
+    pub functional: Vec<String>,
+    /// `InverseFunctionalObjectProperty(P)` role names.
+    pub inverse_functional: Vec<String>,
+    /// `(sub, super)` role inclusions from `SubObjectPropertyOf` (simple) and
+    /// `EquivalentObjectProperties` (both directions).
+    pub inclusions: Vec<(String, String)>,
+    /// `(P, Q)` pairs from `InverseObjectProperties(P, Q)` (symmetric).
+    pub inverse_pairs: Vec<(String, String)>,
+    /// `(chain, super)` property chains `R1∘…∘Rn ⊑ S` with `n ≥ 1`.
+    pub chains: Vec<(Vec<String>, String)>,
+    /// `(role, class)` from `ObjectPropertyDomain`.
+    pub domains: Vec<(String, ClassExpression)>,
+    /// `(role, class)` from `ObjectPropertyRange`.
+    pub ranges: Vec<(String, ClassExpression)>,
+    /// `(sub, super)` from `SubDataPropertyOf`.
+    pub data_inclusions: Vec<(String, String)>,
+    /// `(role, class)` from `DataPropertyDomain`.
+    pub data_domains: Vec<(String, ClassExpression)>,
+    /// `(role, range)` from `DataPropertyRange`.
+    pub data_ranges: Vec<(String, crate::ontology::DataRange)>,
+    /// `(p, q)` pairs from `DisjointObjectProperties`.
+    pub disjoint_pairs: Vec<(String, String)>,
+    /// `HasKey(C, object-props, data-props)` axioms.
+    pub has_keys: Vec<(
+        ClassExpression,
+        Vec<crate::ontology::ObjectPropertyExpression>,
+        Vec<crate::ontology::DataPropertyExpression>,
+    )>,
+}
+
+impl RBoxCache {
+    /// Extract the role-axiom data of `ontology`.
+    ///
+    /// The `match` below is the verbatim body of the extraction that used to
+    /// run inside [`TableauExecutor::apply_role_rules`] on every sweep — only
+    /// the destination moved (from per-call locals into `self`).
+    #[must_use]
+    pub fn build(ontology: &crate::ontology::Ontology) -> Self {
+        use crate::ontology::{Axiom, ObjectPropertyExpression};
+
+        let mut cache = Self::default();
+        for axiom in ontology.axioms() {
+            match axiom {
+                Axiom::TransitiveObjectProperty(a) => cache.transitive.push(a.property.to_string()),
+                Axiom::SymmetricObjectProperty(a) => cache.symmetric.push(a.property.to_string()),
+                Axiom::AsymmetricObjectProperty(a) => cache.asymmetric.push(a.property.to_string()),
+                Axiom::IrreflexiveObjectProperty(a) => {
+                    cache.irreflexive.push(a.property.to_string());
+                }
+                Axiom::ReflexiveObjectProperty(a) => cache.reflexive.push(a.property.to_string()),
+                Axiom::FunctionalObjectProperty(a) => cache.functional.push(a.property.to_string()),
+                Axiom::InverseFunctionalObjectProperty(a) => {
+                    cache.inverse_functional.push(a.property.to_string());
+                }
+                Axiom::InverseObjectProperties(a) => {
+                    cache
+                        .inverse_pairs
+                        .push((a.property1.to_string(), a.property2.to_string()));
+                }
+                Axiom::EquivalentObjectProperties(a) => {
+                    // Equivalent properties are bidirectional role inclusions.
+                    let names: Vec<String> = a
+                        .properties
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect();
+                    for i in 0..names.len() {
+                        for j in (i + 1)..names.len() {
+                            cache.inclusions.push((names[i].clone(), names[j].clone()));
+                            cache.inclusions.push((names[j].clone(), names[i].clone()));
+                        }
+                    }
+                }
+                Axiom::SubObjectPropertyOf(a) => {
+                    if let ObjectPropertyExpression::PropertyChain(chain) = &a.sub_property {
+                        let super_name = a.super_property.to_string();
+                        if !matches!(a.super_property, ObjectPropertyExpression::PropertyChain(_)) {
+                            let chain_names: Vec<String> =
+                                chain.iter().map(std::string::ToString::to_string).collect();
+                            if !chain_names.is_empty() {
+                                cache.chains.push((chain_names, super_name));
+                            }
+                        }
+                    } else {
+                        let sub_name = a.sub_property.to_string();
+                        let super_name = a.super_property.to_string();
+                        if sub_name != super_name {
+                            cache.inclusions.push((sub_name, super_name));
+                        }
+                    }
+                }
+                Axiom::ObjectPropertyDomain(a) => {
+                    cache
+                        .domains
+                        .push((a.property.to_string(), a.domain.clone()));
+                }
+                Axiom::ObjectPropertyRange(a) => {
+                    cache.ranges.push((a.property.to_string(), a.range.clone()));
+                }
+                Axiom::SubDataPropertyOf(a) => {
+                    let sub_name = a.sub_property.to_string();
+                    let super_name = a.super_property.to_string();
+                    if sub_name != super_name {
+                        cache.data_inclusions.push((sub_name, super_name));
+                    }
+                }
+                Axiom::DataPropertyDomain(a) => {
+                    cache
+                        .data_domains
+                        .push((a.property.to_string(), a.domain.clone()));
+                }
+                Axiom::DataPropertyRange(a) => {
+                    cache
+                        .data_ranges
+                        .push((a.property.to_string(), a.range.clone()));
+                }
+                Axiom::DisjointObjectProperties(a) => {
+                    let names: Vec<String> = a
+                        .properties
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect();
+                    for i in 0..names.len() {
+                        for j in (i + 1)..names.len() {
+                            cache
+                                .disjoint_pairs
+                                .push((names[i].clone(), names[j].clone()));
+                        }
+                    }
+                }
+                Axiom::HasKey(a) => cache.has_keys.push((
+                    a.class.clone(),
+                    a.object_properties.clone(),
+                    a.data_properties.clone(),
+                )),
+                _ => {}
+            }
+        }
+        cache
+    }
+}
+
 impl TableauExecutor {
     /// Convert an `ObjectPropertyExpression` to a role name string using Display (not Debug).
     /// Using Display avoids the extra `Atomic(...)` / `Inverse(...)` wrapping that Debug adds,
@@ -29,6 +200,41 @@ impl TableauExecutor {
     #[inline]
     fn prop_to_role_name(prop: &crate::ontology::ObjectPropertyExpression) -> String {
         prop.to_string()
+    }
+
+    /// Allocation-free `prop_to_role_name(prop) == role` (Phase C).
+    ///
+    /// Exactly the comparison the callers below used to make with a freshly
+    /// formatted `String`, resolved by matching the `Display` form of each
+    /// `ObjectPropertyExpression` variant against `role` byte-wise:
+    /// `ObjectProperty` → IRI, `InverseObjectProperty` → `inv(IRI)` (compared
+    /// in `inv(` … `)` form without allocating), `PropertyChain` → falls back
+    /// to the formatted comparison (its `Display` is a ` ∘ `-joined list; chains
+    /// never reach these call sites in practice).
+    #[inline]
+    fn prop_matches_role(prop: &crate::ontology::ObjectPropertyExpression, role: &str) -> bool {
+        use crate::ontology::ObjectPropertyExpression as OPE;
+        match prop {
+            OPE::ObjectProperty(p) => p.iri.as_str() == role,
+            OPE::InverseObjectProperty(p) => role
+                .strip_prefix("inv(")
+                .and_then(|rest| rest.strip_suffix(')'))
+                .is_some_and(|inner| inner == p.iri.as_str()),
+            OPE::PropertyChain(_) => Self::prop_to_role_name(prop) == role,
+        }
+    }
+
+    /// Allocation-free `DataPropertyExpression` role comparison (Phase C).
+    ///
+    /// `DataPropertyExpression` has a single variant whose `Display` is the
+    /// property IRI, so this is exactly `prop.to_string() == role` without the
+    /// per-call `String` allocation.
+    #[inline]
+    fn data_prop_matches_role(prop: &crate::ontology::DataPropertyExpression, role: &str) -> bool {
+        use crate::ontology::DataPropertyExpression as DPE;
+        match prop {
+            DPE::DataProperty(p) => p.iri.as_str() == role,
+        }
     }
 
     /// Convert `ConceptLabel` to `ClassExpression` for rule contexts
@@ -124,6 +330,12 @@ impl TableauExecutor {
         let mut memory_guard =
             crate::performance::MemoryGuard::from_max_memory_mb(tableau.config.max_memory_mb);
 
+        // Set when the expansion loop aborts because `reasoning.timeout` elapsed.
+        // A timed-out tableau must NOT be reported as satisfiable: `Unknown` is
+        // propagated to the callers (`run_tableau_*`), which turn it into
+        // `Err("Tableau returned unknown result")` instead of a false answer.
+        let mut timed_out = false;
+
         // Main expansion loop
         loop {
             if tableau.state != TableauState::Unknown {
@@ -153,6 +365,7 @@ impl TableauExecutor {
             {
                 warn!("Tableau expansion timed out");
                 tableau.state = TableauState::Unknown;
+                timed_out = true;
                 break;
             }
 
@@ -232,8 +445,15 @@ impl TableauExecutor {
             }
         }
 
-        // If we exit the loop with Unknown state but no clashes, the tableau is satisfiable
-        if tableau.state == TableauState::Unknown && !tableau.clash_detector.has_clashes() {
+        // If we exit the loop with Unknown state but no clashes, the tableau is
+        // satisfiable — EXCEPT after a timeout (or a memory-limit abort, which
+        // returns `Err` above): an interrupted expansion proves nothing, so the
+        // state stays `Unknown` and callers must surface an error rather than a
+        // silently wrong answer.
+        if tableau.state == TableauState::Unknown
+            && !timed_out
+            && !tableau.clash_detector.has_clashes()
+        {
             debug!("Tableau finished with no pending rules and no clashes - satisfiable");
             tableau.state = TableauState::Satisfiable;
         }
@@ -254,6 +474,8 @@ impl TableauExecutor {
 
         tableau.nodes.push(node);
         tableau.statistics.increment_nodes();
+        // Phase D: a fresh node is a new blocking input.
+        tableau.touch_label_revision();
 
         Ok(node_id)
     }
@@ -472,7 +694,7 @@ impl TableauExecutor {
                                                 property: p,
                                                 filler: f,
                                             } = &**expr
-                                            && Self::prop_to_role_name(p) == role_name
+                                            && Self::prop_matches_role(p, role_name.as_str())
                                         {
                                             return Some(*f.clone());
                                         }
@@ -503,7 +725,7 @@ impl TableauExecutor {
                                                 cardinality,
                                                 filler: f,
                                             } = &**expr
-                                            && Self::prop_to_role_name(p) == role_name
+                                            && Self::prop_matches_role(p, role_name.as_str())
                                         {
                                             return Some((*cardinality, *f.clone()));
                                         }
@@ -1120,7 +1342,16 @@ impl TableauExecutor {
         if let Some(source_node) = tableau.nodes.get_mut(source) {
             source_node.concepts.clear();
             source_node.status.clashed = true;
+            // Label set emptied → invalidate cached blocking signatures.
+            source_node.touch_labels();
         }
+        // Phase D: merge changed node labels (source cleared, target grew).
+        tableau.touch_label_revision();
+
+        // Phase E: edge redirects and successor-map swaps may have changed
+        // which roles have ≥2 successors / predecessors — refresh the merge
+        // gate bookkeeping from the post-merge structure.
+        tableau.rebuild_multi_successor_roles();
 
         // Record the merge for backtracking.
         tableau.merge_log.push(super::MergeRecord {
@@ -1197,6 +1428,13 @@ impl TableauExecutor {
             tableau
                 .edges
                 .truncate(backtrack_point.saved_state.edge_count);
+            // Phase D: truncated nodes are gone from the blocking input set.
+            tableau.touch_label_revision();
+            // Phase E: recycled node ids must never look "already clause-checked"
+            // (a fresh node starts at `label_version = 0`, which an old entry
+            // could also record). Labels restored below also bump their own
+            // `label_version`, but clearing here covers truncation alone.
+            tableau.clause_check_versions.clear();
             tableau.rebuild_role_successors();
             tableau.pending_queue = backtrack_point.saved_state.pending_queue.clone();
             tableau
@@ -1208,10 +1446,20 @@ impl TableauExecutor {
 
             // Restore per-node concept sets so the alternative is applied to the same
             // labels the choice point saw (undoes OR-rule disjunct additions, etc.).
+            let mut restored_labels = false;
             for (i, concepts) in backtrack_point.saved_state.node_concepts.iter().enumerate() {
-                if let Some(node) = tableau.nodes.get_mut(i) {
+                if let Some(node) = tableau.nodes.get_mut(i)
+                    && node.concepts != *concepts
+                {
                     node.concepts.clone_from(concepts);
+                    // Restored label set → invalidate cached blocking signatures.
+                    node.touch_labels();
+                    restored_labels = true;
                 }
+            }
+            if restored_labels {
+                // Phase D: restored labels are a new blocking input.
+                tableau.touch_label_revision();
             }
 
             // Reset clash detection *before* applying the alternative: the previous branch's
@@ -1337,7 +1585,7 @@ impl TableauExecutor {
                                     property,
                                     cardinality,
                                     filler,
-                                } if property.to_string() == role
+                                } if Self::data_prop_matches_role(property, role)
                                     && *cardinality as usize == max_count
                                     && filler.to_string() == filler_str =>
                                 {
@@ -1347,7 +1595,7 @@ impl TableauExecutor {
                                     property,
                                     cardinality,
                                     filler,
-                                } if property.to_string() == role
+                                } if Self::data_prop_matches_role(property, role)
                                     && *cardinality as usize == max_count
                                     && filler.to_string() == filler_str =>
                                 {
@@ -1379,7 +1627,7 @@ impl TableauExecutor {
                                     property,
                                     cardinality,
                                     filler,
-                                } if Self::prop_to_role_name(property) == role
+                                } if Self::prop_matches_role(property, role)
                                     && *cardinality as usize == max_count
                                     && filler.to_string() == filler_str =>
                                 {
@@ -1389,7 +1637,7 @@ impl TableauExecutor {
                                     property,
                                     cardinality,
                                     filler,
-                                } if Self::prop_to_role_name(property) == role
+                                } if Self::prop_matches_role(property, role)
                                     && *cardinality as usize == max_count
                                     && filler.to_string() == filler_str =>
                                 {
@@ -1472,12 +1720,12 @@ impl TableauExecutor {
                     .filter_map(|c| match c {
                         ConceptLabel::Complex(expr) => match expr.as_ref() {
                             ClassExpression::ObjectMaxCardinality { property, .. }
-                                if Self::prop_to_role_name(property) == role_name =>
+                                if Self::prop_matches_role(property, role_name) =>
                             {
                                 Some((**expr).clone())
                             }
                             ClassExpression::ObjectExactCardinality { property, .. }
-                                if Self::prop_to_role_name(property) == role_name =>
+                                if Self::prop_matches_role(property, role_name) =>
                             {
                                 Some((**expr).clone())
                             }
@@ -1516,7 +1764,8 @@ impl TableauExecutor {
         // Clone the clauses to avoid borrow conflicts
         let relevant_clauses: Vec<_> = if let Some(ref index) = tableau.clause_index {
             index
-                .get_candidate_clause_refs(&[class_iri.as_str().to_string()])
+                // Phase C: borrowed predicate (was `class_iri.as_str().to_string()`).
+                .get_candidate_clause_refs(&[class_iri.as_str()])
                 .into_iter()
                 .cloned()
                 .collect()
@@ -1680,8 +1929,10 @@ impl TableauExecutor {
         };
         for edge in &tableau.edges {
             if edge.to == node_id {
-                let edge_role = edge.role.to_string();
-                if (edge_role == role_name || edge_role == inv_role_name)
+                // Phase C: allocation-free role comparison (was
+                // `edge.role.to_string()` — one `String` per edge per call).
+                if (edge.role.is_role(role_name.as_str())
+                    || edge.role.is_role(inv_role_name.as_str()))
                     && !successors.contains(&edge.from)
                 {
                     successors.push(edge.from);
@@ -1830,7 +2081,7 @@ impl TableauExecutor {
                                                 property: p,
                                                 filler: f,
                                             } = &**expr
-                                            && Self::prop_to_role_name(p) == role_name
+                                            && Self::prop_matches_role(p, role_name.as_str())
                                         {
                                             return Some(*f.clone());
                                         }
@@ -2424,10 +2675,10 @@ impl TableauExecutor {
         node.concepts.iter().any(|c| match c {
             ConceptLabel::Complex(expr) => match expr.as_ref() {
                 ClassExpression::DataSomeValuesFrom { property, filler } => {
-                    property.to_string() == role_name && filler == range
+                    Self::data_prop_matches_role(property, role_name) && filler == range
                 }
                 ClassExpression::DataAllValuesFrom { property, filler } => {
-                    property.to_string() == role_name && filler == range
+                    Self::data_prop_matches_role(property, role_name) && filler == range
                 }
                 _ => false,
             },
@@ -2526,12 +2777,12 @@ impl TableauExecutor {
                     .filter_map(|c| match c {
                         ConceptLabel::Complex(expr) => match expr.as_ref() {
                             ClassExpression::DataMaxCardinality { property, .. }
-                                if property.to_string() == role_name =>
+                                if Self::data_prop_matches_role(property, role_name) =>
                             {
                                 Some((**expr).clone())
                             }
                             ClassExpression::DataExactCardinality { property, .. }
-                                if property.to_string() == role_name =>
+                                if Self::data_prop_matches_role(property, role_name) =>
                             {
                                 Some((**expr).clone())
                             }
@@ -2629,26 +2880,15 @@ impl TableauExecutor {
         tableau: &mut super::Tableau,
         rule_app: RuleApplication,
     ) -> Result<()> {
-        use crate::ontology::{Axiom, ObjectPropertyExpression};
-
         let _ = rule_app;
 
-        // Collect all property-chain axioms: (chain roles, super role).
-        let mut chains: Vec<(Vec<String>, String)> = Vec::new();
-        for axiom in tableau.ontology.axioms() {
-            if let Axiom::SubObjectPropertyOf(a) = axiom
-                && let ObjectPropertyExpression::PropertyChain(chain) = &a.sub_property
-                && !matches!(a.super_property, ObjectPropertyExpression::PropertyChain(_))
-            {
-                let chain_names: Vec<String> =
-                    chain.iter().map(std::string::ToString::to_string).collect();
-                if chain_names.len() >= 2 {
-                    chains.push((chain_names, a.super_property.to_string()));
-                }
-            }
-        }
-
-        Self::apply_property_chains(tableau, &chains)?;
+        // Phase C: reuse the cached RBox extraction instead of re-scanning the
+        // axioms. `apply_property_chains` skips chains shorter than 2 hops, so
+        // passing the full cached list is identical to collecting only the
+        // `len() >= 2` chains here (the cache applies the same
+        // "sub is a chain, super is not a chain" filter as this rule did).
+        let rbox = Self::rbox_cache(tableau);
+        Self::apply_property_chains(tableau, &rbox.chains)?;
         Ok(())
     }
 
@@ -2760,6 +3000,23 @@ impl TableauExecutor {
         Ok(())
     }
 
+    /// Whether `checker` decides blocking purely from node ids and label sets
+    /// (Phase D).
+    ///
+    /// Every strategy except [`StrategyKind::Ancestor`] does: they compare
+    /// cached label signatures only. `AncestorBlocking` rebuilds its `parent_map`
+    /// from `role_successors` (edges) on every pass, so an edge-only iteration
+    /// *does* change its input; [`StrategyKind::Dynamic`] can adapt into
+    /// `Ancestor`, so it is treated the same. Those two keep recomputing
+    /// unconditionally. [`StrategyKind::Optimal`] only ever adapts
+    /// `Anywhere → Core`, both label-only, so it is safe to skip.
+    fn blocking_depends_only_on_labels(checker: &dyn BlockingChecker) -> bool {
+        !matches!(
+            checker.kind(),
+            StrategyKind::Ancestor | StrategyKind::Dynamic
+        )
+    }
+
     /// Update blocking information for all nodes.
     ///
     /// Delegates to the configured `BlockingChecker` (built once per run from the
@@ -2769,11 +3026,21 @@ impl TableauExecutor {
     ///    (a meta-level artifact) and nominal nodes represent named individuals whose
     ///    labels must always be expanded; blocking them would be unsound for OWL 2 DL.
     ///    Nominal-aware blocking is handled in a later workstream (A2).
-    /// 2. **A node may not be blocked by the Root node**, since the root's label is a
-    ///    TBox-encoding and is not a genuine individual witness.
+    /// 2. **A node may not be blocked by a Root or Nominal node.** Phase E: the
+    ///    checkers already skip Root/Nominal *candidates* in the pairwise scan
+    ///    (`blocking::may_be_blocker`); this post-filter is kept as a belt-and-braces
+    ///    rejection for any future checker that forgets the filter.
     ///
     /// Blocked nodes are marked `fully_expanded` so `is_complete` can recognise that
     /// the tableau has exhausted all unblocked expansion.
+    ///
+    /// **Phase D:** returns early — without touching `blocking_info`/`fully_expanded`
+    /// — when [`super::Tableau::label_revision`] is unchanged since the previous
+    /// recomputation, so iterations that only added edges (role closure, property
+    /// chains) never pay the O(n²) pairwise comparison. The guards above run only
+    /// when a recomputation actually happened; on a skipped pass the existing flags
+    /// already satisfy them, because they were derived from the same node ids and
+    /// label sets.
     fn update_blocking(
         tableau: &mut super::Tableau,
         checker: &mut Box<dyn BlockingChecker>,
@@ -2781,6 +3048,13 @@ impl TableauExecutor {
         if !tableau.config.blocking_enabled {
             return Ok(());
         }
+
+        if tableau.label_revision == tableau.blocking_revision
+            && Self::blocking_depends_only_on_labels(checker.as_ref())
+        {
+            return Ok(());
+        }
+        tableau.blocking_revision = tableau.label_revision;
 
         // Recompute blocking from the current node labels. Each checker is stateful
         // across calls (e.g. signature caches, compared-pair sets) but recomputes the
@@ -2793,8 +3067,7 @@ impl TableauExecutor {
         for i in 0..node_count {
             // Never block the root or nominal nodes, and never block a node that carries
             // a nominal label `{a}` — such a node is a genuine individual witness whose
-            // labels must always be expanded (nominal-aware blocking). A nominal label in
-            // a *blocker* is still a sound blocker (see `blocking.rs`).
+            // labels must always be expanded (nominal-aware blocking).
             if matches!(
                 tableau.nodes[i].node_type,
                 NodeType::Nominal | NodeType::Root
@@ -2806,11 +3079,15 @@ impl TableauExecutor {
                 continue;
             }
 
-            // A node blocked by the root would rely on TBox-encoding concepts as a witness;
-            // reject such a block as unsound.
+            // A blocker that is not a legitimate witness (root = TBox encoding,
+            // nominal = named individual) is rejected as unsound — Phase E this
+            // also covers nominal blockers (the checkers already skip them).
             if let Some(blocker) = tableau.nodes[i].blocking_info.blocker
                 && blocker < node_count
-                && tableau.nodes[blocker].node_type == NodeType::Root
+                && matches!(
+                    tableau.nodes[blocker].node_type,
+                    NodeType::Root | NodeType::Nominal
+                )
             {
                 tableau.nodes[i].blocking_info.is_blocked = false;
                 tableau.nodes[i].blocking_info.blocker = None;
@@ -2828,48 +3105,85 @@ impl TableauExecutor {
     }
 
     /// Phase 2: Check for DL clause violations after tableau expansion
-    /// This method checks all tableau nodes against the DL clauses to detect violations
+    /// This method checks tableau nodes against the DL clauses to detect violations
     /// that only become apparent during reasoning (e.g., derived concept combinations)
+    ///
+    /// **Phase E — label-version gating:** only nodes whose
+    /// [`super::TableauNode::label_version`] moved past
+    /// [`super::Tableau::clause_check_versions`] (plus never-checked nodes) are
+    /// passed to `ClauseChecker::check_node`. A per-node clause violation is a
+    /// pure function of that node's own label set — every per-node check reads
+    /// only `node.concepts` (binary-atom clauses are evaluated at the tableau
+    /// level by [`Self::check_role_clause_violations`], which stays ungated
+    /// because it also depends on the *edge* set, and edge mutations do not
+    /// bump `label_version`) — and every label mutation bumps `label_version`,
+    /// so an unchanged version proves the node cannot have become violating.
+    /// `dirty_nodes`-driven clash detection is untouched.
     fn check_clause_violations(tableau: &mut super::Tableau) -> Result<()> {
         // Only perform clause checking if a ClauseChecker is available
-        if let Some(ref mut checker) = tableau.clause_checker {
-            // Check all nodes for clause violations
-            for node in &tableau.nodes {
-                if let Some(violation) = checker.check_node(node) {
-                    let clause_id = violation.clause.id.clone();
-                    let explanation = violation.explanation.clone();
-
-                    // Found a clause violation - create a clash
-                    let clash = Clash {
-                        clash_type: ClashType::ClauseViolation {
-                            clause_id: clause_id.clone(),
-                            node: node.id,
-                            description: explanation.clone(),
-                        },
-                        nodes: vec![node.id],
-                        dependencies: Arc::new(DependencySet::new()),
-                        explanation: format!(
-                            "DL Clause violation at node {}: {}",
-                            node.id, explanation
-                        ),
-                    };
-
-                    // Add the clash to the detector
-                    tableau.clash_detector.add_clash(clash);
-                    tableau.statistics.clashes_detected += 1;
-                    tableau.state = TableauState::Unsatisfiable;
-
-                    debug!(
-                        "Detected clause violation at node {}: Clause {}, {}",
-                        node.id, clause_id, explanation
-                    );
-
-                    // Early exit on first violation for efficiency
-                    return Ok(());
-                }
+        let Some(checker) = tableau.clause_checker.as_mut() else {
+            return Ok(());
+        };
+        let versions = &mut tableau.clause_check_versions;
+        for node in &tableau.nodes {
+            // Phase E: skip nodes whose labels are unchanged since their last check.
+            if versions.get(&node.id) == Some(&node.label_version) {
+                continue;
             }
+            if let Some(violation) = checker.check_node(node) {
+                let clause_id = violation.clause.id.clone();
+                let explanation = violation.explanation.clone();
+
+                // Found a clause violation - create a clash
+                let clash = Clash {
+                    clash_type: ClashType::ClauseViolation {
+                        clause_id: clause_id.clone(),
+                        node: node.id,
+                        description: explanation.clone(),
+                    },
+                    nodes: vec![node.id],
+                    dependencies: Arc::new(DependencySet::new()),
+                    explanation: format!(
+                        "DL Clause violation at node {}: {}",
+                        node.id, explanation
+                    ),
+                };
+
+                // Add the clash to the detector
+                tableau.clash_detector.add_clash(clash);
+                tableau.statistics.clashes_detected += 1;
+                tableau.state = TableauState::Unsatisfiable;
+
+                debug!(
+                    "Detected clause violation at node {}: Clause {}, {}",
+                    node.id, clause_id, explanation
+                );
+
+                // Early exit on first violation for efficiency. The version is
+                // deliberately NOT recorded: a later pass (after backtracking
+                // restored labels) must re-check this node.
+                return Ok(());
+            }
+            // Clean check at this version — record it so subsequent iterations skip.
+            versions.insert(node.id, node.label_version);
         }
         Ok(())
+    }
+
+    /// The cached `RBox` extraction for `tableau`, built from the ontology's
+    /// axioms on first use (Phase C) and shared via `Arc` afterwards.
+    ///
+    /// The ontology `Arc` is fixed for the lifetime of the tableau, so the
+    /// extraction is stable; `Tableau::load_ontology` clears the cache
+    /// defensively if a caller reloads axioms.
+    fn rbox_cache(tableau: &mut super::Tableau) -> Arc<RBoxCache> {
+        if let Some(cached) = &tableau.rbox_cache {
+            cached.clone()
+        } else {
+            let built = Arc::new(RBoxCache::build(tableau.ontology.as_ref()));
+            tableau.rbox_cache = Some(built.clone());
+            built
+        }
     }
 
     /// Apply the `RBox` (role-axiom) rules over the current edge set (workstream A5).
@@ -2906,127 +3220,44 @@ impl TableauExecutor {
     /// blocked nodes share their blocker's labels, so this is sound.
     fn apply_role_rules(tableau: &mut super::Tableau) -> Result<bool> {
         use crate::core::tableau::node::NodeType;
-        use crate::ontology::{Axiom, ClassExpression, ObjectPropertyExpression};
 
         let mut changed = false;
 
         // ── Collect RBox data (owned, so we can mutate the tableau freely). ─────────
-        let mut transitive: Vec<String> = Vec::new();
-        let mut symmetric: Vec<String> = Vec::new();
-        let mut asymmetric: Vec<String> = Vec::new();
-        let mut irreflexive: Vec<String> = Vec::new();
-        let mut reflexive: Vec<String> = Vec::new();
-        let mut functional: Vec<String> = Vec::new();
-        let mut inverse_functional: Vec<String> = Vec::new();
-        let mut inclusions: Vec<(String, String)> = Vec::new();
-        let mut inverse_pairs: Vec<(String, String)> = Vec::new();
-        let mut chains: Vec<(Vec<String>, String)> = Vec::new();
-        let mut domains: Vec<(String, ClassExpression)> = Vec::new();
-        let mut ranges: Vec<(String, ClassExpression)> = Vec::new();
-        let mut data_inclusions: Vec<(String, String)> = Vec::new();
-        let mut data_domains: Vec<(String, ClassExpression)> = Vec::new();
-        let mut data_ranges: Vec<(String, crate::ontology::DataRange)> = Vec::new();
-        let mut disjoint_pairs: Vec<(String, String)> = Vec::new();
-        let mut has_keys: Vec<(
-            ClassExpression,
-            Vec<ObjectPropertyExpression>,
-            Vec<crate::ontology::DataPropertyExpression>,
-        )> = Vec::new();
-
-        for axiom in tableau.ontology.axioms() {
-            match axiom {
-                Axiom::TransitiveObjectProperty(a) => transitive.push(a.property.to_string()),
-                Axiom::SymmetricObjectProperty(a) => symmetric.push(a.property.to_string()),
-                Axiom::AsymmetricObjectProperty(a) => asymmetric.push(a.property.to_string()),
-                Axiom::IrreflexiveObjectProperty(a) => irreflexive.push(a.property.to_string()),
-                Axiom::ReflexiveObjectProperty(a) => reflexive.push(a.property.to_string()),
-                Axiom::FunctionalObjectProperty(a) => functional.push(a.property.to_string()),
-                Axiom::InverseFunctionalObjectProperty(a) => {
-                    inverse_functional.push(a.property.to_string());
-                }
-                Axiom::InverseObjectProperties(a) => {
-                    inverse_pairs.push((a.property1.to_string(), a.property2.to_string()));
-                }
-                Axiom::EquivalentObjectProperties(a) => {
-                    // Equivalent properties are bidirectional role inclusions.
-                    let names: Vec<String> = a
-                        .properties
-                        .iter()
-                        .map(std::string::ToString::to_string)
-                        .collect();
-                    for i in 0..names.len() {
-                        for j in (i + 1)..names.len() {
-                            inclusions.push((names[i].clone(), names[j].clone()));
-                            inclusions.push((names[j].clone(), names[i].clone()));
-                        }
-                    }
-                }
-                Axiom::SubObjectPropertyOf(a) => {
-                    if let ObjectPropertyExpression::PropertyChain(chain) = &a.sub_property {
-                        let super_name = a.super_property.to_string();
-                        if !matches!(a.super_property, ObjectPropertyExpression::PropertyChain(_)) {
-                            let chain_names: Vec<String> =
-                                chain.iter().map(std::string::ToString::to_string).collect();
-                            if !chain_names.is_empty() {
-                                chains.push((chain_names, super_name));
-                            }
-                        }
-                    } else {
-                        let sub_name = a.sub_property.to_string();
-                        let super_name = a.super_property.to_string();
-                        if sub_name != super_name {
-                            inclusions.push((sub_name, super_name));
-                        }
-                    }
-                }
-                Axiom::ObjectPropertyDomain(a) => {
-                    domains.push((a.property.to_string(), a.domain.clone()));
-                }
-                Axiom::ObjectPropertyRange(a) => {
-                    ranges.push((a.property.to_string(), a.range.clone()));
-                }
-                Axiom::SubDataPropertyOf(a) => {
-                    let sub_name = a.sub_property.to_string();
-                    let super_name = a.super_property.to_string();
-                    if sub_name != super_name {
-                        data_inclusions.push((sub_name, super_name));
-                    }
-                }
-                Axiom::DataPropertyDomain(a) => {
-                    data_domains.push((a.property.to_string(), a.domain.clone()));
-                }
-                Axiom::DataPropertyRange(a) => {
-                    data_ranges.push((a.property.to_string(), a.range.clone()));
-                }
-                Axiom::DisjointObjectProperties(a) => {
-                    let names: Vec<String> = a
-                        .properties
-                        .iter()
-                        .map(std::string::ToString::to_string)
-                        .collect();
-                    for i in 0..names.len() {
-                        for j in (i + 1)..names.len() {
-                            disjoint_pairs.push((names[i].clone(), names[j].clone()));
-                        }
-                    }
-                }
-                Axiom::HasKey(a) => has_keys.push((
-                    a.class.clone(),
-                    a.object_properties.clone(),
-                    a.data_properties.clone(),
-                )),
-                _ => {}
-            }
-        }
+        // Phase C: the extraction depends only on the (immutable) ontology, so
+        // it now runs **once** per tableau and is kept in `Tableau::rbox_cache`
+        // behind an `Arc`; every iteration of the expansion loop reuses it
+        // instead of re-scanning all axioms and re-formatting every matching
+        // property into a fresh `String`.
+        let rbox = Self::rbox_cache(tableau);
+        let RBoxCache {
+            transitive,
+            symmetric,
+            asymmetric,
+            irreflexive,
+            reflexive,
+            functional,
+            inverse_functional,
+            inclusions,
+            inverse_pairs,
+            chains,
+            domains,
+            ranges,
+            data_inclusions,
+            data_domains,
+            data_ranges,
+            disjoint_pairs,
+            has_keys,
+        } = &*rbox;
 
         let node_count = tableau.nodes.len();
 
         // ── 1. Role inclusions: R ⊑ S — every R-edge also satisfies S. ──────────────
-        for (sub_name, super_name) in &inclusions {
+        for (sub_name, super_name) in inclusions {
             let matching: Vec<(NodeId, NodeId)> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *sub_name)
+                .filter(|e| e.role.is_role(sub_name))
                 .map(|e| (e.from, e.to))
                 .collect();
             for (x, y) in matching {
@@ -3037,11 +3268,11 @@ impl TableauExecutor {
         }
 
         // ── 2. Transitivity: P(x,y) ∧ P(y,z) ⇒ P(x,z). ──────────────────────────────
-        for p in &transitive {
+        for p in transitive {
             let p_edges: Vec<(NodeId, NodeId)> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *p)
+                .filter(|e| e.role.is_role(p))
                 .map(|e| (e.from, e.to))
                 .collect();
             for (x, y) in &p_edges {
@@ -3054,11 +3285,11 @@ impl TableauExecutor {
         }
 
         // ── 3. Symmetry: P(x,y) ⇒ P(y,x). ───────────────────────────────────────────
-        for p in &symmetric {
+        for p in symmetric {
             let p_edges: Vec<(NodeId, NodeId)> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *p)
+                .filter(|e| e.role.is_role(p))
                 .map(|e| (e.from, e.to))
                 .collect();
             for (x, y) in p_edges {
@@ -3073,7 +3304,7 @@ impl TableauExecutor {
         // individual witness, so it is skipped. Nominal nodes are genuine individual
         // witnesses (named individuals exist in every model) and correctly receive
         // self-loops; a reflexive property forces P(a,a) for every individual a.
-        for p in &reflexive {
+        for p in reflexive {
             for n in 0..node_count {
                 if tableau.nodes[n].node_type == NodeType::Root {
                     continue;
@@ -3089,11 +3320,11 @@ impl TableauExecutor {
         // edge on *either* side must be derived in the reverse direction on the other side.
         // Deriving only P ⇒ Q (and not Q ⇒ P) misses e.g. the S-edges that a functional R
         // needs to see after `S(a,x) ∧ S(b,x)` (they must first invert to R(x,a) / R(x,b)).
-        for (p, q) in &inverse_pairs {
+        for (p, q) in inverse_pairs {
             let p_edges: Vec<(NodeId, NodeId)> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *p)
+                .filter(|e| e.role.is_role(p))
                 .map(|e| (e.from, e.to))
                 .collect();
             for (x, y) in p_edges {
@@ -3104,7 +3335,7 @@ impl TableauExecutor {
             let q_edges: Vec<(NodeId, NodeId)> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *q)
+                .filter(|e| e.role.is_role(q))
                 .map(|e| (e.from, e.to))
                 .collect();
             for (x, y) in q_edges {
@@ -3115,16 +3346,16 @@ impl TableauExecutor {
         }
 
         // ── 6. Complex role inclusions (property chains), any length ≥ 2. ───────────
-        if Self::apply_property_chains(tableau, &chains)? {
+        if Self::apply_property_chains(tableau, chains)? {
             changed = true;
         }
 
         // ── 7. Domain / range: R(x,y) ⇒ C(x) / C(y). ────────────────────────────────
-        for (p, dom) in &domains {
+        for (p, dom) in domains {
             let sources: Vec<NodeId> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *p)
+                .filter(|e| e.role.is_role(p))
                 .map(|e| e.from)
                 .collect();
             for x in sources {
@@ -3133,11 +3364,11 @@ impl TableauExecutor {
                 }
             }
         }
-        for (p, rng) in &ranges {
+        for (p, rng) in ranges {
             let targets: Vec<NodeId> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *p)
+                .filter(|e| e.role.is_role(p))
                 .map(|e| e.to)
                 .collect();
             for y in targets {
@@ -3153,11 +3384,11 @@ impl TableauExecutor {
         // super-property edge; DataPropertyDomain puts the source individual in C;
         // DataPropertyRange validates the asserted/derived literal against the range
         // (an out-of-range literal is a datatype clash).
-        for (sub_name, super_name) in &data_inclusions {
+        for (sub_name, super_name) in data_inclusions {
             let matching: Vec<(NodeId, NodeId)> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *sub_name)
+                .filter(|e| e.role.is_role(sub_name))
                 .map(|e| (e.from, e.to))
                 .collect();
             for (x, y) in matching {
@@ -3166,11 +3397,11 @@ impl TableauExecutor {
                 }
             }
         }
-        for (p, dom) in &data_domains {
+        for (p, dom) in data_domains {
             let sources: Vec<NodeId> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *p)
+                .filter(|e| e.role.is_role(p))
                 .map(|e| e.from)
                 .collect();
             for x in sources {
@@ -3179,11 +3410,11 @@ impl TableauExecutor {
                 }
             }
         }
-        for (p, rng) in &data_ranges {
+        for (p, rng) in data_ranges {
             let targets: Vec<NodeId> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *p)
+                .filter(|e| e.role.is_role(p))
                 .map(|e| e.to)
                 .collect();
             for y in targets {
@@ -3220,12 +3451,27 @@ impl TableauExecutor {
         // merged, and a `Choice::FunctionalMerge` is pushed so backtracking can retry the
         // alternative survivor. A pair that is already known distinct (DifferentIndividuals)
         // is a clash: the ontology asserts a ≠ b yet functionality forces a = b.
-        for p in &functional {
+        //
+        // Phase E — merge gating: a role with at most one successor per node (resp. one
+        // predecessor per target) has nothing to merge, and the scans below are
+        // O(nodes)/O(edges) per role *per loop iteration*. `multi_successor_roles`
+        // records exactly the roles that ever reached a second successor/predecessor
+        // (maintained in `Tableau::add_edge` and rebuilt on backtrack/merge), so the
+        // no-op passes are skipped entirely. The set over-approximates, so a stale
+        // entry only costs one no-op pass and a missing entry is impossible: every
+        // edge creation goes through `add_edge`.
+        for p in functional {
+            if !tableau.multi_successor_roles.contains(p.as_str()) {
+                continue;
+            }
             if Self::merge_forced_equal_successors(tableau, p)? {
                 changed = true;
             }
         }
-        for p in &inverse_functional {
+        for p in inverse_functional {
+            if !tableau.multi_successor_roles.contains(p.as_str()) {
+                continue;
+            }
             // inverse-functional P is functional on inv(P): merge the P-predecessors of a
             // shared target. We reuse the same machinery over the predecessor sets.
             if Self::merge_forced_equal_predecessors(tableau, p)? {
@@ -3237,7 +3483,7 @@ impl TableauExecutor {
         // The common value may differ per key property (OWL 2 semantics), so each key
         // property is checked independently for a *shared* successor node (object) or a
         // shared nominal value label (data).
-        for (class_ce, obj_props, data_props) in &has_keys {
+        for (class_ce, obj_props, data_props) in has_keys {
             let class_label = ConceptLabel::Complex(Box::new(class_ce.clone()));
             let members: Vec<NodeId> = (0..node_count)
                 .filter(|&n| tableau.nodes[n].concepts.contains(&class_label))
@@ -3337,11 +3583,11 @@ impl TableauExecutor {
         // what makes `ObjectHasSelf(R)` with an asymmetric R unsatisfiable. The
         // reverse-edge check is therefore run for *every* A-edge including
         // `from == to`.
-        for a in &asymmetric {
+        for a in asymmetric {
             let violating: Vec<Clash> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *a)
+                .filter(|e| e.role.is_role(a))
                 .filter(|e| Self::has_edge(tableau, e.to, e.from, a))
                 .map(|e| Clash {
                     clash_type: ClashType::ClauseViolation {
@@ -3367,11 +3613,11 @@ impl TableauExecutor {
             }
         }
         // Irreflexivity: I(x,x) ⇒ ⊥.
-        for irr in &irreflexive {
+        for irr in irreflexive {
             let violating: Vec<Clash> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.from == e.to && e.role.to_string() == *irr)
+                .filter(|e| e.from == e.to && e.role.is_role(irr))
                 .map(|e| Clash {
                     clash_type: ClashType::ClauseViolation {
                         clause_id: format!("irreflexive({irr})"),
@@ -3396,11 +3642,11 @@ impl TableauExecutor {
             }
         }
         // Disjoint roles: P(x,y) ∧ Q(x,y) ⇒ ⊥.
-        for (p, q) in &disjoint_pairs {
+        for (p, q) in disjoint_pairs {
             let p_edges: Vec<(NodeId, NodeId)> = tableau
                 .edges
                 .iter()
-                .filter(|e| e.role.to_string() == *p)
+                .filter(|e| e.role.is_role(p))
                 .map(|e| (e.from, e.to))
                 .collect();
             for (x, y) in p_edges {
@@ -3519,7 +3765,7 @@ impl TableauExecutor {
                                 property: p,
                                 filler: f,
                             } = &**expr
-                            && Self::prop_to_role_name(p) == role
+                            && Self::prop_matches_role(p, role)
                         {
                             return Some(*f.clone());
                         }
@@ -3576,7 +3822,7 @@ impl TableauExecutor {
             // frontier: (current node, depth reached, path start node)
             let mut frontier: Vec<(NodeId, usize, NodeId)> = Vec::new();
             for edge in &tableau.edges {
-                if edge.role.to_string() == chain[0] {
+                if edge.role.is_role(&chain[0]) {
                     frontier.push((edge.to, 1, edge.from));
                 }
             }
@@ -3586,7 +3832,7 @@ impl TableauExecutor {
                 let mut next: Vec<(NodeId, usize, NodeId)> = Vec::new();
                 for (cur, d, start) in &frontier {
                     for edge in &tableau.edges {
-                        if edge.from == *cur && &edge.role.to_string() == role {
+                        if edge.from == *cur && edge.role.is_role(role) {
                             next.push((edge.to, d + 1, *start));
                         }
                     }
@@ -3799,7 +4045,7 @@ impl TableauExecutor {
         {
             let mut seen = std::collections::HashSet::new();
             for edge in &tableau.edges {
-                if edge.role.to_string() == *role && seen.insert(edge.to) {
+                if edge.role.is_role(role) && seen.insert(edge.to) {
                     targets.push(edge.to);
                 }
             }
@@ -3812,7 +4058,7 @@ impl TableauExecutor {
                 let live: Vec<NodeId> = tableau
                     .edges
                     .iter()
-                    .filter(|e| e.role.to_string() == *role && e.to == t)
+                    .filter(|e| e.role.is_role(role) && e.to == t)
                     .map(|e| e.from)
                     .filter(|&g| tableau.nodes.get(g).is_some_and(|x| !x.status.clashed))
                     .collect();
@@ -4264,5 +4510,66 @@ impl TableauExecutor {
         class_expr: &crate::ontology::ClassExpression,
     ) -> Result<()> {
         tableau.queue_rule_for_concept(node_id, class_expr)
+    }
+}
+
+#[cfg(test)]
+mod phase_e_tests {
+    use super::*;
+    use crate::config::ReasoningConfig;
+    use crate::core::tableau::{ClauseChecker, Tableau};
+    use crate::dl_clauses::{DLAtom, DLClause, DLClauseSet};
+    use crate::ontology::Ontology;
+    use std::collections::{HashMap, HashSet};
+
+    /// Phase E — `check_clause_violations` label-version gating: a clean check
+    /// is recorded per node, an unchanged node is skipped on the next pass,
+    /// and a `label_version` bump re-checks the node so a violation that only
+    /// appears after a label change still becomes a clash.
+    #[test]
+    fn clause_check_gating_skips_unchanged_and_catches_new_violations() {
+        let mut tableau = Tableau::new(ReasoningConfig::default(), Arc::new(Ontology::new()));
+        let root = tableau.add_node(NodeType::Root).unwrap();
+
+        // Clause: B(x) ← A(x) — violated as soon as A is present without B.
+        let clause = DLClause {
+            head: vec![DLAtom::concept_assertion("http://ex.org/B", "x")],
+            body: vec![DLAtom::concept_assertion("http://ex.org/A", "x")],
+            variables: HashSet::from(["x".to_string()]),
+            id: "phase_e_clause".to_string(),
+        };
+        let set = DLClauseSet {
+            deterministic_clauses: vec![clause],
+            disjunctive_clauses: vec![],
+            abox_facts: vec![],
+            prefixes: HashMap::new(),
+            statistics: Default::default(),
+        };
+        tableau.clause_checker = Some(ClauseChecker::new(set));
+
+        // 1) Empty labels: no violation, and the check is recorded.
+        TableauExecutor::check_clause_violations(&mut tableau).unwrap();
+        assert!(!tableau.clash_detector.has_clashes());
+        assert_eq!(
+            tableau.clause_check_versions.get(&root),
+            Some(&tableau.nodes[root].label_version),
+            "a clean check must record the node's label version"
+        );
+
+        // 2) Unchanged labels: the second pass skips the node (still no clash,
+        //    and the recorded version is untouched).
+        let recorded = tableau.clause_check_versions.get(&root).copied();
+        TableauExecutor::check_clause_violations(&mut tableau).unwrap();
+        assert!(!tableau.clash_detector.has_clashes());
+        assert_eq!(tableau.clause_check_versions.get(&root), recorded.as_ref());
+
+        // 3) Adding A bumps `label_version` → the node is re-checked and the
+        //    violation (B missing) becomes a clash.
+        tableau.nodes[root].add_concept(ConceptLabel::Atomic("http://ex.org/A".to_string()));
+        TableauExecutor::check_clause_violations(&mut tableau).unwrap();
+        assert!(
+            tableau.clash_detector.has_clashes(),
+            "a label change must re-check the node and detect the violation"
+        );
     }
 }

@@ -221,3 +221,65 @@ fn turtle_predicate_a_shorthand_in_semicolon_list() {
         ont.axioms()
     );
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// B3 — an explicit default prefix must survive `Ontology(<IRI>)`
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// `Prefix(:=<http://example.org/default#>)` followed by
+/// `Ontology(<http://example.org/onto>)`: the ontology IRI must not overwrite
+/// the declared `""` prefix, so `:A` expands to
+/// `http://example.org/default#A` (B3: it used to become
+/// `http://example.org/onto#A`).
+#[test]
+fn functional_explicit_default_prefix_survives_ontology_declaration() {
+    let ont = parse_functional(concat!(
+        "Prefix(:=<http://example.org/default#>)\n",
+        "Ontology(<http://example.org/onto>)\n",
+        "Declaration(Class(:A))\n",
+    ))
+    .expect("document with an explicit default prefix must parse");
+
+    let declares_default_a = ont.axioms().iter().any(|ax| match ax {
+        Axiom::Declaration(d) => {
+            matches!(&d.entity, Entity::Class(iri)
+                if iri.as_str() == "http://example.org/default#A")
+        }
+        _ => false,
+    });
+    assert!(
+        declares_default_a,
+        "`:A` must resolve against the explicitly declared default prefix; axioms: {:?}",
+        ont.axioms()
+    );
+
+    // The ontology IRI itself is still recorded.
+    assert_eq!(
+        ont.get_iri().map(|iri| iri.to_string()).as_deref(),
+        Some("http://example.org/onto")
+    );
+}
+
+/// Without an explicit `Prefix(:=…)` the historical behaviour is unchanged:
+/// the ontology IRI (plus `#`) becomes the default prefix.
+#[test]
+fn functional_ontology_iri_still_provides_default_prefix_when_none_declared() {
+    let ont = parse_functional(concat!(
+        "Ontology(<http://example.org/onto>)\n",
+        "Declaration(Class(:B))\n",
+    ))
+    .expect("document without an explicit default prefix must parse");
+
+    let declares_onto_b = ont.axioms().iter().any(|ax| match ax {
+        Axiom::Declaration(d) => {
+            matches!(&d.entity, Entity::Class(iri)
+                if iri.as_str() == "http://example.org/onto#B")
+        }
+        _ => false,
+    });
+    assert!(
+        declares_onto_b,
+        "`:B` must fall back to the ontology IRI; axioms: {:?}",
+        ont.axioms()
+    );
+}

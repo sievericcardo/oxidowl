@@ -59,10 +59,10 @@ impl Default for MLHeuristicsConfig {
     fn default() -> Self {
         Self {
             enable_online_learning: true,
-            model_update_interval: Duration::from_hours(1), // 1 hour
+            model_update_interval: Duration::from_secs(3600), // 1 hour
             training_batch_size: 32,
             learning_rate: 0.001,
-            checkpoint_interval: Duration::from_hours(2), // 2 hours
+            checkpoint_interval: Duration::from_secs(7200), // 2 hours
             enable_ensembling: false,
             model_storage_dir: PathBuf::from("./ml_models"),
             min_training_samples: 100,
@@ -887,12 +887,11 @@ impl QueryFeatureExtractor {
             use std::fs;
             if let Ok(meminfo) = fs::read_to_string("/proc/meminfo") {
                 for line in meminfo.lines() {
-                    if line.starts_with("MemAvailable:") {
-                        if let Some(value) = line.split_whitespace().nth(1) {
-                            if let Ok(kb) = value.parse::<f32>() {
-                                return kb / 1024.0; // Convert KB to MB
-                            }
-                        }
+                    if line.starts_with("MemAvailable:")
+                        && let Some(value) = line.split_whitespace().nth(1)
+                        && let Ok(kb) = value.parse::<f32>()
+                    {
+                        return kb / 1024.0; // Convert KB to MB
                     }
                 }
             }
@@ -924,22 +923,21 @@ impl QueryFeatureExtractor {
         #[cfg(target_os = "linux")]
         {
             use std::fs;
-            if let Ok(loadavg) = fs::read_to_string("/proc/loadavg") {
-                if let Some(load) = loadavg.split_whitespace().next() {
-                    if let Ok(load_val) = load.parse::<f32>() {
-                        // Normalize by number of CPUs
-                        if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
-                            let cpu_count = cpuinfo
-                                .lines()
-                                .filter(|l| l.starts_with("processor"))
-                                .count() as f32;
-                            if cpu_count > 0.0 {
-                                return (load_val / cpu_count).min(1.0);
-                            }
-                        }
-                        return load_val.min(1.0);
+            if let Ok(loadavg) = fs::read_to_string("/proc/loadavg")
+                && let Some(load) = loadavg.split_whitespace().next()
+                && let Ok(load_val) = load.parse::<f32>()
+            {
+                // Normalize by number of CPUs
+                if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
+                    let cpu_count = cpuinfo
+                        .lines()
+                        .filter(|l| l.starts_with("processor"))
+                        .count() as f32;
+                    if cpu_count > 0.0 {
+                        return (load_val / cpu_count).min(1.0);
                     }
                 }
+                return load_val.min(1.0);
             }
         }
 

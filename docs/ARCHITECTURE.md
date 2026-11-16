@@ -61,6 +61,7 @@
   - `shacl/` - Full SHACL Core + SHACL-SPARQL engine (10+ constraint categories)
 
 - **`swrl`** - SWRL (Semantic Web Rule Language) implementation
+  - `materializer.rs` - DL-safe forward-chaining materialization (`SwrlMaterializer`) applied on ontology load
   - `engine.rs` - SWRL rule execution engine with multiple strategies
   - `interpreter.rs` - Individual rule interpretation and execution
   - `parser.rs` - SWRL syntax parsing

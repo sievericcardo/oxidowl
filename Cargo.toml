@@ -1,6 +1,6 @@
 [package]
 name = "oxidowl"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2024"
 description = "A high-performance Description Logic reasoner using tableau algorithms with parallel computation. This project started as a test to explore the capabilities of agentic LLM tools for software development."
 license = "LGPL-3.0-or-later"
@@ -173,7 +173,7 @@ explanations = []
 ml = ["candle-core", "candle-nn"]  # Machine learning features
 http-imports = ["reqwest"]  # HTTP import fetching for ontologies
 zip-imports = ["zip"]  # Zip archive support for ontology imports
-# owl-integration = ["owlapi", "rdf", "sophia"]  # Disabled until proper deps are available
+# owl-integration = ["rdf", "sophia"]  # Disabled until proper deps are available
 # Kani formal verification harnesses (enabled by `cargo kani` or `--features kani`)
 kani = []
 

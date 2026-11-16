@@ -510,7 +510,6 @@ impl ClassificationResult {
 struct ClassNode {
     name: String,
     #[allow(dead_code)]
-    #[allow(dead_code)]
     iri: String,
     children: Vec<ClassNode>,
 }

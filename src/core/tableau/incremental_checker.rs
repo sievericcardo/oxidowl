@@ -40,9 +40,9 @@
 //! cache.put(fingerprint, clause_id, result);
 //! ```
 
+use crate::core::fast_hash::{FastBuildHasher, FastHasher};
 use crate::core::tableau::{ConceptLabel, NodeId, TableauNode};
 use lru::LruCache;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
@@ -52,6 +52,13 @@ use std::num::NonZeroUsize;
 /// A fingerprint is a 64-bit hash representing the complete state of a node
 /// (concepts, roles, edges). Two nodes with the same fingerprint should produce
 /// the same clause checking results.
+///
+/// Phase E: computed with the seedless [`FastHasher`] and without heap
+/// allocations — concept/role names are borrowed `&str`s (sorted as slices)
+/// instead of cloned `String`s, and the node type is hashed as a `u8`
+/// discriminant instead of a `format!("{:?}")` `String`. Fingerprints are
+/// process-internal cache keys, so the digest change is invisible outside the
+/// clause-check cache.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct NodeFingerprint(u64);
 
@@ -69,41 +76,43 @@ impl NodeFingerprint {
     /// # Performance
     ///
     /// - Time: O(n log n) where n = concepts + role edges
-    /// - Space: O(1) (result is single u64)
+    /// - Space: O(1) result (one transient `Vec` for the sort keys)
     #[must_use]
     pub fn from_node(node: &TableauNode) -> Self {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = FastHasher::new();
 
         // Hash node ID for uniqueness
         node.id.hash(&mut hasher);
 
-        // Hash atomic concepts (sorted for determinism)
-        let mut atomic_concepts: Vec<String> = node
+        // Hash atomic concepts (sorted for determinism) — borrowed &str keys,
+        // no per-concept `String` clone / `format!("¬…")` (Phase E).
+        let mut atomic_concepts: Vec<(&str, bool)> = node
             .concepts
             .iter()
             .filter_map(|c| match c {
-                ConceptLabel::Atomic(name) => Some(name.clone()),
-                ConceptLabel::NegatedAtomic(name) => Some(format!("¬{name}")),
+                ConceptLabel::Atomic(name) => Some((name.as_str(), false)),
+                ConceptLabel::NegatedAtomic(name) => Some((name.as_str(), true)),
                 _ => None, // Complex concepts handled separately
             })
             .collect();
-        atomic_concepts.sort();
-        for concept in atomic_concepts {
+        atomic_concepts.sort_unstable();
+        for (concept, negated) in atomic_concepts {
+            negated.hash(&mut hasher);
             concept.hash(&mut hasher);
         }
 
-        // Hash role successors (sorted for determinism)
-        let mut role_edges: Vec<(String, Vec<NodeId>)> = node
+        // Hash role successors (sorted for determinism) — `Arc<str>` keys are
+        // hashed as `&str`, never re-formatted into a `String`.
+        let mut role_edges: Vec<(&str, Vec<NodeId>)> = node
             .role_successors
             .iter()
             .map(|(role, successors)| {
                 let mut sorted_successors: Vec<NodeId> = successors.iter().copied().collect();
                 sorted_successors.sort_unstable();
-                // Convert Arc<str> key to String so the Vec type stays (String, Vec<NodeId>)
-                (role.to_string(), sorted_successors)
+                (role.as_ref(), sorted_successors)
             })
             .collect();
-        role_edges.sort_by(|a, b| a.0.cmp(&b.0));
+        role_edges.sort_unstable_by(|a, b| a.0.cmp(b.0));
         for (role, successors) in role_edges {
             role.hash(&mut hasher);
             for successor in successors {
@@ -111,8 +120,14 @@ impl NodeFingerprint {
             }
         }
 
-        // Hash node type
-        format!("{:?}", node.node_type).hash(&mut hasher);
+        // Hash node type (u8 discriminant — no `format!("{:?}")` allocation).
+        let node_type_ord: u8 = match node.node_type {
+            crate::core::tableau::NodeType::Individual => 0,
+            crate::core::tableau::NodeType::Nominal => 1,
+            crate::core::tableau::NodeType::Generated => 2,
+            crate::core::tableau::NodeType::Root => 3,
+        };
+        node_type_ord.hash(&mut hasher);
 
         NodeFingerprint(hasher.finish())
     }
@@ -172,6 +187,12 @@ pub enum CachedCheckResult {
 /// The cache maps (`NodeFingerprint`, `ClauseID`) -> `CachedCheckResult`.
 /// When the cache is full, the least recently used entry is evicted.
 ///
+/// Phase E: the hasher is [`FastBuildHasher`] (seedless FNV-1a) instead of
+/// `std`'s default — every `get` re-hashes the `(fingerprint, clause_id)`
+/// key, and `SipHash` was a measurable slice of `ClauseChecker::check_node`
+/// in the consumer profile. LRU semantics (and the eviction tests) are
+/// unchanged; only the digest function swapped.
+///
 /// # Memory Usage
 ///
 /// Each cache entry uses approximately:
@@ -183,8 +204,8 @@ pub enum CachedCheckResult {
 ///
 /// Default capacity of 10,000 entries ≈ 880 KB
 pub struct CheckResultCache {
-    /// LRU cache for check results
-    cache: LruCache<CacheKey, CachedCheckResult>,
+    /// LRU cache for check results (Phase E: fast deterministic hasher).
+    cache: LruCache<CacheKey, CachedCheckResult, FastBuildHasher>,
 
     /// Statistics
     hits: usize,
@@ -211,7 +232,12 @@ impl CheckResultCache {
     /// Panics if `capacity` is zero.
     #[must_use]
     pub fn new(capacity: usize) -> Self {
-        let cache = LruCache::new(NonZeroUsize::new(capacity).expect("capacity must be > 0"));
+        // Phase E: `with_hasher` installs the fast deterministic hasher; LRU
+        // behaviour (capacity, eviction order, statistics) is unchanged.
+        let cache = LruCache::with_hasher(
+            NonZeroUsize::new(capacity).expect("capacity must be > 0"),
+            FastBuildHasher::default(),
+        );
         Self {
             cache,
             hits: 0,

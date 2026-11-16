@@ -31,6 +31,17 @@ pub struct ReasoningStatistics {
 
     /// Maximum tableau depth reached
     pub max_tableau_depth: usize,
+
+    /// Number of classification runs actually executed (a `classify()` call
+    /// served from the classification cache does not increment this).
+    pub classification_runs: u64,
+
+    /// Number of `get_instances` queries served.
+    pub instance_queries: u64,
+
+    /// Number of consistency answers served from the reasoner's memoised
+    /// cache instead of re-running the tableau.
+    pub consistency_cache_hits: u64,
 }
 
 impl ReasoningStatistics {
@@ -77,6 +88,29 @@ impl ReasoningStatistics {
         self.cache_hit_ratio = ratio;
     }
 
+    /// Fold the counters of a per-operation local statistics value into `self`.
+    ///
+    /// Used by [`crate::core::reasoner::Reasoner`] to accumulate the statistics
+    /// produced by individual operations (`classify`, `realize`,
+    /// `get_instances`, consistency checks) into the shared totals returned by
+    /// `Reasoner::get_statistics`.
+    pub fn merge(&mut self, other: &ReasoningStatistics) {
+        self.consistency_checks += other.consistency_checks;
+        self.satisfiability_checks += other.satisfiability_checks;
+        self.subsumption_checks += other.subsumption_checks;
+        self.total_reasoning_time += other.total_reasoning_time;
+        self.tableau_nodes_created += other.tableau_nodes_created;
+        self.backtracking_operations += other.backtracking_operations;
+        self.max_tableau_depth = self.max_tableau_depth.max(other.max_tableau_depth);
+        self.classification_runs += other.classification_runs;
+        self.instance_queries += other.instance_queries;
+        self.consistency_cache_hits += other.consistency_cache_hits;
+        // Ratios are not additive: take the most recent observation.
+        if other.cache_hit_ratio != 0.0 {
+            self.cache_hit_ratio = other.cache_hit_ratio;
+        }
+    }
+
     /// Get total number of reasoning operations
     #[must_use]
     pub fn total_operations(&self) -> u64 {
@@ -103,6 +137,9 @@ impl ReasoningStatistics {
              - Satisfiability checks: {}\n\
              - Subsumption checks: {}\n\
              - Total operations: {}\n\
+             - Classification runs: {}\n\
+             - Instance queries: {}\n\
+             - Consistency cache hits: {}\n\
              - Total reasoning time: {:?}\n\
              - Average time per operation: {:?}\n\
              - Cache hit ratio: {:.2}%\n\
@@ -113,6 +150,9 @@ impl ReasoningStatistics {
             self.satisfiability_checks,
             self.subsumption_checks,
             self.total_operations(),
+            self.classification_runs,
+            self.instance_queries,
+            self.consistency_cache_hits,
             self.total_reasoning_time,
             self.average_reasoning_time(),
             self.cache_hit_ratio * 100.0,

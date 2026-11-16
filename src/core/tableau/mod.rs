@@ -36,6 +36,7 @@ use crate::{
         completion::{CompletionStrategy, RuleApplication},
         dependency::DependencySet,
         expansion::DefaultExpansionStrategy,
+        fast_hash::FastBuildHasher,
     },
     ontology::{ClassExpression, Ontology},
 };
@@ -86,6 +87,16 @@ pub struct Tableau {
 
     /// Reference to the ontology for querying axioms during reasoning
     pub ontology: Arc<Ontology>,
+
+    /// Phase C: pre-extracted `RBox` (role-axiom) data, built **once** from
+    /// `ontology.axioms()` on the first [`executor::TableauExecutor`] `RBox` sweep
+    /// and shared (`Arc`) across every subsequent sweep of this tableau run.
+    ///
+    /// The ontology is immutable for the lifetime of a tableau (the `Arc` is
+    /// fixed at construction), so the cache is never invalidated by expansion;
+    /// [`Tableau::load_ontology`] clears it defensively in case a caller reloads
+    /// different axioms into an existing tableau.
+    pub(crate) rbox_cache: Option<Arc<executor::RBoxCache>>,
 
     /// Concept cache for performance
     concept_cache: HashMap<String, ConceptLabel>,
@@ -141,6 +152,54 @@ pub struct Tableau {
     /// value-space helpers used by the datatype rules: concrete-literal generation, facet
     /// evaluation, value equality, and range membership.
     pub datatype_validator: crate::core::reasoner::datatype_validation::DatatypeValidator,
+
+    /// Phase D: monotone revision over everything blocking decisions depend on —
+    /// the node set (ids) and every node's label set. Bumped by
+    /// [`Tableau::touch_label_revision`] on node creation, node truncation
+    /// (backtracking), every genuinely-new concept insertion, merge label clears
+    /// and backtrack label restores. Edge mutations deliberately do **not** bump
+    /// it: [`executor::TableauExecutor::update_blocking`] recomputes the O(n²)
+    /// blocking comparisons only when this has moved past `blocking_revision`, so
+    /// edge-only iterations (role closure, property chains, All-rule successor
+    /// links) keep the flags the last recomputation produced.
+    pub label_revision: u64,
+
+    /// `label_revision` as observed by the last blocking recomputation — the
+    /// executor's bookkeeping counterpart of [`Tableau::label_revision`]
+    /// (Phase D skip). Only [`executor::TableauExecutor`] writes it.
+    pub(crate) blocking_revision: u64,
+
+    /// Phase E: per-node `label_version` as of that node's last clause check.
+    ///
+    /// [`executor::TableauExecutor::check_clause_violations`] only calls
+    /// `ClauseChecker::check_node` for nodes whose [`TableauNode::label_version`]
+    /// has moved past the recorded value (or that have no entry yet — newly
+    /// created nodes are always checked). Sound because a per-node clause can
+    /// only become violated when *that node's* label set changes: every
+    /// per-node check (`check_deterministic_clauses*`, `check_negative_clauses*`,
+    /// `check_disjointness_violations`) reads only `node.concepts`, and every
+    /// label mutation bumps `label_version`. Cleared on backtracking and on
+    /// ontology reload so recycled node ids can never look "already checked".
+    pub(crate) clause_check_versions: HashMap<NodeId, u64, FastBuildHasher>,
+
+    /// Phase E: roles for which some node already has **two** successors or
+    /// some target already has **two** predecessors.
+    ///
+    /// [`executor::TableauExecutor::apply_role_rules`] runs the
+    /// `merge_forced_equal_successors` / `merge_forced_equal_predecessors`
+    /// scans only for functional / inverse-functional roles present in this
+    /// set: a role with ≤ 1 successor per node (and ≤ 1 predecessor per
+    /// target) has nothing to merge, and those scans are O(nodes)/O(edges)
+    /// per role per loop iteration. The set is an *over*-approximation on
+    /// purpose (edge duplicates and clashed nodes can only add roles), so a
+    /// stale entry costs one no-op pass, never a missed merge.
+    pub multi_successor_roles: HashSet<String, FastBuildHasher>,
+
+    /// `(target node, role)` → number of incoming edges, backing the
+    /// predecessor half of [`Tableau::multi_successor_roles`]. Maintained in
+    /// [`Tableau::add_edge`] and rebuilt from the edge list by
+    /// [`Tableau::rebuild_multi_successor_roles`] (backtracking, merges).
+    pub(crate) role_predecessor_counts: HashMap<(NodeId, Arc<str>), u32, FastBuildHasher>,
 }
 
 /// A backtrack point for handling non-deterministic choices
@@ -301,6 +360,7 @@ impl Tableau {
             clause_checker: None, // Will be populated when ontology is loaded
             clause_index: None,   // Will be populated when ontology is loaded
             ontology,
+            rbox_cache: None,
             concept_cache: HashMap::new(),
             role_cache: HashMap::new(),
             individual_map: HashMap::new(),
@@ -312,6 +372,41 @@ impl Tableau {
             negative_object_assertions: Vec::new(),
             datatype_validator: crate::core::reasoner::datatype_validation::DatatypeValidator::new(
             ),
+            label_revision: 0,
+            blocking_revision: 0,
+            clause_check_versions: HashMap::default(),
+            multi_successor_roles: HashSet::default(),
+            role_predecessor_counts: HashMap::default(),
+        }
+    }
+
+    /// Phase D: record a change to the blocking inputs (node set or labels).
+    ///
+    /// [`executor::TableauExecutor::update_blocking`] skips its pairwise
+    /// comparison pass while `label_revision == blocking_revision`; every
+    /// mutation that could change a blocking decision — node creation,
+    /// node truncation, a new concept label, a merge clearing labels, a
+    /// backtrack restoring them — must call this. Bumping more often than
+    /// strictly necessary is safe (it only costs one extra recomputation);
+    /// *missing* a bump would leave stale blocking flags.
+    #[inline]
+    pub(crate) fn touch_label_revision(&mut self) {
+        self.label_revision = self.label_revision.wrapping_add(1);
+    }
+
+    /// Insert `concept` directly into `node_id`'s label set (the ontology-loading
+    /// path in [`Self::process_axiom`]), bumping [`Self::label_revision`] when the
+    /// set actually grew (Phase D).
+    fn seed_concept(&mut self, node_id: NodeId, concept: ConceptLabel) {
+        let inserted = self.nodes.get_mut(node_id).is_some_and(|node| {
+            let inserted = node.concepts.insert(concept);
+            if inserted {
+                node.touch_labels();
+            }
+            inserted
+        });
+        if inserted {
+            self.touch_label_revision();
         }
     }
 
@@ -326,6 +421,14 @@ impl Tableau {
     /// Load axioms from an ontology
     pub fn load_ontology(&mut self, ontology: &Ontology) -> Result<()> {
         use crate::dl_clauses::DLClauseGenerator;
+
+        // Phase C: the RBox cache is derived from `self.ontology`'s axioms —
+        // drop it before (re)loading so a caller that reloads axioms into an
+        // existing tableau can never observe a stale role-axiom extraction.
+        self.rbox_cache = None;
+        // Phase E: a (re)loaded ontology generates a different clause set —
+        // previously-checked versions no longer prove anything.
+        self.clause_check_versions.clear();
 
         // Register DatatypeDefinition axioms so user-defined datatype literals are validated
         // against their defining ranges (workstream A4).
@@ -454,9 +557,7 @@ impl Tableau {
                 // This allows the tableau to check their consistency
                 for class_expr in &equiv.classes {
                     let concept = ConceptLabel::Complex(Box::new(class_expr.clone()));
-                    if let Some(root) = self.nodes.get_mut(root_id) {
-                        root.concepts.insert(concept.clone());
-                    }
+                    self.seed_concept(root_id, concept);
                     // Queue rules if needed
                     self.queue_rule_for_concept(root_id, class_expr)?;
                 }
@@ -478,9 +579,7 @@ impl Tableau {
                         ]);
 
                         let concept = ConceptLabel::Complex(Box::new(intersection.clone()));
-                        if let Some(root) = self.nodes.get_mut(root_id) {
-                            root.concepts.insert(concept);
-                        }
+                        self.seed_concept(root_id, concept);
 
                         // Queue AND rule to expand this intersection
                         let rule_app = RuleApplication {
@@ -509,9 +608,7 @@ impl Tableau {
                         ]);
 
                         let concept = ConceptLabel::Complex(Box::new(intersection.clone()));
-                        if let Some(root) = self.nodes.get_mut(root_id) {
-                            root.concepts.insert(concept);
-                        }
+                        self.seed_concept(root_id, concept);
 
                         // Queue AND rule
                         let rule_app = RuleApplication {
@@ -540,9 +637,7 @@ impl Tableau {
                 ]);
 
                 let concept = ConceptLabel::Complex(Box::new(intersection.clone()));
-                if let Some(root) = self.nodes.get_mut(root_id) {
-                    root.concepts.insert(concept);
-                }
+                self.seed_concept(root_id, concept);
 
                 // Queue AND rule
                 let rule_app = RuleApplication {
@@ -587,12 +682,14 @@ impl Tableau {
 
                 // Add the class assertion to the node
                 let concept = ConceptLabel::Complex(Box::new(assertion.class.clone()));
-                if let Some(node) = self.nodes.get_mut(node_id) {
-                    node.concepts.insert(concept);
-                }
+                self.seed_concept(node_id, concept);
 
                 // Also add all equivalent classes (if any) - but only if we have equivalence closure
                 // This is an optimization to avoid expensive lookups when not needed
+                // (`self.clause_checker` stays borrowed for the whole lookup, so the
+                // Phase D revision bump is applied once after the block instead of
+                // through `seed_concept` inside it.)
+                let mut seeded_equivalent = false;
                 if let Some(checker) = &mut self.clause_checker
                     && let ClassExpression::Class(ref class) = assertion.class
                     && let Some(eq_closure) = checker.equivalence_closure()
@@ -613,11 +710,17 @@ impl Tableau {
                             let equiv_class = crate::ontology::Class::new(equiv_iri);
                             let equiv_expr = ClassExpression::Class(equiv_class);
                             let equiv_concept = ConceptLabel::Complex(Box::new(equiv_expr));
-                            if let Some(node) = self.nodes.get_mut(node_id) {
-                                node.concepts.insert(equiv_concept);
+                            if let Some(node) = self.nodes.get_mut(node_id)
+                                && node.concepts.insert(equiv_concept)
+                            {
+                                node.touch_labels();
+                                seeded_equivalent = true;
                             }
                         }
                     }
+                }
+                if seeded_equivalent {
+                    self.touch_label_revision();
                 }
 
                 // Queue rule for expanding this concept
@@ -636,9 +739,7 @@ impl Tableau {
 
                     for complex_expr in unfolding_targets {
                         let complex_label = ConceptLabel::Complex(Box::new(complex_expr.clone()));
-                        if let Some(node) = self.nodes.get_mut(node_id) {
-                            node.concepts.insert(complex_label);
-                        }
+                        self.seed_concept(node_id, complex_label);
                         self.queue_rule_for_concept(node_id, &complex_expr)?;
                         log::debug!(
                             "Unfolded concept {:?} to {:?} at node {}",
@@ -1103,6 +1204,13 @@ impl Tableau {
         self.inequalities.clear();
         self.merge_log.clear();
         self.negative_object_assertions.clear();
+        // Phase E: node set dropped — clause-check and multi-successor
+        // bookkeeping must not survive a reset.
+        self.clause_check_versions.clear();
+        self.multi_successor_roles.clear();
+        self.role_predecessor_counts.clear();
+        // Phase D: the node set was dropped — blocking inputs changed.
+        self.touch_label_revision();
     }
 
     // Legacy methods for compatibility with existing code
@@ -1172,6 +1280,8 @@ impl Tableau {
         let node = TableauNode::new(id, node_type);
         self.nodes.push(node);
         self.statistics.increment_nodes();
+        // Phase D: a fresh node is a new blocking input.
+        self.touch_label_revision();
         Ok(id)
     }
 
@@ -1187,15 +1297,38 @@ impl Tableau {
         let edge = TableauEdge::new(from, to, role.clone(), Arc::new(DependencySet::new()));
         self.edges.push(edge);
 
+        // Phase E: canonical role-name key — the same string the successor
+        // map uses (`RoleLabel`'s `Display`), so RBox functional names
+        // (`ObjectPropertyExpression::to_string`) match it byte-wise.
+        let role_str = role.to_string();
+        let role_key = Arc::<str>::from(role_str.as_str());
+
         // Update node connections
         if let Some(from_node) = self.nodes.get_mut(from) {
             // Update role successors — intern the role string so equal keys share one Arc.
-            let role_str = role.to_string();
-            from_node
+            let successors = from_node
                 .role_successors
-                .entry(Arc::<str>::from(role_str.as_str()))
-                .or_insert_with(HashSet::new)
-                .insert(to);
+                .entry(role_key.clone())
+                .or_insert_with(HashSet::new);
+            // A *distinct* second successor is exactly the condition under which
+            // the functional merge (`merge_forced_equal_successors`) can act.
+            if successors.insert(to) && successors.len() == 2 {
+                self.multi_successor_roles.insert(role_str.clone());
+            }
+        }
+        // Predecessor half: the same trigger for the inverse-functional merge
+        // (`merge_forced_equal_predecessors`) — a second incoming edge for the
+        // role at `to`. Duplicate edges may overcount; over-approximation only
+        // costs one no-op merge pass (see `multi_successor_roles` docs).
+        {
+            let count = self
+                .role_predecessor_counts
+                .entry((to, role_key))
+                .or_insert(0);
+            *count = count.saturating_add(1);
+            if *count == 2 {
+                self.multi_successor_roles.insert(role_str);
+            }
         }
         // For predecessors, we'd need a separate tracking mechanism or traverse edges
 
@@ -1241,7 +1374,11 @@ impl Tableau {
         }
 
         let is_new = if let Some(node) = self.nodes.get_mut(node_id) {
-            node.concepts.insert(concept.clone())
+            let inserted = node.concepts.insert(concept.clone());
+            if inserted {
+                node.touch_labels();
+            }
+            inserted
         } else {
             return Ok(());
         };
@@ -1249,6 +1386,8 @@ impl Tableau {
         if is_new {
             // Only mark dirty if the concept was actually new.
             self.dirty_nodes.push(node_id);
+            // Phase D: a new label is a new blocking input.
+            self.touch_label_revision();
             if queue_rules && matches!(&concept, ConceptLabel::Complex(_)) {
                 crate::core::tableau::executor::TableauExecutor::queue_rules_for_concept(
                     self, node_id, &concept,
@@ -1331,7 +1470,9 @@ impl Tableau {
     /// Rebuild every node's `role_successors` cache from the current edge list.
     ///
     /// Called after backtracking truncates nodes/edges and undoes merges, so the successor
-    /// maps exactly match the surviving edge structure.
+    /// maps exactly match the surviving edge structure. Phase E: also refreshes the
+    /// derived [`Self::multi_successor_roles`] / [`Self::role_predecessor_counts`]
+    /// bookkeeping in the same pass.
     pub fn rebuild_role_successors(&mut self) {
         for node in &mut self.nodes {
             node.role_successors.clear();
@@ -1346,6 +1487,41 @@ impl Tableau {
                     .insert(edge.to);
             }
         }
+        self.rebuild_multi_successor_roles();
+    }
+
+    /// Recompute [`Self::multi_successor_roles`] and [`Self::role_predecessor_counts`]
+    /// from the current successor maps and edge list (Phase E).
+    ///
+    /// Called wherever the edge structure changes *wholesale* (role-successor
+    /// rebuild after backtracking, merge redirects); [`Tableau::add_edge`]
+    /// maintains both incrementally on the hot path. Counts include duplicate
+    /// edges and clashed nodes on purpose — the set is a safe
+    /// *over*-approximation (see the field docs).
+    pub fn rebuild_multi_successor_roles(&mut self) {
+        self.multi_successor_roles.clear();
+        self.role_predecessor_counts.clear();
+        for node in &self.nodes {
+            for (role, successors) in &node.role_successors {
+                if successors.len() >= 2 {
+                    self.multi_successor_roles.insert(role.to_string());
+                }
+            }
+        }
+        for edge in &self.edges {
+            if edge.from >= self.nodes.len() || edge.to >= self.nodes.len() {
+                continue;
+            }
+            let role_str = edge.role.to_string();
+            let count = self
+                .role_predecessor_counts
+                .entry((edge.to, Arc::<str>::from(role_str.as_str())))
+                .or_insert(0);
+            *count = count.saturating_add(1);
+            if *count == 2 {
+                self.multi_successor_roles.insert(role_str);
+            }
+        }
     }
 
     /// Undo all merges recorded at index `from_len` and later, in reverse order.
@@ -1358,6 +1534,12 @@ impl Tableau {
     ///
     /// Panics if the merge log is unexpectedly empty while unwinding.
     pub fn undo_merges(&mut self, from_len: usize) {
+        if self.merge_log.len() > from_len {
+            // Phase D: restored node labels/types are new blocking inputs
+            // (over-approximate on purpose — a spurious bump only costs one
+            // extra recomputation).
+            self.touch_label_revision();
+        }
         while self.merge_log.len() > from_len {
             let rec = self
                 .merge_log
@@ -1370,12 +1552,15 @@ impl Tableau {
                     target.concept_dependencies = rec.target_dependencies;
                     target.node_type = rec.target_node_type;
                     target.status = rec.target_status;
+                    // Restored label set → invalidate cached blocking signatures.
+                    target.touch_labels();
                 }
                 if let Some(source) = self.nodes.get_mut(rec.source) {
                     source.concepts = rec.source_concepts;
                     source.concept_dependencies = rec.source_dependencies;
                     source.node_type = rec.source_node_type;
                     source.status = rec.source_status;
+                    source.touch_labels();
                 }
             }
             for (idx, from_pre, to_pre) in &rec.edge_changes {
@@ -1401,3 +1586,79 @@ impl std::fmt::Debug for Tableau {
 }
 
 // Re-export common types for convenience
+
+#[cfg(test)]
+mod phase_e_tests {
+    use super::*;
+
+    fn empty_tableau() -> Tableau {
+        Tableau::new(ReasoningConfig::default(), Arc::new(Ontology::new()))
+    }
+
+    /// Phase E — `multi_successor_roles` maintenance: the functional-merge
+    /// gate opens exactly when some node reaches a second successor *or* some
+    /// target reaches a second predecessor, and a wholesale rebuild derives
+    /// the same set from the edge / successor structure.
+    #[test]
+    fn multi_successor_roles_tracks_second_successor_and_second_predecessor() {
+        let mut t = empty_tableau();
+        for _ in 0..4 {
+            t.add_node(NodeType::Root).unwrap();
+        }
+
+        // One successor per node → the functional gate stays closed.
+        t.add_edge(0, 1, RoleLabel::Atomic("R".to_string()))
+            .unwrap();
+        assert!(!t.multi_successor_roles.contains("R"));
+
+        // A second *distinct* successor of node 0 opens the functional gate.
+        t.add_edge(0, 2, RoleLabel::Atomic("R".to_string()))
+            .unwrap();
+        assert!(t.multi_successor_roles.contains("R"));
+
+        // Predecessor side: one S-predecessor at node 3 is not enough …
+        t.add_edge(1, 3, RoleLabel::Atomic("S".to_string()))
+            .unwrap();
+        assert!(
+            !t.multi_successor_roles.contains("S"),
+            "a single predecessor must not open the inverse-functional gate"
+        );
+        // … a second one does.
+        t.add_edge(2, 3, RoleLabel::Atomic("S".to_string()))
+            .unwrap();
+        assert!(t.multi_successor_roles.contains("S"));
+        assert_eq!(
+            t.role_predecessor_counts.get(&(3, Arc::<str>::from("S"))),
+            Some(&2)
+        );
+
+        // A wholesale rebuild derives the same set from the structure.
+        t.multi_successor_roles.clear();
+        t.role_predecessor_counts.clear();
+        t.rebuild_role_successors();
+        assert!(t.multi_successor_roles.contains("R"));
+        assert!(t.multi_successor_roles.contains("S"));
+    }
+
+    /// Phase E — clause-check bookkeeping must not survive a reset or an
+    /// ontology reload (different clause set ⇒ old versions prove nothing).
+    #[test]
+    fn clause_check_versions_reset_on_reset_and_ontology_reload() {
+        let mut t = empty_tableau();
+        let n = t.add_node(NodeType::Root).unwrap();
+        t.clause_check_versions.insert(n, 7);
+
+        t.reset();
+        assert!(
+            t.clause_check_versions.is_empty(),
+            "reset must clear versions"
+        );
+
+        t.clause_check_versions.insert(0, 7);
+        t.load_ontology(&Ontology::new()).unwrap();
+        assert!(
+            t.clause_check_versions.is_empty(),
+            "reloading the ontology must clear versions"
+        );
+    }
+}
