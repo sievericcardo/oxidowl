@@ -8,10 +8,13 @@
 #   meta      – resolve the release tag (push ref or dispatch input)
 #   build     – native release binaries for 4 targets (no cross-compilation)
 #   release   – create the GitHub Release and attach binaries + checksums
-#   docker    – build & push ghcr.io/sievericcardo/oxidowl (linux/amd64)
+#   docker    – build the linux/amd64 image to validate the Dockerfile on
+#               every release; the image is NEVER pushed. Publishing is a
+#               manual owner action (docker build/push locally, or a
+#               one-off re-enable of a login+push step).
 #
-# Secrets: only the default GITHUB_TOKEN (contents: write, packages: write).
-# No PAT is required.
+# Secrets: only the default GITHUB_TOKEN (contents: write). No PAT is
+# required and no registry auth is needed — nothing is pushed to ghcr.io.
 
 name: Release
 
@@ -27,7 +30,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -80,11 +82,21 @@ jobs:
             target: x86_64-unknown-linux-gnu
           # macos-13 (the previous x86_64 label) was retired on 2025-12-04;
           # macos-15-intel is GitHub's replacement Intel runner (supported
-          # until August 2027). Do NOT switch back to macos-13 — jobs on
-          # retired labels queue forever instead of failing.
+          # until August 2027). Do NOT switch back to macos-13 — a retired
+          # macOS label fails/cancels immediately at queue time with
+          # `The configuration '...' is not supported`, so the job never runs.
           - os: macos-15-intel
             target: x86_64-apple-darwin
-          - os: macos-14
+          # macos-14 (the previous arm64 label) was retired on 2026-11-02 —
+          # GitHub retired ALL macOS 14 runner images (actions/runner-images
+          # issues #13518 and #15226; GitHub changelog 2026-10-01 "macOS 14
+          # runner image retirement"). Jobs on `macos-14` are cancelled at
+          # queue time with `The configuration 'macos-14-arm64-us-default' is
+          # not supported`. `macos-15` is the documented arm64 migration
+          # target (explicit pin; sibling of `macos-15-intel`). Do NOT use
+          # `macos-latest` — it moved to macOS 26 in mid-2026 and would
+          # drift — and do NOT reintroduce `macos-14`.
+          - os: macos-15
             target: aarch64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -113,12 +125,15 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build release binary
-        env:
-          TARGET: ${{ matrix.target }}
         # `server` enables the OWLlink/SPARQL/REST HTTP servers (warp);
         # `sparql` enables the SPARQL endpoint module. Default features stay
         # on (they pull in Oxigraph/RocksDB via `sparql-store`).
-        run: cargo build --release --locked --features server,sparql --target "$TARGET" --bin oxidowl
+        # The target is interpolated by Actions BEFORE the shell runs, so this
+        # step is shell-agnostic. Do NOT pass `"$TARGET"` instead: this step
+        # also runs on windows-latest, whose default shell is pwsh, where an
+        # unset `$TARGET` expands to an empty string and cargo fails with
+        # `error: target was empty`.
+        run: cargo build --release --locked --features server,sparql --target ${{ matrix.target }} --bin oxidowl
 
       - name: Package (unix)
         if: runner.os != 'Windows'
@@ -183,8 +198,18 @@ jobs:
           files: artifacts/**
           generate_release_notes: true
 
+  # Builds the linux/amd64 image on every release purely to validate that
+  # the Dockerfile still builds. The image is NEVER pushed to ghcr.io:
+  # publishing is a manual owner action (docker build/push from a local
+  # machine, or a one-off re-enable of a docker/login-action step together
+  # with `push: true`). metadata-action is kept so the computed tags/labels
+  # stay visible in the CI log and are reusable if an owner later re-enables
+  # a login+push step manually.
   docker:
-    name: docker (ghcr.io)
+    name: docker (build only)
+    # Intentionally also needs `build`: a Dockerfile/feature-set regression
+    # must not silently pass while the native release builds are red.
+    # Do NOT "optimise" this down to `needs: [meta]`.
     needs: [meta, build]
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -192,13 +217,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
-
-      - name: Login to ghcr.io
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker metadata
         id: docker-meta
@@ -213,7 +231,7 @@ jobs:
             # `latest` only for tag builds, never on manual branch dispatches.
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
 
-      - name: Build and push
+      - name: Build (never pushed)
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -223,7 +241,10 @@ jobs:
           # slow for a full release build. Add arm64 later only with a native
           # arm64 runner (e.g. ubuntu-24.04-arm), never via emulation.
           platforms: linux/amd64
-          push: true
+          # Build-only policy: validate the Dockerfile, publish nothing.
+          # Publishing stays a manual owner action — flip this back to true
+          # only together with a re-added docker/login-action step.
+          push: false
           tags: ${{ steps.docker-meta.outputs.tags }}
           labels: ${{ steps.docker-meta.outputs.labels }}
 

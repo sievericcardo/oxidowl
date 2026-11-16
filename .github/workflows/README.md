@@ -22,17 +22,19 @@ Linux jobs install `build-essential cmake clang libclang-dev` because RocksDB
 is compiled from source via Oxigraph (`sparql-store` default feature).
 `--no-default-features` is known-broken and intentionally not tested.
 
-## `release.yml` — binaries, GitHub Release, GHCR image
+## `release.yml` — binaries, GitHub Release, Docker build (no push)
 
 Triggers on `v*` tag pushes (and manual dispatch with an optional `tag`
-input).
+input). Only the default `GITHUB_TOKEN` is used (`contents: write` for the
+release); no PAT and no container-registry auth — nothing is pushed to
+ghcr.io.
 
 | Job         | What it does                                                                 |
 | ----------- | ---------------------------------------------------------------------------- |
 | `meta`      | Resolves the release tag (push ref or dispatch input)                        |
-| `build`     | Native `cargo build --release --locked --features server,sparql` for 4 targets: `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin` (macos-15-intel), `aarch64-apple-darwin` (macos-14), `x86_64-pc-windows-msvc`; packages `oxidowl-<tag>-<target>.tar.gz` (`.zip` on Windows) with binary + README + LICENSE and SHA-256 checksums |
+| `build`     | Native `cargo build --release --locked --features server,sparql` for 4 targets: `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin` (macos-15-intel), `aarch64-apple-darwin` (macos-15 arm64 — the `macos-14` label was retired on 2026-11-02 and must not be reintroduced), `x86_64-pc-windows-msvc`; packages `oxidowl-<tag>-<target>.tar.gz` (`.zip` on Windows) with binary + README + LICENSE and SHA-256 checksums |
 | `release`   | Creates the GitHub Release via `softprops/action-gh-release@v2` with all artifacts and auto-generated notes |
-| `docker`    | Builds and pushes `ghcr.io/sievericcardo/oxidowl` (linux/amd64 only — arm64 would need QEMU emulation for the RocksDB source build) |
+| `docker`    | Builds the `linux/amd64` image to validate the Dockerfile; **never pushes** (arm64 would need QEMU emulation for the RocksDB source build). Publishing is a manual owner action |
 
 crates.io publishing is deliberately **commented out** in `release.yml`;
 `cargo publish` is permanent, so it must stay a manual step (needs a
